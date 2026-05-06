@@ -1,5 +1,5 @@
 ---
-skill: create-agent
+name: create-agent
 description: Scaffold a new agent with best-practice structure, specs, and skill shortcut
 argument-hint: [agent-name]
 arguments: [name]
@@ -94,13 +94,17 @@ Include validation checkpoints between major phases.}
 1. {Invariant rules that must always hold}
 ```
 
-### 2.3 Skill Spec — `.claude/skills/{skill-name}.md`
+### 2.3 Skill Spec — `.claude/skills/{skill-name}/SKILL.md`
 
-Generate the skill spec:
+Create the skill directory and generate the skill spec:
+
+```bash
+mkdir -p .claude/skills/{skill-name}
+```
 
 ```markdown
 ---
-skill: {skill-name}
+name: {skill-name}
 description: {One-line description}
 user-invocable: true
 {disable-model-invocation: true  # if manual-only}
@@ -191,7 +195,32 @@ Append a row to each of these tables:
 | `/{skill-name}` | {description} | `{name}` |
 ```
 
-## Phase 3: Review & Next Steps
+## Phase 3: Save Memory
+
+Save a **project** memory so future conversations know this agent exists. Write to the memory system at `/home/rlavi/.claude/projects/-home-rlavi-Projects-ninja-agents/memory/`:
+
+1. Create `agent_{name}.md` with frontmatter:
+   ```markdown
+   ---
+   name: agent-{name}
+   description: "{name}" agent was scaffolded — {one-line purpose}
+   type: project
+   ---
+
+   Agent "{name}" was created on {today's date}.
+
+   **What it does:** {one-sentence description from Phase 1}
+   **Skill:** `/{skill-name}`
+   **Model:** {model}
+   **MCP servers:** {list or "none"}
+   ```
+
+2. Add a pointer line to `MEMORY.md`:
+   ```
+   - [Agent: {name}](agent_{name}.md) — {name} agent scaffolded, invoked via /{skill-name}
+   ```
+
+## Phase 4: Review & Next Steps
 
 After generating all files, display:
 

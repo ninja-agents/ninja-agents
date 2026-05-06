@@ -1,5 +1,5 @@
 ---
-skill: team-update
+name: team-update
 description: Generate a weekly team status report for leadership (7-day window)
 user-invocable: true
 ---

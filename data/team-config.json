@@ -1,0 +1,110 @@
+{
+  "team_name": "Migrations & Networking Frontend",
+  "report_title": "Migrations & Networking Frontend - Weekly Report",
+  "jira": {
+    "cloud_id": "redhat.atlassian.net",
+    "team_filter_id": "91323",
+    "base_url": "https://redhat.atlassian.net/browse"
+  },
+  "products": [
+    {
+      "key": "CNV",
+      "name": "Container-Native Virtualization",
+      "jira_prefixes": ["CNV", "CONSOLE"],
+      "repos": [
+        "kubevirt-ui/kubevirt-plugin",
+        "kubevirt-ui/topology-plugin",
+        "kubevirt-ui/kubevirt-api",
+        "openshift/nmstate-console-plugin",
+        "openshift/networking-console-plugin",
+        "cnv-qe/kubevirt-ui"
+      ]
+    },
+    {
+      "key": "MTV",
+      "name": "Migration Toolkit for Virtualization",
+      "jira_prefixes": ["MTV"],
+      "repos": [
+        "kubev2v/forklift-console-plugin",
+        "kubev2v/forklift-console-types",
+        "kubev2v/forklift"
+      ]
+    },
+    {
+      "key": "MTA",
+      "name": "Migration Toolkit for Applications",
+      "jira_prefixes": ["MTA"],
+      "repos": [
+        "konveyor/tackle2-ui",
+        "konveyor/enhancements",
+        "konveyor/release-tools",
+        "konveyor/ci"
+      ]
+    }
+  ],
+  "ocpbugs_repo_to_product": {
+    "nmstate-console-plugin": "CNV",
+    "networking-console-plugin": "CNV",
+    "kubevirt-plugin": "CNV",
+    "kubevirt-ui": "CNV",
+    "forklift-console-plugin": "MTV",
+    "forklift": "MTV",
+    "tackle2-ui": "MTA"
+  },
+  "engineers": [
+    {
+      "name": "Leon Kladnitsky",
+      "directory": "leon-kladnitsky",
+      "github": "lkladnit",
+      "gitlab": "lkladnit",
+      "jira_account_id": "712020:1f4f0221-a1a1-4c18-b299-c2d883e1b773",
+      "jira_display_names": ["Leon Kladnitsky"],
+      "products": ["CNV"]
+    },
+    {
+      "name": "Phillip Bailey",
+      "directory": "phillip-bailey",
+      "github": "pcbailey",
+      "gitlab": "phbailey",
+      "jira_account_id": "5af18c19626b42214cd305b4",
+      "jira_display_names": ["Phillip Rhodes", "Phillip Bailey"],
+      "products": ["CNV"]
+    },
+    {
+      "name": "Aviv Turgeman",
+      "directory": "aviv-turgeman",
+      "github": "avivtur",
+      "gitlab": "aturgema",
+      "jira_account_id": "5e9ff58b1f32260c13f717ca",
+      "jira_display_names": ["Aviv Turgeman"],
+      "products": ["MTV"]
+    },
+    {
+      "name": "Pedro Abreu",
+      "directory": "pedro-abreu",
+      "github": "Pedro-S-Abreu",
+      "gitlab": "pabreu",
+      "jira_account_id": "712020:6a961f6e-07c1-4cc3-ac97-e454f504b2d2",
+      "jira_display_names": ["Pedro Abreu"],
+      "products": ["MTV"]
+    },
+    {
+      "name": "Scott Dickers",
+      "directory": "scott-dickers",
+      "github": "sjd78",
+      "gitlab": "sdickers",
+      "jira_account_id": "557058:28e60082-ea1d-4380-9a0a-ac0cabded05a",
+      "jira_display_names": ["Scott Dickerson", "Scott Dickers"],
+      "products": ["CNV", "MTA"]
+    },
+    {
+      "name": "Radek Szwajkowski",
+      "directory": "radek-szwajkowski",
+      "github": "rszwajko",
+      "gitlab": "rszwajko",
+      "jira_account_id": "712020:bf84e9ef-c0aa-47f3-a156-0b419447bf29",
+      "jira_display_names": ["Radoslaw Szwajkowski", "Radek Szwajkowski"],
+      "products": ["MTA"]
+    }
+  ]
+}

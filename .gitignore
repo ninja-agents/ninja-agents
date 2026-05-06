@@ -1,0 +1,15 @@
+# Secrets
+.env
+
+# Transient data
+data/cache/
+
+# Generated reports (keep examples, ignore dated outputs)
+data/team-wide/weekly-update-*.md
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store

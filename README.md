@@ -1,10 +1,32 @@
 # Ninja Agents
 
-AI agents for engineering teams, powered by [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
+A shared playground for AI agents that help engineering teams. Built for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) with [Cursor](https://cursor.com) support.
+
+## Quick Start
+
+```bash
+git clone <repo-url> && cd ninja-agents
+
+# Set up tokens (needed by agents that query external services)
+cp .env.example .env
+# Edit .env with your actual tokens
+
+# Open in your IDE and run an agent
+claude                # Claude Code
+# or open in Cursor
+```
+
+## Available Agents
+
+| Agent | Skill | Description |
+|-------|-------|-------------|
+| [weekly-team-update](agents/weekly-team-update/) | `/team-update` | Weekly team report for leadership from GitHub, GitLab, and Jira |
+
+Each agent has its own README with setup and usage instructions.
 
 ## Prerequisites
 
-You need **Claude Code** installed plus the following MCP servers (or CLI equivalents):
+You need an AI-powered IDE plus MCP servers for the agents you want to use:
 
 | Data Source | MCP Server | CLI Alternative |
 |-------------|-----------|-----------------|
@@ -19,107 +41,51 @@ You need **Claude Code** installed plus the following MCP servers (or CLI equiva
    cp .env.example .env
    ```
 
-2. Fill in your tokens:
+2. Fill in tokens for the services your agents need:
    - **GitHub**: [Create token](https://github.com/settings/tokens) with `repo`, `read:org` scopes
    - **GitLab**: [Create token](https://gitlab.cee.redhat.com/-/profile/personal_access_tokens) with `api`, `read_api`, `read_repository` scopes
    - **Jira**: [Create token](https://id.atlassian.com/manage-profile/security/api-tokens)
 
-3. Configure MCP servers in Claude Code:
-   ```bash
-   claude mcp list    # verify servers are connected
-   ```
+## Contributing a New Agent
 
-## Quick Start
+Each agent is a self-contained directory under `agents/`:
 
-```bash
-# Clone the repo
-git clone <repo-url> && cd ninja-agents
-
-# Set up tokens
-cp .env.example .env
-# Edit .env with your actual tokens
-
-# Open Claude Code in this directory
-claude
-
-# Run the weekly team report
-/team-update
 ```
-
-## Available Agents
-
-### Weekly Team Report (`/team-update`)
-
-Generates a leadership-ready weekly status report by querying GitHub, GitLab, and Jira for the last 7 days of activity across all team members.
-
-**What it does:**
-1. Fetches merged PRs, open PRs, and Jira tickets for each engineer (parallel MCP queries)
-2. Saves raw data as CSV files in `data/cache/team-wide/`
-3. Runs `scripts/generate-weekly-report.py` to produce a formatted markdown report
-4. Validates all links in the report
-5. Saves the final report to `data/team-wide/weekly-update-YYYY-MM-DD.md`
-
-**Output format:**
-- Key Highlights (auto-generated)
-- Completed This Week (by product, then by engineer, PRs nested under Jira tickets)
-- In Progress (same structure)
-- Blockers & Critical Issues
-
-**Time:** ~30-40 seconds
-
-## Configuration
-
-### Team Config (`data/team-config.json`)
-
-This is the main file you need to customize for your team. It defines:
-
-- **Team name** and report title
-- **Jira** cloud ID, filter ID, and base URL
-- **Products** with Jira prefixes and tracked GitHub/GitLab repos
-- **Engineers** with their GitHub username, GitLab username, Jira account ID, and product assignments
-
-The included config is a working example for the Migrations & Networking Frontend team. To adapt it for your team:
-
-1. Update `team_name` and `report_title`
-2. Update `jira` section with your Jira instance details
-3. Replace `products` with your product areas and repos
-4. Replace `engineers` with your team members
-
-To find a team member's Jira account ID, use:
-```bash
-# In Claude Code:
-mcp__atlassian__lookupJiraAccountId with searchString: "user@company.com"
+agents/your-agent/
+├── README.md        # What it does, how to use it, prerequisites
+├── scripts/         # Supporting scripts (Python, shell, etc.)
+└── data/            # Config, cache, output
 ```
-
-## Adding New Agents
 
 To add a new agent:
 
-1. Create an agent spec in `.claude/agents/your-agent.md`
-2. Create a skill file in `.claude/skills/your-skill.md` for easy invocation
-3. Add any supporting scripts in `scripts/`
-4. Update this README
+1. Copy `agents/_template/` to `agents/your-agent/`
+2. Add your scripts, config, and a README
+3. Wire it up for Claude Code:
+   - Create `.claude/agents/your-agent.md` (agent spec)
+   - Create `.claude/skills/your-skill.md` (skill shortcut)
+4. Update the agent table in this README and in `AGENTS.md`
 
-See the weekly-team-update agent as a reference for the agent spec format.
+See [agents/_template/README.md](agents/_template/README.md) for the full guide.
 
 ## Project Structure
 
 ```
 ninja-agents/
-├── CLAUDE.md                    # Instructions for Claude Code
-├── README.md                    # This file
-├── .env.example                 # Token template (copy to .env)
+├── AGENTS.md                          # Agent index (org-required)
+├── CLAUDE.md                          # Claude Code project context
+├── README.md                          # This file
+├── .env.example                       # Token template
 ├── .claude/
-│   ├── agents/                  # Agent specifications
-│   │   └── weekly-team-update.md
-│   ├── skills/                  # Skill shortcuts
-│   │   └── team-update.md
-│   └── settings.json            # Permission allowlist
-├── scripts/                     # Supporting scripts
-│   ├── generate-weekly-report.py
-│   └── validate-report-links.py
-└── data/
-    ├── team-config.json         # Team configuration (customize this)
-    ├── cache/team-wide/         # Temporary CSV cache
-    └── team-wide/               # Generated reports
+│   ├── agents/                        # Claude Code agent specs
+│   ├── skills/                        # Claude Code skill shortcuts
+│   └── settings.json                  # Permission allowlist
+├── .cursor/
+│   └── rules/                         # Cursor project rules
+└── agents/                            # Self-contained agent directories
+    ├── _template/                     # Skeleton for new agents
+    └── weekly-team-update/            # Weekly team report agent
+        ├── README.md
+        ├── scripts/
+        └── data/
 ```

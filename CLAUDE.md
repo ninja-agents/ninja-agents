@@ -1,31 +1,29 @@
 # Ninja Agents
 
-AI agents for engineering teams. This project contains reusable Claude Code agents that query GitHub, GitLab, and Jira to generate team intelligence.
+A shared playground for AI agents that help engineering teams. Each agent lives in its own directory under `agents/`.
 
-## Prerequisites
+## Project Structure
 
-Before running any agent, ensure these MCP servers are configured in Claude Code:
+- `agents/{name}/` — self-contained agent directories (scripts, data, config, README)
+- `.claude/agents/` — Claude Code agent specs (wiring into agent directories)
+- `.claude/skills/` — Claude Code skill shortcuts
+- `.env` — tokens for MCP servers (never commit)
 
-- **GitHub MCP** — for PR and commit data from github.com
-- **GitLab MCP** (`@zereight/mcp-gitlab`) — for MR and commit data from gitlab.cee.redhat.com
-- **Atlassian Rovo MCP** — for Jira ticket data from redhat.atlassian.net
+## Adding a New Agent
 
-Tokens are loaded from `.env` (copy from `.env.example`). Never commit `.env`.
+1. Create `agents/{your-agent}/` with a README, scripts, and data
+2. Wire it up in `.claude/agents/{your-agent}.md` (agent spec) and `.claude/skills/{your-skill}.md` (skill shortcut)
+3. See `agents/_template/` for the expected structure
 
-## Team Configuration
+## MCP Servers
 
-All team-specific data lives in `data/team-config.json`:
-- Engineer names, GitHub/GitLab usernames, Jira account IDs
-- Product areas with repo and Jira prefix mappings
-- Jira cloud ID and filter configuration
+Agents in this repo may use these MCP servers:
 
-Agents read this file at runtime — no team data is hardcoded in agent specs or scripts.
-
-## Available Skills
-
-| Skill | Description | Time |
-|-------|-------------|------|
-| `/team-update` | Weekly team report for leadership (7-day window) | ~30-40s |
+| Server | Purpose |
+|--------|---------|
+| [GitHub MCP](https://github.com/github/github-mcp-server) | PR and commit data from github.com |
+| [@zereight/mcp-gitlab](https://www.npmjs.com/package/@zereight/mcp-gitlab) | MR and commit data from gitlab.cee.redhat.com |
+| [Atlassian Rovo MCP](https://www.npmjs.com/package/@anthropic-ai/mcp-atlassian) | Jira ticket data from redhat.atlassian.net |
 
 ## MCP Tool Patterns
 
@@ -54,28 +52,14 @@ mcp__atlassian__searchJiraIssuesUsingJql:
   fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "issuetype", "priority", "updated", "created", "customfield_10470"]
 ```
 
-## Output Formatting Rules
+## Available Skills
 
-- **All links use markdown hyperlinks with descriptive text:**
-  - Jira: `[MTV-4458 - UI Show MTV metrics](https://redhat.atlassian.net/browse/MTV-4458)`
-  - GitHub PR: `[PR #123 - Add VM wizard](https://github.com/org/repo/pull/123)`
-  - GitLab MR: `[MR !456 - Fix migration](https://gitlab.cee.redhat.com/org/repo/-/merge_requests/456)`
+| Skill | Description | Agent |
+|-------|-------------|-------|
+| `/team-update` | Weekly team report for leadership (7-day window) | `weekly-team-update` |
 
-- **Jira resolution field matters:**
-  - Only `resolution = "Done"` counts as a completed deliverable
-  - "Cannot Reproduce", "Won't Do", "Duplicate" are NOT deliverables
+## Rules
 
-## Workflow: Weekly Team Report
-
-The `/team-update` skill launches the `weekly-team-update` agent which:
-
-1. Reads `data/team-config.json` for engineer usernames
-2. Fetches data in 2 parallel batches:
-   - Batch 1: GitHub PRs (merged + open) + Jira tickets (18 parallel queries)
-   - Batch 2: GitLab MRs (merged + open) (12 parallel queries)
-3. Saves results as CSV in `data/cache/team-wide/`
-4. Runs `python3 scripts/generate-weekly-report.py` for deterministic formatting
-5. Validates links with `python3 scripts/validate-report-links.py`
-6. Saves report to `data/team-wide/weekly-update-{date}.md`
-
-**The agent does NOT format the report itself** — the Python script handles all filtering, nesting, and formatting deterministically.
+- Never commit `.env` or tokens
+- All links in reports use markdown hyperlinks with descriptive text
+- Only `resolution = "Done"` counts as a completed Jira deliverable

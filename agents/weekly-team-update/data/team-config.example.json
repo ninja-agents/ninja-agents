@@ -1,0 +1,45 @@
+{
+  "_comment": "Copy this file to team-config.json and fill in your team's real data.",
+  "team_name": "My Team",
+  "report_title": "My Team - Weekly Report",
+  "jira": {
+    "cloud_id": "your-site.atlassian.net",
+    "team_filter_id": "12345",
+    "base_url": "https://your-site.atlassian.net/browse",
+    "projects": ["Project Alpha", "Project Beta"]
+  },
+  "products": [
+    {
+      "key": "ALPHA",
+      "name": "Product Alpha",
+      "jira_prefixes": ["ALPHA"],
+      "repos": ["my-org/alpha-frontend", "my-org/alpha-backend"]
+    },
+    {
+      "key": "BETA",
+      "name": "Product Beta",
+      "jira_prefixes": ["BETA"],
+      "repos": ["my-org/beta-ui"]
+    }
+  ],
+  "engineers": [
+    {
+      "name": "Jane Doe",
+      "directory": "jane-doe",
+      "github": "janedoe",
+      "gitlab": "jdoe",
+      "jira_account_id": "557058:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "jira_display_names": ["Jane Doe"],
+      "role": "dev"
+    },
+    {
+      "name": "John Smith",
+      "directory": "john-smith",
+      "github": "johnsmith",
+      "gitlab": "jsmith",
+      "jira_account_id": "712020:yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
+      "jira_display_names": ["John Smith"],
+      "role": "qe"
+    }
+  ]
+}

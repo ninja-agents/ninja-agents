@@ -1,0 +1,29 @@
+---
+description: Project context for Ninja Agents — a shared AI agent playground
+globs:
+alwaysApply: true
+---
+
+# Ninja Agents
+
+A shared playground for AI agents that help engineering teams. Each agent is self-contained under `agents/`.
+
+## Agent Directory Convention
+
+Each agent lives in `agents/{name}/` with its own README, scripts, and data. See individual agent READMEs for usage:
+
+- [weekly-team-update](agents/weekly-team-update/README.md) — weekly team report for leadership
+
+## MCP Servers
+
+Agents may use these MCP servers (configure in Cursor settings):
+
+- **GitHub MCP** — PR and commit data from github.com
+- **GitLab MCP** (`@zereight/mcp-gitlab`) — MR and commit data from gitlab.cee.redhat.com
+- **Atlassian Rovo MCP** — Jira ticket data from redhat.atlassian.net
+
+Tokens are loaded from `.env` (copy from `.env.example`). Never commit `.env`.
+
+## Contributing
+
+To add a new agent, see `agents/_template/README.md` for the expected structure.

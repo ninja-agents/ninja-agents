@@ -693,11 +693,11 @@ def generate_highlights(sections: Dict[str, Dict[str, EngineerBlock]]) -> List[s
 def main():
     parser = argparse.ArgumentParser(description="Generate weekly team report from cached CSVs")
     parser.add_argument("--date", required=True, help="Report date (YYYY-MM-DD)")
-    parser.add_argument("--cache-dir", default="data/cache/team-wide",
+    parser.add_argument("--cache-dir", default="agents/weekly-team-update/data/cache",
                         help="Path to cached CSV directory")
     parser.add_argument("--output", default=None,
-                        help="Output path (default: data/team-wide/weekly-update-{date}.md)")
-    parser.add_argument("--config", default="data/team-config.json",
+                        help="Output path (default: agents/weekly-team-update/data/output/weekly-update-{date}.md)")
+    parser.add_argument("--config", default="agents/weekly-team-update/data/team-config.json",
                         help="Path to team config JSON")
     args = parser.parse_args()
 
@@ -711,7 +711,7 @@ def main():
     window_end = report_date + timedelta(days=1)  # inclusive of report date
     cache_dir = Path(args.cache_dir)
     config_path = Path(args.config)
-    output_path = Path(args.output) if args.output else Path(f"data/team-wide/weekly-update-{args.date}.md")
+    output_path = Path(args.output) if args.output else Path(f"agents/weekly-team-update/data/output/weekly-update-{args.date}.md")
 
     config = load_config(config_path)
 

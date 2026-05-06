@@ -14,7 +14,7 @@
       "Bash(find:*)",
       "Bash(git:*)",
       "Bash(wc:*)",
-      "Bash(rm -f data/cache/*)"
+      "Bash(rm -f agents/*/data/cache/*)"
     ]
   }
 }

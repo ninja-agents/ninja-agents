@@ -21,14 +21,14 @@ Launches the `weekly-team-update` agent which:
 1. **Fetches last 7 days of activity** via parallel MCP queries:
    - Batch 1: GitHub PRs (merged + open) for all engineers + Jira team filter (parallel calls)
    - Batch 2: GitLab MRs (merged + open) for all engineers (parallel calls)
-2. **Saves data to CSV** in `data/cache/team-wide/` (github-prs.csv, gitlab-mrs.csv, jira-tickets.csv)
-3. **Runs `scripts/generate-weekly-report.py`** which deterministically:
+2. **Saves data to CSV** in `agents/weekly-team-update/data/cache/` (github-prs.csv, gitlab-mrs.csv, jira-tickets.csv)
+3. **Runs `agents/weekly-team-update/scripts/generate-weekly-report.py`** which deterministically:
    - Filters by date window and resolution
    - Nests PRs under their parent Jira tickets
    - Organizes by product and engineer
    - Generates formatted markdown
-4. **Validates all links** via `scripts/validate-report-links.py`
-5. **Saves to file**: `data/team-wide/weekly-update-{YYYY-MM-DD}.md`
+4. **Validates all links** via `agents/weekly-team-update/scripts/validate-report-links.py`
+5. **Saves to file**: `agents/weekly-team-update/data/output/weekly-update-{YYYY-MM-DD}.md`
 6. **Displays** the report
 
 **Time:** ~30-40 seconds

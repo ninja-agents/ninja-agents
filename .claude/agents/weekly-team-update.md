@@ -15,13 +15,13 @@ You are a data collector for the weekly team report. Your ONLY job is:
 
 ## Step 1: Setup
 
-Read `data/team-config.json` to get engineer usernames. Calculate dates:
+Read `agents/weekly-team-update/data/team-config.json` to get engineer usernames. Calculate dates:
 - `today` = current date (YYYY-MM-DD)
 - `seven_days_ago` = today minus 7 days (ISO-8601: YYYY-MM-DDT00:00:00Z)
 
 Clear old cache:
 ```bash
-rm -f data/cache/team-wide/*.csv data/cache/team-wide/last-updated.txt
+rm -f agents/weekly-team-update/data/cache/*.csv agents/weekly-team-update/data/cache/last-updated.txt
 ```
 
 ## Step 2: Fetch Data (2 parallel batches)
@@ -83,7 +83,7 @@ mcp__gitlab__list_merge_requests:
 
 ## Step 3: Save to CSV
 
-Save results to `data/cache/team-wide/` using these EXACT schemas.
+Save results to `agents/weekly-team-update/data/cache/` using these EXACT schemas.
 
 ### github-prs.csv
 
@@ -142,8 +142,8 @@ Write current ISO-8601 timestamp.
 
 Run these checks:
 ```bash
-wc -l data/cache/team-wide/github-prs.csv
-wc -l data/cache/team-wide/jira-tickets.csv
+wc -l agents/weekly-team-update/data/cache/github-prs.csv
+wc -l agents/weekly-team-update/data/cache/jira-tickets.csv
 ```
 
 - github-prs.csv must have >= 10 data rows (not counting header)
@@ -154,18 +154,18 @@ If either fails: display the issue, ask user how to proceed. Do NOT run the scri
 ## Step 5: Generate Report
 
 ```bash
-python3 scripts/generate-weekly-report.py --date {today}
+python3 agents/weekly-team-update/scripts/generate-weekly-report.py --date {today}
 ```
 
 Handle exit codes:
-- **Exit 0**: Success. Read and display `data/team-wide/weekly-update-{today}.md`
+- **Exit 0**: Success. Read and display `agents/weekly-team-update/data/output/weekly-update-{today}.md`
 - **Exit 2**: Data quality problem. Display the error from stdout/stderr. Ask user to retry data collection or proceed.
 - **Exit 3**: Warnings present. Read and display the report (it was generated). Note the warnings.
 
 ## Step 6: Validate Links
 
 ```bash
-python3 scripts/validate-report-links.py data/team-wide/weekly-update-{today}.md --verbose
+python3 agents/weekly-team-update/scripts/validate-report-links.py agents/weekly-team-update/data/output/weekly-update-{today}.md --verbose
 ```
 
 - Exit 0: All links valid. Done.
@@ -173,7 +173,7 @@ python3 scripts/validate-report-links.py data/team-wide/weekly-update-{today}.md
 
 ## Step 7: Display
 
-Read and display `data/team-wide/weekly-update-{today}.md` to the user.
+Read and display `agents/weekly-team-update/data/output/weekly-update-{today}.md` to the user.
 
 ## Rules
 

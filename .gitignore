@@ -1,11 +1,16 @@
 # Secrets
 .env
 
-# Transient data
-data/cache/
+# Sensitive team config (real files contain PII / internal IDs — see .example.json)
+agents/weekly-team-update/data/team-config.json
+agents/sprint-retro/data/sprint-config.json
 
-# Generated reports (keep examples, ignore dated outputs)
-data/team-wide/weekly-update-*.md
+# Agent cache (contents only, keep .gitkeep)
+agents/*/data/cache/*
+!agents/*/data/cache/.gitkeep
+
+# Agent output (generated reports)
+agents/*/data/output/*.md
 
 # Python
 __pycache__/

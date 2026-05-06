@@ -5,12 +5,12 @@ Report Link Validation Script
 Parses a weekly report markdown file, extracts all GitHub PR, GitLab MR,
 and Jira links, then verifies each via API calls.
 
-Engineer username mappings are loaded from data/team-config.json (not hardcoded).
+Engineer username mappings are loaded from agents/weekly-team-update/data/team-config.json (not hardcoded).
 
 Usage:
-  python3 scripts/validate-report-links.py                              # latest report
-  python3 scripts/validate-report-links.py path/to/report.md            # specific file
-  python3 scripts/validate-report-links.py --verbose                    # show all checks
+  python3 agents/weekly-team-update/scripts/validate-report-links.py                    # latest report
+  python3 agents/weekly-team-update/scripts/validate-report-links.py path/to/report.md  # specific file
+  python3 agents/weekly-team-update/scripts/validate-report-links.py --verbose           # show all checks
 """
 
 import argparse
@@ -58,18 +58,19 @@ class LinkResult(NamedTuple):
 
 
 class ReportLinkValidator:
-    def __init__(self, project_root: Path, verbose: bool = False):
-        self.project_root = project_root
+    def __init__(self, agent_root: Path, repo_root: Path, verbose: bool = False):
+        self.agent_root = agent_root
+        self.repo_root = repo_root
         self.verbose = verbose
         self.results: List[LinkResult] = []
         self._github_token = None
         self._gitlab_token = None
         self._load_tokens()
-        config_path = project_root / "data" / "team-config.json"
+        config_path = self.agent_root / "data" / "team-config.json"
         self._engineer_github, self._engineer_gitlab = load_engineer_maps(config_path)
 
     def _load_tokens(self):
-        env_path = self.project_root / ".env"
+        env_path = self.repo_root / ".env"
         if not env_path.exists():
             return
         with open(env_path) as f:
@@ -280,8 +281,8 @@ class ReportLinkValidator:
         return errors == 0
 
 
-def find_latest_report(project_root: Path) -> Optional[Path]:
-    report_dir = project_root / "data" / "team-wide"
+def find_latest_report(agent_root: Path) -> Optional[Path]:
+    report_dir = agent_root / "data" / "output"
     if not report_dir.exists():
         return None
     reports = sorted(report_dir.glob("weekly-update-*.md"), reverse=True)
@@ -295,7 +296,7 @@ def main():
     parser.add_argument(
         "file",
         nargs="?",
-        help="Path to report markdown file (default: latest in data/team-wide/)"
+        help="Path to report markdown file (default: latest in agents/weekly-team-update/data/output/)"
     )
     parser.add_argument(
         "--verbose", "-v",
@@ -304,23 +305,24 @@ def main():
     )
     args = parser.parse_args()
 
-    project_root = Path(__file__).resolve().parent.parent
+    agent_root = Path(__file__).resolve().parent.parent
+    repo_root = agent_root.parent.parent
 
     if args.file:
         file_path = Path(args.file)
         if not file_path.is_absolute():
             file_path = Path.cwd() / file_path
     else:
-        file_path = find_latest_report(project_root)
+        file_path = find_latest_report(agent_root)
         if not file_path:
-            print(f"{RED}No weekly reports found in data/team-wide/{RESET}")
+            print(f"{RED}No weekly reports found in agents/weekly-team-update/data/output/{RESET}")
             sys.exit(1)
 
     if not file_path.exists():
         print(f"{RED}File not found: {file_path}{RESET}")
         sys.exit(1)
 
-    validator = ReportLinkValidator(project_root, verbose=args.verbose)
+    validator = ReportLinkValidator(agent_root, repo_root, verbose=args.verbose)
     success = validator.validate(file_path)
     sys.exit(0 if success else 1)
 

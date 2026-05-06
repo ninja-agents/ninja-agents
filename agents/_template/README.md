@@ -6,8 +6,10 @@ One-line description of what this agent does.
 
 List the MCP servers or CLI tools this agent needs:
 
-- **GitHub MCP** — for PR data
+- **GitHub MCP** — for PR and commit data
 - (add or remove as needed)
+
+Tokens must be configured in `.env` at the repo root.
 
 ## Usage
 
@@ -17,17 +19,19 @@ List the MCP servers or CLI tools this agent needs:
 /your-skill-name
 ```
 
-### Cursor
+### Cursor / Manual
 
 Describe how to use this agent from Cursor (e.g., run scripts directly, use MCP tools manually).
 
 ## How It Works
 
-Brief description of the agent's workflow.
+1. Step one
+2. Step two
+3. Step three
 
 ## Configuration
 
-Describe any config files in `data/` that need to be customized.
+Describe any config files in `data/` that need to be customized, or "No configuration needed."
 
 ## File Layout
 
@@ -42,9 +46,24 @@ agents/your-agent/
     └── output/         # Generated output (gitignored)
 ```
 
-## Wiring Up for Claude Code
+## Wiring Up
 
-1. Create `.claude/agents/your-agent.md` with the agent spec (model, description, workflow steps)
-2. Create `.claude/skills/your-skill.md` with the skill shortcut
-3. Add any needed MCP tool permissions to `.claude/settings.json`
-4. Update the agent table in `README.md` and `AGENTS.md`
+After creating your agent directory, wire it into the IDE tooling:
+
+1. **Agent spec** — create `.claude/agents/your-agent.md` with:
+   - Frontmatter: `name`, `description` (with trigger phrases + examples), `model`, `memory`
+   - Body: role statement, numbered `## Step N` sections, `## Rules` section
+   - See `.claude/agents/weekly-team-update.md` for a working example
+
+2. **Skill shortcut** — create `.claude/skills/your-skill.md` with:
+   - Frontmatter: `skill`, `description`, `user-invocable: true`
+   - Body: usage, what it does, expected output
+
+3. **Permissions** — add any MCP tools or bash commands to `.claude/settings.json`
+
+4. **Index files** — add a row to the agent tables in:
+   - `AGENTS.md`
+   - `README.md`
+   - `CLAUDE.md` (Available Skills table)
+
+Or just run `/create-agent your-agent-name` to do all of this automatically.

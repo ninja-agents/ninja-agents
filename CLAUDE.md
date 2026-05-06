@@ -57,6 +57,7 @@ mcp__atlassian__searchJiraIssuesUsingJql:
 | Skill | Description | Agent |
 |-------|-------------|-------|
 | `/team-update` | Weekly team report for leadership (7-day window) | `weekly-team-update` |
+| `/create-agent` | Scaffold a new agent with best-practice structure and specs | — (interactive) |
 
 ## Rules
 

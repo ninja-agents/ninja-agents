@@ -36,15 +36,12 @@ You need an AI-powered IDE plus MCP servers for the agents you want to use:
 
 ### Token Setup
 
-1. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
+See [docs/mcp-setup.md](docs/mcp-setup.md) for the full step-by-step guide. The short version:
 
-2. Fill in tokens for the services your agents need:
-   - **GitHub**: [Create token](https://github.com/settings/tokens) with `repo`, `read:org` scopes
-   - **GitLab**: [Create token](https://gitlab.cee.redhat.com/-/profile/personal_access_tokens) with `api`, `read_api`, `read_repository` scopes
-   - **Jira**: [Create token](https://id.atlassian.com/manage-profile/security/api-tokens)
+```bash
+cp .env.example .env
+# Edit .env with your tokens, then restart Claude Code
+```
 
 ## Contributing a New Agent
 

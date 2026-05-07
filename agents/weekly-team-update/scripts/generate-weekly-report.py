@@ -692,7 +692,8 @@ def format_in_progress_section(sections: Dict[str, Dict[str, EngineerBlock]],
 # ---------------------------------------------------------------------------
 
 def _clean_summary(summary: str) -> str:
-    s = re.sub(r'^\[(?:UI|QE|RFE)\]\s*', '', summary)
+    s = re.sub(r'^\[(?:UI|QE|RFE|TP)\]\s*', '', summary)
+    s = re.sub(r'^\[(?:UI|QE|RFE|TP)\]\s*', '', s)
     s = re.sub(r'^\[tackle2-ui#\d+\]\s*', '', s)
     s = s.strip()
     if len(s) > 60:
@@ -706,61 +707,77 @@ def _is_filler_ticket(summary: str) -> bool:
     return bool(re.search(r'AI Challenge|Polarion test plan', summary, re.IGNORECASE))
 
 
+def _extract_cve_libs(texts: List[str]) -> List[str]:
+    lib_patterns = [
+        (r'\blodash\b', 'lodash'), (r'\bimmutable\b', 'immutable'),
+        (r'\baxios\b', 'axios'), (r'\bfast-xml-parser\b', 'fast-xml-parser'),
+        (r'\bqs\b', 'qs'), (r'\bfollow-redirects\b', 'follow-redirects'),
+        (r'\breact.router\b', 'react-router'),
+    ]
+    found = []
+    combined = " ".join(texts).lower()
+    for pattern, name in lib_patterns:
+        if re.search(pattern, combined):
+            found.append(name)
+    return found
+
+
 def generate_highlights(sections: Dict[str, Dict[str, EngineerBlock]]) -> List[str]:
-    engineer_work: Dict[str, dict] = {}
+    cve_count = 0
+    cve_products: set = set()
+    cve_texts: List[str] = []
+    test_versions: set = set()
+    features: Dict[str, List[str]] = {}
+    bugs: Dict[str, List[str]] = {}
+
     for pk, engineers in sections.items():
         for eng_name, block in engineers.items():
-            if eng_name not in engineer_work:
-                engineer_work[eng_name] = {
-                    "cve_count": 0, "test_versions": set(),
-                    "notable": [], "products": set(), "total": 0,
-                }
-            w = engineer_work[eng_name]
-
             for t in block.completed_tickets:
-                pr_count = len(t.nested_prs)
-                w["total"] += 1 + pr_count
                 is_test = bool(re.match(r'^\[(?:TIER|POST|STAGE)', t.summary, re.IGNORECASE))
                 is_cve = "CVE" in t.summary.upper()
                 if is_test:
                     for m in re.finditer(r'cnv-(\d+\.\d+\.\d+)', t.summary, re.IGNORECASE):
-                        w["test_versions"].add(m.group(1))
+                        test_versions.add(m.group(1))
                 elif is_cve:
-                    w["cve_count"] += 1 + pr_count
+                    cve_count += 1 + len(t.nested_prs)
+                    cve_products.add(pk)
+                    cve_texts.append(t.summary)
+                    for pr in t.nested_prs:
+                        cve_texts.append(pr.title)
                 elif not _is_filler_ticket(t.summary):
-                    w["notable"].append(_clean_summary(t.summary))
+                    if t.issuetype in ("Story", "Epic"):
+                        features.setdefault(pk, []).append(_clean_summary(t.summary))
+                    elif t.issuetype == "Bug":
+                        bugs.setdefault(pk, []).append(_clean_summary(t.summary))
 
             for pr in block.completed_prs:
-                w["total"] += 1
                 if "CVE" in pr.title.upper():
-                    w["cve_count"] += 1
-
-            if block.completed_tickets or block.completed_prs:
-                w["products"].add(pk)
+                    cve_count += 1
+                    cve_products.add(pk)
+                    cve_texts.append(pr.title)
 
     highlights: List[str] = []
-    sorted_eng = sorted(engineer_work.items(), key=lambda x: x[1]["total"], reverse=True)
 
-    for eng_name, w in sorted_eng:
-        if w["total"] == 0:
-            continue
-        parts: List[str] = []
-        if w["test_versions"]:
-            parts.append(f"completed release testing for CNV {', '.join(sorted(w['test_versions']))}")
-        if w["cve_count"] > 0:
-            parts.append(f"drove CVE remediation ({w['cve_count']} fixes)")
-        for s in w["notable"]:
-            parts.append(s)
-            if len(parts) >= 3:
-                break
-        if not parts:
-            continue
-        product_str = "/".join(sorted(w["products"]))
-        highlights.append(f"- {eng_name} ({product_str}): {'; '.join(parts[:3])}")
-        if len(highlights) >= 4:
-            break
+    if cve_count > 0:
+        libs = _extract_cve_libs(cve_texts)
+        products_str = " and ".join(sorted(cve_products))
+        lib_str = f" for {', '.join(libs)}" if libs else ""
+        highlights.append(f"- CVE remediation across {products_str} — {cve_count} fixes shipped{lib_str}")
 
-    return highlights
+    if test_versions:
+        highlights.append(f"- Completed Tier 1/2 release testing for CNV {', '.join(sorted(test_versions))}")
+
+    for pk, items in features.items():
+        if items:
+            detail = "; ".join(items[:3])
+            highlights.append(f"- {pk} feature delivery: {detail}")
+
+    for pk, items in bugs.items():
+        if items:
+            detail = "; ".join(items[:3])
+            highlights.append(f"- {pk} quality: {detail}")
+
+    return highlights[:4]
 
 # ---------------------------------------------------------------------------
 # Main

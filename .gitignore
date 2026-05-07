@@ -1,4 +1,4 @@
-# Secrets
+# Secrets (tokens should be set as env vars, but ignore .env as a safety net)
 .env
 
 # Sensitive team config (real files contain PII / internal IDs — see .example.json)

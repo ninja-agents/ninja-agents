@@ -7,7 +7,7 @@ Generates a leadership-ready weekly status report by querying GitHub, GitLab, an
 - **GitHub MCP** — for PR and commit data
 - **GitLab MCP** (`@zereight/mcp-gitlab`) — for MR data
 - **Atlassian Rovo MCP** — for Jira ticket data
-- Tokens configured in `.env` — see [MCP setup guide](../../docs/mcp-setup.md)
+- Tokens set as environment variables — see [MCP setup guide](../../docs/mcp-setup.md)
 
 ## Usage
 

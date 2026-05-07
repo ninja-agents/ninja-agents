@@ -9,7 +9,7 @@ List the MCP servers or CLI tools this agent needs:
 - **GitHub MCP** — for PR and commit data
 - (add or remove as needed)
 
-Tokens must be configured in `.env` at the repo root.
+Tokens must be set as environment variables before launching Claude Code — see [MCP setup guide](../../docs/mcp-setup.md).
 
 ## Usage
 

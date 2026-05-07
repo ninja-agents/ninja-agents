@@ -7,9 +7,9 @@ A shared playground for AI agents that help engineering teams. Built for [Claude
 ```bash
 git clone <repo-url> && cd ninja-agents
 
-# Set up tokens (needed by agents that query external services)
-cp .env.example .env
-# Edit .env with your actual tokens
+# Set your tokens as environment variables before launching Claude Code
+export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
+export GITLAB_PAT=glpat-xxxxxxxxxxxxxxxxxxxx
 
 # Open in your IDE and run an agent
 claude                # Claude Code
@@ -39,8 +39,9 @@ You need an AI-powered IDE plus MCP servers for the agents you want to use:
 See [docs/mcp-setup.md](docs/mcp-setup.md) for the full step-by-step guide. The short version:
 
 ```bash
-cp .env.example .env
-# Edit .env with your tokens, then restart Claude Code
+export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
+export GITLAB_PAT=glpat-xxxxxxxxxxxxxxxxxxxx
+claude   # launch Claude Code with tokens in your environment
 ```
 
 ## Contributing a New Agent
@@ -72,7 +73,7 @@ ninja-agents/
 ├── AGENTS.md                          # Agent index (org-required)
 ├── CLAUDE.md                          # Claude Code project context
 ├── README.md                          # This file
-├── .env.example                       # Token template
+├── .mcp.json                          # MCP server definitions (uses env vars)
 ├── .claude/
 │   ├── agents/                        # Claude Code agent specs
 │   ├── skills/                        # Claude Code skill shortcuts

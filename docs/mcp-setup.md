@@ -1,6 +1,6 @@
 # MCP Server Setup
 
-This guide walks you through configuring the MCP servers that agents in this repo depend on. The server definitions live in `.mcp.json` (committed to the repo); you only need to supply your personal tokens.
+This guide walks you through configuring the MCP servers that agents in this repo depend on. The server definitions live in `.mcp.json` (committed to the repo); you only need to supply your personal tokens as environment variables when launching Claude Code.
 
 ## Prerequisites
 
@@ -10,11 +10,12 @@ This guide walks you through configuring the MCP servers that agents in this rep
 ## Quick Start
 
 ```bash
-cp .env.example .env
-# Edit .env with your tokens (see steps below)
+export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
+export GITLAB_PAT=glpat-xxxxxxxxxxxxxxxxxxxx
+claude
 ```
 
-Restart Claude Code after editing `.env` — it loads environment variables at startup.
+You can add these exports to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) so they persist across sessions.
 
 ## Token Setup
 
@@ -26,9 +27,9 @@ Used by the GitHub MCP server for PR and commit data.
 2. Create a **fine-grained** or **classic** token with these scopes:
    - `repo` — read access to repositories
    - `read:org` — read org membership
-3. Copy the token into `.env`:
-   ```
-   GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
+3. Export the token:
+   ```bash
+   export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
    ```
 
 ### 2. GitLab Personal Access Token
@@ -40,18 +41,18 @@ Used by the GitLab MCP server for MR data from `gitlab.cee.redhat.com`.
    - `api` — full API access
    - `read_api` — read-only API access (sufficient if you only need to read)
    - `read_repository` — read repo contents
-3. Copy the token into `.env`:
-   ```
-   GITLAB_PAT=glpat-xxxxxxxxxxxxxxxxxxxx
+3. Export the token:
+   ```bash
+   export GITLAB_PAT=glpat-xxxxxxxxxxxxxxxxxxxx
    ```
 
 ### 3. Atlassian (no token needed)
 
-The Atlassian Rovo MCP server authenticates via browser OAuth. On first use, Claude Code will open a browser window for you to log in to your Atlassian account. No `.env` entry is needed.
+The Atlassian Rovo MCP server authenticates via browser OAuth. On first use, Claude Code will open a browser window for you to log in to your Atlassian account. No environment variable is needed.
 
 ## Verification
 
-After setting up `.env`, restart Claude Code and run:
+After exporting your tokens, launch Claude Code and run:
 
 ```
 /mcp
@@ -82,7 +83,7 @@ The MCP servers are defined in `.mcp.json` at the project root:
 | **gitlab** | stdio | `npx @zereight/mcp-gitlab` |
 | **atlassian** | HTTP | `mcp.atlassian.com/v1/mcp` |
 
-Token references in `.mcp.json` use `${VAR_NAME}` syntax, which Claude Code resolves from your environment (including `.env`).
+Token references in `.mcp.json` use `${VAR_NAME}` syntax, which Claude Code resolves from your environment variables.
 
 ## Troubleshooting
 
@@ -93,9 +94,9 @@ Token references in `.mcp.json` use `${VAR_NAME}` syntax, which Claude Code reso
 
 ### Server shows but tools fail with auth errors
 
-- Check that `.env` has the correct token values
+- Check that the required environment variables are set: `echo $GITHUB_PAT`
 - For Atlassian, try re-authenticating by using an Atlassian MCP tool — it will reopen the browser OAuth flow
-- Restart Claude Code after editing `.env`
+- Restart Claude Code after changing environment variables
 
 ### GitLab returns empty results
 

@@ -7,8 +7,7 @@ A shared playground for AI agents that help engineering teams. Each agent lives 
 - `agents/{name}/` — self-contained agent directories (scripts, data, config, README)
 - `.claude/agents/` — Claude Code agent specs (wiring into agent directories)
 - `.claude/skills/` — Claude Code skill shortcuts
-- `.mcp.json` — MCP server definitions (committed, no secrets)
-- `.env` — tokens for MCP servers (never commit)
+- `.mcp.json` — MCP server definitions (committed, no secrets; tokens resolve from env vars)
 
 ## Adding a New Agent
 
@@ -62,6 +61,6 @@ mcp__atlassian__searchJiraIssuesUsingJql:
 
 ## Rules
 
-- Never commit `.env` or tokens
+- Never commit tokens or secrets
 - All links in reports use markdown hyperlinks with descriptive text
 - Only `resolution = "Done"` counts as a completed Jira deliverable

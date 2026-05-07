@@ -33,7 +33,7 @@ YELLOW = '\033[93m'
 RED = '\033[91m'
 RESET = '\033[0m'
 
-TICKET_ID_RE = re.compile(r'((?:MTV|MTA|CNV|OCPBUGS|CONSOLE)-\d+)')
+TICKET_ID_RE = None  # set by build_ticket_id_re() in main()
 JIRA_GITHUB_REF_RE = re.compile(r'\[([a-zA-Z0-9_-]+)#(\d+)\]')
 
 # ---------------------------------------------------------------------------
@@ -104,8 +104,14 @@ def build_github_to_name(config: dict) -> Dict[str, str]:
     return {e["github"]: e["name"] for e in config["engineers"]}
 
 
-def build_engineer_products(config: dict) -> Dict[str, List[str]]:
-    return {e["name"]: e["products"] for e in config["engineers"]}
+def build_ticket_id_re(config: dict) -> re.Pattern:
+    prefixes = set()
+    for p in config["products"]:
+        for prefix in p["jira_prefixes"]:
+            prefixes.add(prefix)
+    sorted_prefixes = sorted(prefixes, key=len, reverse=True)
+    pattern = r'((?:' + '|'.join(sorted_prefixes) + r')-\d+)'
+    return re.compile(pattern)
 
 
 def build_repo_to_product(config: dict) -> Dict[str, str]:
@@ -116,8 +122,6 @@ def build_repo_to_product(config: dict) -> Dict[str, str]:
             parts = repo.split("/")
             if len(parts) == 2:
                 mapping[parts[1]] = p["key"]
-    for repo, product in config.get("ocpbugs_repo_to_product", {}).items():
-        mapping[repo] = product
     return mapping
 
 
@@ -127,6 +131,20 @@ def build_prefix_to_product(config: dict) -> Dict[str, str]:
         for prefix in p["jira_prefixes"]:
             mapping[prefix] = p["key"]
     return mapping
+
+
+def build_ocpbugs_summary_repo_re(config: dict) -> re.Pattern:
+    repo_names = set()
+    for p in config["products"]:
+        for repo in p["repos"]:
+            parts = repo.split("/")
+            if len(parts) == 2 and len(parts[1]) > 3:
+                repo_names.add(parts[1])
+    if not repo_names:
+        return re.compile(r'(?!)')
+    sorted_names = sorted(repo_names, key=len, reverse=True)
+    pattern = r'\b(?:' + '|'.join(re.escape(name) for name in sorted_names) + r')\b'
+    return re.compile(pattern)
 
 # ---------------------------------------------------------------------------
 # CSV loading
@@ -332,8 +350,19 @@ def filter_completed_jira(tickets: List[JiraItem], window_start: datetime,
 
 
 def filter_in_progress_jira(tickets: List[JiraItem]) -> List[JiraItem]:
-    closed_statuses = {"Done", "Closed", "Resolved", "Verified"}
-    return [t for t in tickets if t.status not in closed_statuses]
+    excluded_statuses = {"Done", "Closed", "Resolved", "Verified", "New"}
+    dev_statuses = {"ASSIGNED", "In Progress", "Dev Complete", "Review", "POST", "To Do", "Release Pending"}
+    qe_statuses = {"ON_QA"}
+    result = []
+    for t in tickets:
+        if t.status in excluded_statuses:
+            continue
+        if t.issuetype in ("Bug", "Vulnerability"):
+            relevant = qe_statuses if t.role == "qa_contact" else dev_statuses
+            if t.status not in relevant:
+                continue
+        result.append(t)
+    return result
 
 # ---------------------------------------------------------------------------
 # Nesting & product mapping
@@ -443,14 +472,27 @@ def nest_in_progress(open_prs: List[PRItem],
 
 def determine_product(item, config: dict, repo_to_product: Dict[str, str],
                       prefix_to_product: Dict[str, str],
-                      engineer_products: Dict[str, List[str]]) -> str:
+                      ocpbugs_summary_re: re.Pattern) -> str:
     if isinstance(item, JiraItem):
         prefix = item.key.split("-")[0] if "-" in item.key else ""
+        if prefix == "OCPBUGS":
+            m = ocpbugs_summary_re.search(item.summary)
+            if m and m.group(0) in repo_to_product:
+                return repo_to_product[m.group(0)]
+            title_ids = extract_ticket_ids(item.summary)
+            for tid in title_ids:
+                tid_prefix = tid.split("-")[0]
+                if tid_prefix != "OCPBUGS" and tid_prefix in prefix_to_product:
+                    return prefix_to_product[tid_prefix]
+            for pr in item.nested_prs:
+                if pr.repo in repo_to_product:
+                    return repo_to_product[pr.repo]
+                pr_repo_name = pr.repo.split("/")[-1] if "/" in pr.repo else pr.repo
+                if pr_repo_name in repo_to_product:
+                    return repo_to_product[pr_repo_name]
         if prefix in prefix_to_product:
             return prefix_to_product[prefix]
-        if prefix == "OCPBUGS":
-            products = engineer_products.get(item.engineer, [])
-            return products[0] if products else "CNV"
+        return "Other"
 
     if isinstance(item, PRItem):
         repo = item.repo
@@ -459,13 +501,17 @@ def determine_product(item, config: dict, repo_to_product: Dict[str, str],
         repo_name = repo.split("/")[-1] if "/" in repo else repo
         if repo_name in repo_to_product:
             return repo_to_product[repo_name]
-        if repo == "openshift/release":
-            products = engineer_products.get(item.engineer, [])
-            return products[0] if products else "CNV"
+        title_ids = extract_ticket_ids(item.title)
+        for tid in title_ids:
+            tid_prefix = tid.split("-")[0]
+            if tid_prefix in prefix_to_product:
+                return prefix_to_product[tid_prefix]
+        m = ocpbugs_summary_re.search(item.title)
+        if m and m.group(0) in repo_to_product:
+            return repo_to_product[m.group(0)]
+        return "Other"
 
-    eng_products = engineer_products.get(
-        item.engineer if isinstance(item, (PRItem, JiraItem)) else "", [])
-    return eng_products[0] if eng_products else "CNV"
+    return "Other"
 
 
 def should_consolidate_test_tasks(tickets: List[JiraItem]) -> Tuple[bool, List[JiraItem], List[JiraItem]]:
@@ -483,8 +529,8 @@ def organize(completed_tickets: List[JiraItem], completed_orphan_prs: List[PRIte
              config: dict) -> Dict[str, Dict[str, EngineerBlock]]:
     repo_to_product = build_repo_to_product(config)
     prefix_to_product = build_prefix_to_product(config)
-    eng_products = build_engineer_products(config)
-    product_order = [p["key"] for p in config["products"]]
+    ocpbugs_summary_re = build_ocpbugs_summary_repo_re(config)
+    product_order = [p["key"] for p in config["products"]] + ["Other"]
     engineer_names = [e["name"] for e in config["engineers"]]
 
     sections: Dict[str, Dict[str, EngineerBlock]] = {}
@@ -499,19 +545,19 @@ def organize(completed_tickets: List[JiraItem], completed_orphan_prs: List[PRIte
         return sections[product][engineer]
 
     for t in completed_tickets:
-        product = determine_product(t, config, repo_to_product, prefix_to_product, eng_products)
+        product = determine_product(t, config, repo_to_product, prefix_to_product, ocpbugs_summary_re)
         get_block(product, t.engineer).completed_tickets.append(t)
 
     for p in completed_orphan_prs:
-        product = determine_product(p, config, repo_to_product, prefix_to_product, eng_products)
+        product = determine_product(p, config, repo_to_product, prefix_to_product, ocpbugs_summary_re)
         get_block(product, p.engineer).completed_prs.append(p)
 
     for t in ip_tickets:
-        product = determine_product(t, config, repo_to_product, prefix_to_product, eng_products)
+        product = determine_product(t, config, repo_to_product, prefix_to_product, ocpbugs_summary_re)
         get_block(product, t.engineer).in_progress_tickets.append(t)
 
     for p in ip_orphan_prs:
-        product = determine_product(p, config, repo_to_product, prefix_to_product, eng_products)
+        product = determine_product(p, config, repo_to_product, prefix_to_product, ocpbugs_summary_re)
         get_block(product, p.engineer).in_progress_prs.append(p)
 
     name_order = {n: i for i, n in enumerate(engineer_names)}
@@ -567,6 +613,7 @@ def format_completed_section(sections: Dict[str, Dict[str, EngineerBlock]],
                              config: dict) -> str:
     lines: List[str] = []
     product_names = {p["key"]: p["name"] for p in config["products"]}
+    product_names["Other"] = "Cross-Product & General"
 
     for pk in sections:
         has_completed = False
@@ -577,7 +624,8 @@ def format_completed_section(sections: Dict[str, Dict[str, EngineerBlock]],
         if not has_completed:
             continue
 
-        lines.append(f"\n### {pk} ({product_names.get(pk, pk)})\n")
+        pn = product_names.get(pk, pk)
+        lines.append(f"\n### {pk} ({pn})\n" if pn != pk else f"\n### {pk}\n")
         for eng_name, block in sections[pk].items():
             if not block.completed_tickets and not block.completed_prs:
                 continue
@@ -609,6 +657,7 @@ def format_in_progress_section(sections: Dict[str, Dict[str, EngineerBlock]],
                                config: dict) -> str:
     lines: List[str] = []
     product_names = {p["key"]: p["name"] for p in config["products"]}
+    product_names["Other"] = "Cross-Product & General"
 
     for pk in sections:
         has_ip = False
@@ -619,7 +668,8 @@ def format_in_progress_section(sections: Dict[str, Dict[str, EngineerBlock]],
         if not has_ip:
             continue
 
-        lines.append(f"\n### {pk} ({product_names.get(pk, pk)})\n")
+        pn = product_names.get(pk, pk)
+        lines.append(f"\n### {pk} ({pn})\n" if pn != pk else f"\n### {pk}\n")
         for eng_name, block in sections[pk].items():
             if not block.in_progress_tickets and not block.in_progress_prs:
                 continue
@@ -641,50 +691,76 @@ def format_in_progress_section(sections: Dict[str, Dict[str, EngineerBlock]],
 # Key highlights
 # ---------------------------------------------------------------------------
 
+def _clean_summary(summary: str) -> str:
+    s = re.sub(r'^\[(?:UI|QE|RFE)\]\s*', '', summary)
+    s = re.sub(r'^\[tackle2-ui#\d+\]\s*', '', s)
+    s = s.strip()
+    if len(s) > 60:
+        s = s[:57].rsplit(" ", 1)[0] + "..."
+    if s and s[0].isupper() and not s[:2].isupper():
+        s = s[0].lower() + s[1:]
+    return s
+
+
+def _is_filler_ticket(summary: str) -> bool:
+    return bool(re.search(r'AI Challenge|Polarion test plan', summary, re.IGNORECASE))
+
+
 def generate_highlights(sections: Dict[str, Dict[str, EngineerBlock]]) -> List[str]:
-    engineer_counts: Dict[str, Dict[str, int]] = {}
+    engineer_work: Dict[str, dict] = {}
     for pk, engineers in sections.items():
         for eng_name, block in engineers.items():
-            if eng_name not in engineer_counts:
-                engineer_counts[eng_name] = {"prs": 0, "tickets": 0, "products": set()}
-            total_prs = len(block.completed_prs)
+            if eng_name not in engineer_work:
+                engineer_work[eng_name] = {
+                    "cve_count": 0, "test_versions": set(),
+                    "notable": [], "products": set(), "total": 0,
+                }
+            w = engineer_work[eng_name]
+
             for t in block.completed_tickets:
-                total_prs += len(t.nested_prs)
-            engineer_counts[eng_name]["prs"] += total_prs
-            engineer_counts[eng_name]["tickets"] += len(block.completed_tickets)
-            if total_prs > 0 or len(block.completed_tickets) > 0:
-                engineer_counts[eng_name]["products"].add(pk)
+                pr_count = len(t.nested_prs)
+                w["total"] += 1 + pr_count
+                is_test = bool(re.match(r'^\[(?:TIER|POST|STAGE)', t.summary, re.IGNORECASE))
+                is_cve = "CVE" in t.summary.upper()
+                if is_test:
+                    for m in re.finditer(r'cnv-(\d+\.\d+\.\d+)', t.summary, re.IGNORECASE):
+                        w["test_versions"].add(m.group(1))
+                elif is_cve:
+                    w["cve_count"] += 1 + pr_count
+                elif not _is_filler_ticket(t.summary):
+                    w["notable"].append(_clean_summary(t.summary))
+
+            for pr in block.completed_prs:
+                w["total"] += 1
+                if "CVE" in pr.title.upper():
+                    w["cve_count"] += 1
+
+            if block.completed_tickets or block.completed_prs:
+                w["products"].add(pk)
 
     highlights: List[str] = []
-    sorted_engineers = sorted(engineer_counts.items(),
-                              key=lambda x: x[1]["prs"] + x[1]["tickets"],
-                              reverse=True)
+    sorted_eng = sorted(engineer_work.items(), key=lambda x: x[1]["total"], reverse=True)
 
-    for eng_name, counts in sorted_engineers[:4]:
-        prs = counts["prs"]
-        tickets = counts["tickets"]
-        products = counts["products"]
-        product_str = "/".join(sorted(products))
-
-        if prs == 0 and tickets == 0:
+    for eng_name, w in sorted_eng:
+        if w["total"] == 0:
             continue
+        parts: List[str] = []
+        if w["test_versions"]:
+            parts.append(f"completed release testing for CNV {', '.join(sorted(w['test_versions']))}")
+        if w["cve_count"] > 0:
+            parts.append(f"drove CVE remediation ({w['cve_count']} fixes)")
+        for s in w["notable"]:
+            parts.append(s)
+            if len(parts) >= 3:
+                break
+        if not parts:
+            continue
+        product_str = "/".join(sorted(w["products"]))
+        highlights.append(f"- {eng_name} ({product_str}): {'; '.join(parts[:3])}")
+        if len(highlights) >= 4:
+            break
 
-        notable_tickets = []
-        for pk, engineers in sections.items():
-            if eng_name in engineers:
-                block = engineers[eng_name]
-                for t in block.completed_tickets:
-                    if t.issuetype in ("Story", "Epic", "Bug") and not re.match(r'^\[(?:TIER|POST|STAGE)', t.summary):
-                        notable_tickets.append(t)
-
-        if notable_tickets:
-            ticket_detail = ", ".join(f"{t.key}" for t in notable_tickets[:3])
-            highlights.append(
-                f"- {eng_name} shipped {prs} {product_str} PRs/MRs including {ticket_detail}")
-        elif prs > 0:
-            highlights.append(f"- {eng_name} shipped {prs} {product_str} PRs/MRs")
-
-    return highlights[:4]
+    return highlights
 
 # ---------------------------------------------------------------------------
 # Main
@@ -714,6 +790,9 @@ def main():
     output_path = Path(args.output) if args.output else Path(f"agents/weekly-team-update/data/output/weekly-update-{args.date}.md")
 
     config = load_config(config_path)
+
+    global TICKET_ID_RE
+    TICKET_ID_RE = build_ticket_id_re(config)
 
     # Load data
     print(f"Loading CSVs from {cache_dir}/...")
@@ -783,9 +862,6 @@ def main():
 
     report_lines.append("## In Progress")
     report_lines.append(format_in_progress_section(sections, config))
-
-    report_lines.append("## Blockers & Critical Issues")
-    report_lines.append("None reported.")
 
     report_text = "\n".join(report_lines) + "\n"
 

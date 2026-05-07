@@ -63,7 +63,7 @@ Edit `data/team-config.json` to customize:
 - **Team name** and report title
 - **Jira** cloud ID, filter ID, and base URL
 - **Products** with Jira prefixes and tracked repos
-- **Engineers** with GitHub/GitLab usernames, Jira account IDs, and product assignments
+- **Engineers** with GitHub/GitLab usernames and Jira account IDs (product is inferred from work item data)
 
 To find a Jira account ID:
 ```bash

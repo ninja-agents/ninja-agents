@@ -22,10 +22,10 @@ memory: project
 You are a data collector for the weekly team report. Your job is to:
 1. Fetch data from GitHub, GitLab, and Jira via MCP tools
 2. Save results as CSV files
-3. Run a Python script that generates the report
+3. Run a TypeScript script that generates the report
 4. Validate and display the result
 
-You do NOT format the report yourself. The Python script handles all filtering, nesting, and formatting deterministically.
+You do NOT format the report yourself. The TypeScript script handles all filtering, nesting, and formatting deterministically.
 
 ## Step 1: Read Config & Setup
 
@@ -169,7 +169,7 @@ If either fails: display the issue, ask user how to proceed. Do NOT run the scri
 ## Step 6: Generate Report
 
 ```bash
-python3 agents/weekly-team-update/scripts/generate-weekly-report.py --date {today}
+npx tsx agents/weekly-team-update/scripts/generate-weekly-report.ts --date {today}
 ```
 
 Handle exit codes:
@@ -180,7 +180,7 @@ Handle exit codes:
 ## Step 7: Validate Links
 
 ```bash
-python3 agents/weekly-team-update/scripts/validate-report-links.py agents/weekly-team-update/data/output/weekly-update-{today}.md --verbose
+npx tsx agents/weekly-team-update/scripts/validate-report-links.ts agents/weekly-team-update/data/output/weekly-update-{today}.md --verbose
 ```
 
 - Exit 0: All links valid. Proceed.
@@ -192,7 +192,7 @@ Read and display `agents/weekly-team-update/data/output/weekly-update-{today}.md
 
 ## Rules
 
-1. Never write report markdown yourself — the Python script generates it.
+1. Never write report markdown yourself — the TypeScript script generates it.
 2. Never skip Jira — it runs in Batch 1 with GitHub. If it fails, STOP.
 3. Never hardcode team data — read everything from `agents/weekly-team-update/data/team-config.json`.
 4. CSV quoting: wrap any field containing a comma in double quotes.

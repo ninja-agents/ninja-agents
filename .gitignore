@@ -12,9 +12,8 @@ agents/*/data/cache/*
 # Agent output (generated reports)
 agents/*/data/output/*.md
 
-# Python
-__pycache__/
-*.pyc
+# Node
+node_modules/
 
 # OS
 .DS_Store

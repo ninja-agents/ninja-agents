@@ -22,8 +22,8 @@ Generates a leadership-ready weekly status report by querying GitHub, GitLab, an
 Run the scripts directly after populating the CSV cache:
 
 ```bash
-python3 agents/weekly-team-update/scripts/generate-weekly-report.py --date 2026-05-06
-python3 agents/weekly-team-update/scripts/validate-report-links.py
+npx tsx agents/weekly-team-update/scripts/generate-weekly-report.ts --date 2026-05-06
+npx tsx agents/weekly-team-update/scripts/validate-report-links.ts
 ```
 
 ## How It Works
@@ -34,11 +34,11 @@ python3 agents/weekly-team-update/scripts/validate-report-links.py
    - Jira tickets (assignee + QA contact) for each engineer
    - GitLab MRs (merged + open) for each engineer
 3. Saves raw data as CSV in `data/cache/`
-4. Runs `scripts/generate-weekly-report.py` for deterministic formatting
-5. Validates all links with `scripts/validate-report-links.py`
+4. Runs `scripts/generate-weekly-report.ts` for deterministic formatting
+5. Validates all links with `scripts/validate-report-links.ts`
 6. Saves report to `data/output/weekly-update-{date}.md`
 
-The agent does NOT format the report itself — the Python script handles all filtering, nesting, and formatting deterministically.
+The agent does NOT format the report itself — the TypeScript script handles all filtering, nesting, and formatting deterministically.
 
 ## Output Format
 
@@ -76,9 +76,12 @@ mcp__atlassian__lookupJiraAccountId with searchString: "user@company.com"
 ```
 agents/weekly-team-update/
 ├── README.md                        # This file
+├── package.json                     # Dependencies (tsx, vitest, typescript)
+├── tsconfig.json                    # TypeScript config
 ├── scripts/
-│   ├── generate-weekly-report.py    # Deterministic report generator
-│   └── validate-report-links.py     # Link validation
+│   ├── generate-weekly-report.ts    # Deterministic report generator
+│   ├── validate-report-links.ts     # Link validation
+│   └── __tests__/                   # Vitest test suites
 └── data/
     ├── team-config.example.json     # Template (committed)
     ├── team-config.json             # Real config (gitignored)

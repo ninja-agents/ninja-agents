@@ -1,5 +1,9 @@
 # Ninja Agents
 
+<p align="center">
+  <img src="logo.png" alt="Ninja Agents logo" width="200">
+</p>
+
 A shared playground for AI agents that help engineering teams ship status reports, run sprint retrospectives, and audit repository documentation. Each agent is a self-contained directory under `agents/` with its own scripts, config, and data. Agents run inside [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Cursor](https://cursor.com) via MCP servers that connect to GitHub, GitLab, and Jira.
 
 ## Quick Start

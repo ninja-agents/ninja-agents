@@ -58,6 +58,7 @@ mcp__atlassian__searchJiraIssuesUsingJql:
 |-------|-------------|-------|
 | `/team-update` | Weekly team report for leadership (7-day window) | `weekly-team-update` |
 | `/create-agent` | Scaffold a new agent with best-practice structure and specs | — (interactive) |
+| `/sprint-retro` | Sprint retrospective analysis from active Jira sprint | `sprint-retro` |
 
 ## Rules
 

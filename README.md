@@ -21,6 +21,7 @@ claude                # Claude Code
 | Agent | Skill | Description |
 |-------|-------|-------------|
 | [weekly-team-update](agents/weekly-team-update/) | `/team-update` | Weekly team report for leadership from GitHub, GitLab, and Jira |
+| [sprint-retro](agents/sprint-retro/) | `/sprint-retro` | Sprint retrospective analysis from active Jira sprint |
 
 Each agent has its own README with setup and usage instructions.
 

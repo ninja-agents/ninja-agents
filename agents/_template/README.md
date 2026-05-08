@@ -26,9 +26,7 @@ Describe how to use this agent from Cursor (e.g., run scripts directly, use MCP 
 For TypeScript agents, scripts can be run directly:
 
 ```bash
-cd agents/your-agent
-npm install
-npm run generate -- --date 2026-01-01
+npm run your-agent:generate -- --date 2026-01-01
 ```
 
 ## How It Works
@@ -48,8 +46,7 @@ Or, if no configuration: "No configuration needed."
 ```
 agents/your-agent/
 ├── README.md           # This file
-├── package.json        # Dependencies and scripts (TypeScript agents)
-├── tsconfig.json       # TypeScript config
+├── tsconfig.json       # TypeScript config (extends root)
 ├── scripts/            # Supporting scripts
 │   ├── your-script.ts
 │   └── validate-output.ts  # Output validation

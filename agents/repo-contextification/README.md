@@ -25,14 +25,14 @@ In Cursor chat, mention `@repo-contextification` or ask to "contextify this repo
 ### Manual
 
 ```bash
-# Run the audit script directly
-npm run audit -- --repo-path /path/to/repo
+# Run the audit script directly (from repo root)
+npm run context:audit -- --repo-path /path/to/repo
 
 # Preview what would be generated (no files written)
-npm run audit:dry-run -- --repo-path /path/to/repo
+npm run context:audit:dry-run -- --repo-path /path/to/repo
 
 # Validate generated docs (checks sections, links, anchors, placeholders)
-npm run validate -- --repo-path /path/to/repo --verbose
+npm run context:validate -- --repo-path /path/to/repo --verbose
 ```
 
 ## How It Works
@@ -53,7 +53,6 @@ No configuration file needed. The agent discovers everything from the target rep
 ```
 agents/repo-contextification/
 ├── README.md
-├── package.json
 ├── tsconfig.json
 ├── scripts/
 │   ├── lib.ts                # shared types and utilities

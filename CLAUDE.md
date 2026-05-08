@@ -83,7 +83,7 @@ TypeScript conventions enforced by ESLint:
 - Use `import.meta.dirname` instead of `dirname(fileURLToPath(import.meta.url))`
 - Use `String(e)` when interpolating caught errors in template literals
 - Mark top-level async calls with `void` when not awaited
-- Include `@types/node` in each agent's devDependencies
+- `@types/node` is in the root devDependencies (shared by all agents)
 
 ## Rules
 

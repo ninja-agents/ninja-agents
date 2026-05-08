@@ -25,13 +25,12 @@ This repo works with multiple AI-powered IDEs:
 
 ### Agent Directory Structure
 
-Every agent follows the layout defined in [agents/_template/](agents/_template/):
+Every agent follows the layout defined in [agents/\_template/](agents/_template/):
 
 ```text
 agents/{name}/
   README.md           # prerequisites, usage, how it works
-  package.json        # tsx, vitest, typescript, @types/node
-  tsconfig.json       # extends root via project references
+  tsconfig.json       # extends root tsconfig
   scripts/            # TypeScript scripts for deterministic output
   data/
     config.json       # agent-specific configuration
@@ -69,7 +68,7 @@ agents/{name}/
 - Use `import.meta.dirname` instead of `dirname(fileURLToPath(import.meta.url))`
 - Add type assertions to `JSON.parse` calls
 - Use `String(e)` for caught errors in template literals
-- Each agent manages its own dependencies via its `package.json`
+- All agent dependencies are managed in the root `package.json`
 
 ## Review Guidelines
 

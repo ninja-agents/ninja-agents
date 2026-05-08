@@ -10,7 +10,7 @@ A shared playground for AI agents that help engineering teams ship status report
 
 ```bash
 git clone <repo-url> && cd ninja-agents
-npm install           # root-level linting/formatting tooling
+npm install           # all dependencies (linting, TypeScript, testing)
 
 # Set tokens as env vars (add to ~/.bashrc or ~/.zshrc to persist)
 export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
@@ -19,12 +19,6 @@ export GITLAB_PAT=glpat-xxxxxxxxxxxxxxxxxxxx
 # Launch Claude Code and invoke an agent
 claude
 # then type: /team-update
-```
-
-Each agent has its own `package.json`. Install per-agent dependencies before running scripts directly:
-
-```bash
-cd agents/weekly-team-update && npm install
 ```
 
 See [docs/mcp-setup.md](docs/mcp-setup.md) for the full token setup guide and troubleshooting.

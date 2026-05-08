@@ -6,14 +6,27 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "weekly:generate": "tsx agents/weekly-team-update/scripts/generate-weekly-report.ts",
+    "weekly:validate": "tsx agents/weekly-team-update/scripts/validate-report-links.ts",
+    "weekly:test": "vitest run --dir agents/weekly-team-update",
+    "retro:generate": "tsx agents/sprint-retro/scripts/generate-sprint-retro.ts",
+    "retro:test": "vitest run --dir agents/sprint-retro",
+    "context:audit": "tsx agents/repo-contextification/scripts/audit-repo.ts",
+    "context:audit:dry-run": "tsx agents/repo-contextification/scripts/audit-repo.ts --dry-run",
+    "context:validate": "tsx agents/repo-contextification/scripts/validate-output.ts",
+    "context:test": "vitest run --dir agents/repo-contextification"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/node": "^22.0.0",
     "eslint": "^10.3.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.8.3",
+    "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "typescript-eslint": "^8.59.2"
+    "typescript-eslint": "^8.59.2",
+    "vitest": "^3.2.0"
   }
 }

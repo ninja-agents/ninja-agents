@@ -82,8 +82,7 @@ mcp__atlassian__lookupJiraAccountId with searchString: "user@company.com"
 ```
 agents/weekly-team-update/
 ├── README.md                        # This file
-├── package.json                     # Dependencies (tsx, vitest, typescript)
-├── tsconfig.json                    # TypeScript config
+├── tsconfig.json                    # TypeScript config (extends root)
 ├── scripts/
 │   ├── generate-weekly-report.ts    # Deterministic report generator
 │   ├── validate-report-links.ts     # Link validation

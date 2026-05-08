@@ -16,7 +16,7 @@ Or run the scaffolding skill in Claude Code:
 /create-agent your-agent-name
 ```
 
-Both approaches produce the standard layout described in [agents/_template/README.md](agents/_template/README.md). After creating the agent directory, wire it into the IDE tooling:
+Both approaches produce the standard layout described in [agents/\_template/README.md](agents/_template/README.md). After creating the agent directory, wire it into the IDE tooling:
 
 1. Agent spec at `.claude/agents/your-agent.md`
 2. Skill shortcut at `.claude/skills/your-skill/SKILL.md`
@@ -45,16 +45,17 @@ Prettier configuration (`prettier.config.mjs`):
 
 - Double quotes, trailing commas, semicolons
 
-Each agent has its own `package.json` with `@types/node`, `tsx`, `typescript`, and `vitest` as devDependencies. The root `tsconfig.json` uses project references to point to each agent's `tsconfig.json`.
+All agent dependencies (`@types/node`, `tsx`, `typescript`, `vitest`) are managed in the root `package.json`. The root `tsconfig.json` uses project references to point to each agent's `tsconfig.json`.
 
 ## Testing
 
-Agents that include scripts use [Vitest](https://vitest.dev/) for unit tests. Run tests within an agent directory:
+Agents that include scripts use [Vitest](https://vitest.dev/) for unit tests. Run tests from the repo root:
 
 ```bash
-cd agents/weekly-team-update
-npm install
-npm test              # vitest run
+npm test                    # run all agent tests
+npm run weekly:test         # run only weekly-team-update tests
+npm run retro:test          # run only sprint-retro tests
+npm run context:test        # run only repo-contextification tests
 ```
 
 Test files live alongside the source (e.g., `scripts/lib.test.ts`). When adding new scripts, add corresponding test files following the same naming convention.

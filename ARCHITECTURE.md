@@ -51,8 +51,7 @@ Each agent follows the same internal structure:
 ```text
 agents/{name}/
   README.md                       # Usage docs, prerequisites, file layout
-  package.json                    # tsx, vitest, typescript, @types/node
-  tsconfig.json                   # Project reference to root tsconfig
+  tsconfig.json                   # Extends root tsconfig for per-agent paths
   scripts/
     generate-*.ts                 # Deterministic report generator
     validate-*.ts                 # Output validation (links, format)
@@ -113,31 +112,30 @@ A validation script then checks the final output for broken links, missing secti
 
 ### Root Level
 
-| Package | Purpose |
-|---------|---------|
-| `eslint` + `typescript-eslint` | Linting with type-checked rules (flat config) |
-| `eslint-config-prettier` | Disables ESLint rules that conflict with Prettier |
-| `prettier` | Code formatting (double quotes, trailing commas, semicolons) |
-| `typescript` | Type checking across all agents via project references |
+| Package                        | Purpose                                                      |
+| ------------------------------ | ------------------------------------------------------------ |
+| `eslint` + `typescript-eslint` | Linting with type-checked rules (flat config)                |
+| `eslint-config-prettier`       | Disables ESLint rules that conflict with Prettier            |
+| `prettier`                     | Code formatting (double quotes, trailing commas, semicolons) |
+| `typescript`                   | Type checking across all agents via project references       |
 
-### Per-Agent
+All dependencies are managed in the root `package.json`. In addition to the linting/formatting tools, the root includes:
 
-| Package | Purpose |
-|---------|---------|
-| `tsx` | TypeScript execution without a build step |
-| `vitest` | Unit testing |
-| `typescript` | Local type checking |
-| `@types/node` | Node.js type definitions |
+| Package       | Purpose                                   |
+| ------------- | ----------------------------------------- |
+| `tsx`         | TypeScript execution without a build step |
+| `vitest`      | Unit testing                              |
+| `@types/node` | Node.js type definitions                  |
 
 No runtime dependencies exist -- agents use only Node.js built-in modules (`fs`, `path`). The `tsx` package provides the TypeScript execution environment.
 
 ### MCP Servers
 
-| Server | Transport | Endpoint | Auth |
-|--------|-----------|----------|------|
-| GitHub MCP | HTTP | `api.githubcopilot.com/mcp/` | `GITHUB_PAT` env var |
-| GitLab MCP | stdio | `npx @zereight/mcp-gitlab` | `GITLAB_PAT` env var |
-| Atlassian Rovo MCP | HTTP | `mcp.atlassian.com/v1/mcp` | Browser OAuth |
+| Server             | Transport | Endpoint                     | Auth                 |
+| ------------------ | --------- | ---------------------------- | -------------------- |
+| GitHub MCP         | HTTP      | `api.githubcopilot.com/mcp/` | `GITHUB_PAT` env var |
+| GitLab MCP         | stdio     | `npx @zereight/mcp-gitlab`   | `GITLAB_PAT` env var |
+| Atlassian Rovo MCP | HTTP      | `mcp.atlassian.com/v1/mcp`   | Browser OAuth        |
 
 MCP server definitions live in `.mcp.json` (for Claude Code) and `.cursor/mcp.json` (for Cursor). Token references use `${VAR_NAME}` syntax, resolved from the user's shell environment at launch time.
 
@@ -158,8 +156,9 @@ npx tsx agents/weekly-team-update/scripts/generate-weekly-report.ts --date 2026-
 npx tsx agents/repo-contextification/scripts/audit-repo.ts --repo-path /path/to/repo
 ```
 
-Tests run per-agent using Vitest:
+Tests run from the repo root using Vitest:
 
 ```bash
-cd agents/sprint-retro && npm test
+npm test              # all agents
+npm run retro:test    # single agent
 ```

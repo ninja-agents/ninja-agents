@@ -25,9 +25,7 @@ In Cursor chat, mention `@sprint-retro` or ask for a "sprint retrospective" — 
 Run the analysis script directly (requires cached CSV data):
 
 ```bash
-cd agents/sprint-retro
-npm install
-npm run generate -- --date 2026-05-07
+npm run retro:generate -- --date 2026-05-07
 ```
 
 ## How It Works
@@ -69,7 +67,6 @@ Engineer data is shared from `agents/weekly-team-update/data/team-config.json` �
 ```
 agents/sprint-retro/
 ├── README.md
-├── package.json
 ├── tsconfig.json
 ├── scripts/
 │   └── generate-sprint-retro.ts    # Analysis engine

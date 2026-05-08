@@ -81,49 +81,29 @@ touch agents/{name}/data/cache/.gitkeep agents/{name}/data/output/.gitkeep
 
 **If TypeScript was selected**, also generate:
 
-**`agents/{name}/package.json`:**
-
-```json
-{
-  "name": "{name}",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "{main-script-name}": "tsx scripts/{main-script}.ts",
-    "validate": "tsx scripts/validate-output.ts",
-    "test": "vitest run"
-  },
-  "devDependencies": {
-    "@types/node": "^22.0.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.7.0",
-    "vitest": "^3.2.0"
-  }
-}
-```
-
-Adjust the `scripts` section: include only scripts that apply. If the agent has no validation script, omit the `"validate"` entry. If no tests, omit `"test"` and `vitest`.
-
 **`agents/{name}/tsconfig.json`:**
 
 ```json
 {
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
     "outDir": "dist",
-    "rootDir": "scripts",
-    "declaration": false,
-    "sourceMap": false
+    "rootDir": "scripts"
   },
   "include": ["scripts/**/*.ts"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["dist"]
 }
 ```
+
+**Add scripts to the root `package.json`** — append namespaced scripts for the new agent:
+
+```json
+"{name}:{main-script-name}": "tsx agents/{name}/scripts/{main-script}.ts",
+"{name}:validate": "tsx agents/{name}/scripts/validate-output.ts",
+"{name}:test": "vitest run --dir agents/{name}"
+```
+
+Include only scripts that apply. If the agent has no validation script, omit the `"{name}:validate"` entry.
 
 **If Python was selected**, generate:
 
@@ -324,7 +304,6 @@ If no config: "No configuration needed."}
 \```
 agents/{name}/
 ├── README.md
-├── package.json # if TypeScript
 ├── tsconfig.json # if TypeScript
 ├── scripts/
 │ ├── {main-script}.ts
@@ -569,7 +548,7 @@ If TypeScript or Python scripts were generated, install dependencies:
 **TypeScript:**
 
 ```bash
-npm --prefix agents/{name} install
+npm install
 ```
 
 **Python:**
@@ -605,7 +584,7 @@ After generating all files, display:
    - [ ] Flesh out the starter script in `agents/{name}/scripts/`
    - [ ] Flesh out the config file in `agents/{name}/data/config.json` (if applicable)
    - [ ] Add MCP tool permissions to `.claude/settings.json` if needed
-   - [ ] Write tests (run with `npm test` from `agents/{name}/`)
+   - [ ] Write tests (run with `npm run {name}:test` from the repo root)
    - [ ] Test the agent by running `/{skill-name}` (Claude Code) or `@{name}` (Cursor)
    - [ ] Commit the new agent
 
@@ -647,7 +626,7 @@ Quality rules for generated files. The Phase 2 templates above show _what_ to ge
 
 - Self-contained under `agents/{name}/` — all paths relative to repo root
 - The `.gitignore` already handles `agents/*/data/cache/*` and `agents/*/data/output/*.md`
-- TypeScript agents: `package.json` + `tsconfig.json` at agent root
+- TypeScript agents: `tsconfig.json` at agent root (dependencies and scripts in root `package.json`)
 - Python agents: `requirements.txt` at agent root
 - Config files in `agents/{name}/data/` — never hardcode team data in specs
 
@@ -655,7 +634,7 @@ Quality rules for generated files. The Phase 2 templates above show _what_ to ge
 
 The repo uses ESLint (flat config) + Prettier at the root. All generated TypeScript must pass `npm run lint` and `npm run format` from the repo root.
 
-- Include `@types/node` in agent devDependencies — required for type-checked linting
+- `@types/node` is already in the root devDependencies — no per-agent install needed
 - Add a `{ "path": "agents/{name}" }` entry to the root `tsconfig.json` references
 - Always add type assertions to `JSON.parse` calls: `JSON.parse(...) as MyType`
 - Use `import.meta.dirname` instead of the `dirname(fileURLToPath(import.meta.url))` pattern (Node 22+)

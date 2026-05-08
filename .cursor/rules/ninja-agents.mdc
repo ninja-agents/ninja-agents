@@ -1,6 +1,5 @@
 ---
-description: Project context for Ninja Agents — a shared AI agent playground
-globs:
+description: Project context for Ninja Agents — a shared AI agent playground with team automation workflows
 alwaysApply: true
 ---
 
@@ -8,22 +7,34 @@ alwaysApply: true
 
 A shared playground for AI agents that help engineering teams. Each agent is self-contained under `agents/`.
 
-## Agent Directory Convention
+## Available Workflows
 
-Each agent lives in `agents/{name}/` with its own README, scripts, and data. See individual agent READMEs for usage:
+Invoke these by name (e.g., `@weekly-team-update`) or describe what you need:
 
-- [weekly-team-update](agents/weekly-team-update/README.md) — weekly team report for leadership
+| Rule                    | Purpose                                                        |
+| ----------------------- | -------------------------------------------------------------- |
+| `@weekly-team-update`   | Weekly team report for leadership (GitHub + GitLab + Jira)     |
+| `@sprint-retro`         | Sprint retrospective analysis from active Jira sprint          |
+| `@repo-contextification`| Audit repo docs and scaffold missing files                     |
+
+Each rule points to its full workflow in `.claude/agents/{name}.md` — the single source of truth.
 
 ## MCP Servers
 
-Agents may use these MCP servers (configure in Cursor settings):
+Configured in `.cursor/mcp.json`. Tokens from environment variables:
 
-- **GitHub MCP** — PR and commit data from github.com
-- **GitLab MCP** (`@zereight/mcp-gitlab`) — MR and commit data from gitlab.cee.redhat.com
-- **Atlassian Rovo MCP** — Jira ticket data from redhat.atlassian.net
+- **GitHub MCP** — `GITHUB_PAT`
+- **GitLab MCP** — `GITLAB_PAT` (gitlab.cee.redhat.com)
+- **Atlassian Rovo MCP** — browser OAuth (redhat.atlassian.net)
 
-Tokens are loaded from `.env` (copy from `.env.example`). Never commit `.env`.
+## Key Conventions
+
+- Only `resolution = "Done"` counts as a completed Jira deliverable
+- GitLab queries MUST include `scope: "all"` or results may be empty
+- All report links use markdown hyperlinks with descriptive text
+- CSV fields containing commas must be wrapped in double quotes
+- Never commit tokens or secrets
 
 ## Contributing
 
-To add a new agent, see `agents/_template/README.md` for the expected structure.
+See `agents/_template/README.md` for the expected structure when adding a new agent.

@@ -17,7 +17,11 @@ Generates a leadership-ready weekly status report by querying GitHub, GitLab, an
 /team-update
 ```
 
-### Cursor / Manual
+### Cursor
+
+In Cursor chat, mention `@weekly-team-update` or ask for a "weekly team report" — the rule activates automatically and walks through the full workflow.
+
+### Manual
 
 Run the scripts directly after populating the CSV cache:
 

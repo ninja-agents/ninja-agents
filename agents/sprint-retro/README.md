@@ -16,6 +16,10 @@ Tokens must be set as environment variables before launching Claude Code.
 /sprint-retro
 ```
 
+### Cursor
+
+In Cursor chat, mention `@sprint-retro` or ask for a "sprint retrospective" — the rule activates automatically and walks through the full workflow.
+
 ### Manual
 
 Run the analysis script directly (requires cached CSV data):

@@ -300,7 +300,11 @@ Include: "Tokens must be set as environment variables before launching Claude Co
 /{skill-name}
 \```
 
-### Cursor / Manual
+### Cursor
+
+In Cursor chat, mention `@{name}` or describe what you need — the rule activates automatically and walks through the full workflow.
+
+### Manual
 
 {If scripts exist: show how to run them directly (e.g., `npm run generate -- --date 2026-01-01`).
 If prompt-only: describe how to invoke the agent manually.}
@@ -497,6 +501,31 @@ Append a row to each of these tables:
 | `/{skill-name}` | {description} | `{name}` |
 ```
 
+**`.cursor/rules/ninja-agents.mdc`** — Available Workflows table:
+
+```
+| `@{name}` | {description} |
+```
+
+**`.cursor/rules/{name}.mdc`** — create a thin pointer rule:
+
+```markdown
+---
+description: "{description}. Use when the user asks for {trigger phrases}."
+alwaysApply: false
+---
+
+# {Title}
+
+Read `.claude/agents/{name}.md` and follow the complete workflow described there.
+
+The agent spec contains all steps, MCP tool call examples, CSV schemas, validation checkpoints, style guides, and rules. It is the single source of truth for this workflow.
+
+Ignore the YAML frontmatter fields `model` and `memory` — those are Claude Code-specific and have no effect in Cursor.
+
+For best results, use Claude Opus or an equivalent model in Cursor settings.
+```
+
 **If TypeScript**, also add a reference to `tsconfig.json` in the repo root:
 
 ```json
@@ -577,7 +606,7 @@ After generating all files, display:
    - [ ] Flesh out the config file in `agents/{name}/data/config.json` (if applicable)
    - [ ] Add MCP tool permissions to `.claude/settings.json` if needed
    - [ ] Write tests (run with `npm test` from `agents/{name}/`)
-   - [ ] Test the agent by running `/{skill-name}`
+   - [ ] Test the agent by running `/{skill-name}` (Claude Code) or `@{name}` (Cursor)
    - [ ] Commit the new agent
 
 ---

@@ -7,7 +7,9 @@ A shared playground for AI agents that help engineering teams. Each agent lives 
 - `agents/{name}/` — self-contained agent directories (scripts, data, config, README)
 - `.claude/agents/` — Claude Code agent specs (wiring into agent directories)
 - `.claude/skills/` — Claude Code skill shortcuts
-- `.mcp.json` — MCP server definitions (committed, no secrets; tokens resolve from env vars)
+- `.mcp.json` — MCP server definitions for Claude Code (committed, no secrets; tokens resolve from env vars)
+- `.cursor/mcp.json` — MCP server definitions for Cursor (mirrors `.mcp.json`)
+- `.cursor/rules/` — Cursor rules that point to `.claude/agents/` specs
 
 ## Adding a New Agent
 

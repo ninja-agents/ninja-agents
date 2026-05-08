@@ -18,7 +18,11 @@ For local-only audits, no MCP server is needed.
 /repo-contextification
 ```
 
-### Cursor / Manual
+### Cursor
+
+In Cursor chat, mention `@repo-contextification` or ask to "contextify this repo" — the rule activates automatically and walks through the full workflow.
+
+### Manual
 
 ```bash
 # Run the audit script directly

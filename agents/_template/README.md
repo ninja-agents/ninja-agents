@@ -82,4 +82,9 @@ After creating your agent directory, wire it into the IDE tooling:
    - `README.md`
    - `CLAUDE.md` (Available Skills table)
 
+5. **Cursor rule** — create `.cursor/rules/your-agent.mdc` with:
+   - Frontmatter: `description` (purpose + trigger phrases), `alwaysApply: false`
+   - Body: point to `.claude/agents/your-agent.md` as the source of truth
+   - See existing `.cursor/rules/weekly-team-update.mdc` for the pattern
+
 Or just run `/create-agent your-agent-name` to do all of this automatically.

@@ -1,0 +1,53 @@
+# CodeRabbit AI Code Review Configuration
+# https://docs.coderabbit.ai/guides/configure-coderabbit
+
+reviews:
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+
+  path_filters:
+    - "!**/*.lock"
+    - "!**/package-lock.json"
+    - "!**/node_modules/**"
+    - "!agents/*/data/cache/**"
+    - "!agents/*/data/output/**"
+    - "!.claude/settings.local.json"
+
+  path_instructions:
+    - path: "agents/*/scripts/*.ts"
+      instructions: |
+        These are deterministic TypeScript scripts that generate reports from CSV data.
+        Check for: proper CSV quoting (commas in fields), type assertions on JSON.parse,
+        use of import.meta.dirname, and String(e) for caught errors.
+
+    - path: ".claude/agents/*.md"
+      instructions: |
+        Agent specs define step-by-step workflows for AI agents. Check for:
+        numbered Step sections, validation checkpoints between steps, clear rules section,
+        and that MCP tool calls include all required parameters (especially scope: "all" for GitLab).
+
+    - path: "agents/*/data/*-config.json"
+      instructions: |
+        Configuration files contain team data and agent settings. Never include
+        secrets or tokens. Verify account IDs are not PII.
+
+    - path: ".cursor/rules/*.mdc"
+      instructions: |
+        Cursor rules are thin pointers to .claude/agents/ specs. They should have
+        YAML frontmatter with description and alwaysApply fields.
+
+chat:
+  auto_reply: true
+
+language: en-US
+tone_instructions: >
+  Be concise and direct. Focus on correctness, security (no committed secrets),
+  and adherence to repo conventions (CSV quoting, MCP tool patterns, agent isolation).
+  Skip stylistic nitpicks that linting already catches.

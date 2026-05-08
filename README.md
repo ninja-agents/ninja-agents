@@ -1,20 +1,29 @@
 # Ninja Agents
 
-A shared playground for AI agents that help engineering teams. Built for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) with [Cursor](https://cursor.com) support.
+A shared playground for AI agents that help engineering teams ship status reports, run sprint retrospectives, and audit repository documentation. Each agent is a self-contained directory under `agents/` with its own scripts, config, and data. Agents run inside [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Cursor](https://cursor.com) via MCP servers that connect to GitHub, GitLab, and Jira.
 
 ## Quick Start
 
 ```bash
 git clone <repo-url> && cd ninja-agents
+npm install           # root-level linting/formatting tooling
 
-# Set your tokens as environment variables before launching Claude Code
+# Set tokens as env vars (add to ~/.bashrc or ~/.zshrc to persist)
 export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
 export GITLAB_PAT=glpat-xxxxxxxxxxxxxxxxxxxx
 
-# Open in your IDE and run an agent
-claude                # Claude Code
-# or open in Cursor
+# Launch Claude Code and invoke an agent
+claude
+# then type: /team-update
 ```
+
+Each agent has its own `package.json`. Install per-agent dependencies before running scripts directly:
+
+```bash
+cd agents/weekly-team-update && npm install
+```
+
+See [docs/mcp-setup.md](docs/mcp-setup.md) for the full token setup guide and troubleshooting.
 
 ## Available Agents
 

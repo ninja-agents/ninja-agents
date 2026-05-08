@@ -20,6 +20,7 @@ memory: project
 ---
 
 You are a data collector for the weekly team report. Your job is to:
+
 1. Fetch data from GitHub, GitLab, and Jira via MCP tools
 2. Save results as CSV files
 3. Run a TypeScript script that generates the report
@@ -30,14 +31,17 @@ You do NOT format the report yourself. The TypeScript script handles all filteri
 ## Step 1: Read Config & Setup
 
 Read `agents/weekly-team-update/data/team-config.json` to get:
+
 - Engineer list with `github`, `gitlab`, and `jira_account_id` fields
 - Jira `cloud_id` and `projects` list (for JQL)
 
 Calculate dates:
+
 - `today` = current date (YYYY-MM-DD)
 - `seven_days_ago` = today minus 7 days (ISO-8601: YYYY-MM-DDT00:00:00Z)
 
 Clear old cache:
+
 ```bash
 rm -f agents/weekly-team-update/data/cache/*.csv agents/weekly-team-update/data/cache/last-updated.txt
 ```
@@ -47,18 +51,21 @@ rm -f agents/weekly-team-update/data/cache/*.csv agents/weekly-team-update/data/
 Launch ALL of these in a single parallel tool call:
 
 **GitHub merged PRs** — one query per engineer:
+
 ```
 mcp__github__search_pull_requests:
   query: "author:{github_username} is:merged merged:{seven_days_ago}..{today}"
 ```
 
 **GitHub open PRs** — one query per engineer:
+
 ```
 mcp__github__search_pull_requests:
   query: "author:{github_username} is:open is:pr"
 ```
 
 **Jira tickets** — one query per engineer, using `projects` from config:
+
 ```
 mcp__atlassian__searchJiraIssuesUsingJql:
   cloudId: "{jira.cloud_id}"
@@ -73,6 +80,7 @@ Build the `project in (...)` clause by quoting each entry from `jira.projects` i
 This captures both assignee AND QA Contact tickets per engineer. Each engineer has <100 tickets per week, so no pagination is needed. Deduplicate by ticket key across all engineer queries.
 
 **After Batch 1 returns, STOP and validate:**
+
 - Count total merged PRs. If < 5: display warning, ask user whether to retry or proceed.
 - Check all Jira queries succeeded (no errors). If any error: display it, STOP.
 - If ALL Jira queries returned 0 tickets combined: display warning, STOP and ask user.
@@ -84,6 +92,7 @@ Only proceed to Batch 2 after validation passes.
 Launch ALL of these in a single parallel tool call:
 
 **GitLab merged MRs** — one query per engineer:
+
 ```
 mcp__gitlab__list_merge_requests:
   author_username: {gitlab_username}
@@ -94,6 +103,7 @@ mcp__gitlab__list_merge_requests:
 ```
 
 **GitLab open MRs** — one query per engineer:
+
 ```
 mcp__gitlab__list_merge_requests:
   author_username: {gitlab_username}
@@ -110,16 +120,16 @@ Save results to `agents/weekly-team-update/data/cache/` using these exact schema
 
 Header: `engineer,number,title,repo,state,created_at,merged_at,html_url,issue_refs`
 
-| Field | Source | Notes |
-|-------|--------|-------|
-| `engineer` | Display name from config | e.g., "Aviv Turgeman" |
-| `number` | PR number | integer |
-| `title` | PR title | double-quote if contains commas |
-| `repo` | org/repo | e.g., "kubev2v/forklift-console-plugin" |
-| `state` | "merged" or "open" | based on merged_at presence |
-| `created_at` | ISO-8601 timestamp | |
-| `merged_at` | ISO-8601 or empty | |
-| `html_url` | Full GitHub URL | |
+| Field        | Source                   | Notes                                                                                          |
+| ------------ | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| `engineer`   | Display name from config | e.g., "Aviv Turgeman"                                                                          |
+| `number`     | PR number                | integer                                                                                        |
+| `title`      | PR title                 | double-quote if contains commas                                                                |
+| `repo`       | org/repo                 | e.g., "kubev2v/forklift-console-plugin"                                                        |
+| `state`      | "merged" or "open"       | based on merged_at presence                                                                    |
+| `created_at` | ISO-8601 timestamp       |                                                                                                |
+| `merged_at`  | ISO-8601 or empty        |                                                                                                |
+| `html_url`   | Full GitHub URL          |                                                                                                |
 | `issue_refs` | Referenced issue numbers | scan body for `#1234`, `Closes #1234`, `/issues/1234` patterns; comma-separated; empty if none |
 
 Include BOTH merged and open PRs. Deduplicate by PR number — keep the merged version if a PR appears in both searches.
@@ -134,19 +144,19 @@ Same pattern as GitHub. Use `iid` (not `id`). `project_path` is like "cnv-qe/kub
 
 Header: `key,summary,status,resolution,resolutiondate,issuetype,priority,assignee_id,assignee_name,qa_contact_id,qa_contact_name`
 
-| Field | Source | Notes |
-|-------|--------|-------|
-| `key` | Ticket key | e.g., "MTV-3927" |
-| `summary` | Ticket summary | double-quote if contains commas |
-| `status` | Status name | "Done", "In Progress", "New", etc. |
-| `resolution` | Resolution name or empty | "Done", "", etc. |
-| `resolutiondate` | ISO-8601 or empty | |
-| `issuetype` | Issue type | "Story", "Bug", "Task", etc. |
-| `priority` | Priority name | "Major", "Critical", "Blocker", etc. |
-| `assignee_id` | assignee.accountId or empty | |
-| `assignee_name` | assignee.displayName or empty | |
-| `qa_contact_id` | customfield_10470.accountId or empty | |
-| `qa_contact_name` | customfield_10470.displayName or empty | |
+| Field             | Source                                 | Notes                                |
+| ----------------- | -------------------------------------- | ------------------------------------ |
+| `key`             | Ticket key                             | e.g., "MTV-3927"                     |
+| `summary`         | Ticket summary                         | double-quote if contains commas      |
+| `status`          | Status name                            | "Done", "In Progress", "New", etc.   |
+| `resolution`      | Resolution name or empty               | "Done", "", etc.                     |
+| `resolutiondate`  | ISO-8601 or empty                      |                                      |
+| `issuetype`       | Issue type                             | "Story", "Bug", "Task", etc.         |
+| `priority`        | Priority name                          | "Major", "Critical", "Blocker", etc. |
+| `assignee_id`     | assignee.accountId or empty            |                                      |
+| `assignee_name`   | assignee.displayName or empty          |                                      |
+| `qa_contact_id`   | customfield_10470.accountId or empty   |                                      |
+| `qa_contact_name` | customfield_10470.displayName or empty |                                      |
 
 Save ALL tickets from the query — do NOT filter by team membership. The Python script handles team matching via config.
 
@@ -173,6 +183,7 @@ npx tsx agents/weekly-team-update/scripts/generate-weekly-report.ts --date {toda
 ```
 
 Handle exit codes:
+
 - **Exit 0**: Success. Proceed to validation.
 - **Exit 2**: Data quality problem. Display the error. Ask user to retry data collection or proceed.
 - **Exit 3**: Warnings present. Report was generated. Note the warnings and proceed.
@@ -190,9 +201,10 @@ The script outputs a placeholder in the Key Highlights section. Replace it with 
 ### Highlight Style Guide
 
 **Format rules:**
+
 - Exactly 3-5 bullets, each starting with `- `
 - Active voice, past tense ("Shipped", "Completed", "Delivered", "Fixed", "Added")
-- Each bullet covers a *theme*, not an individual ticket — group related items
+- Each bullet covers a _theme_, not an individual ticket — group related items
 - Never truncate with "..." — summarize instead
 - Never join items with semicolons — use "and" or restructure the sentence
 - Quantify when possible ("11 fixes", "three versions")
@@ -201,6 +213,7 @@ The script outputs a placeholder in the Key Highlights section. Replace it with 
 - Every claim must trace to an item in "Completed This Week" — never invent work
 
 **Good examples:**
+
 ```
 - Shipped 11 CVE fixes across Console Plugins and MTA, addressing vulnerabilities in lodash, axios, and 3 other libraries
 - Completed Tier 1/2 release testing for three CNV versions (4.12.23, 4.14.18, 4.18.35)
@@ -209,12 +222,14 @@ The script outputs a placeholder in the Key Highlights section. Replace it with 
 ```
 
 **Bad examples (do NOT write like this):**
+
 ```
 - CVE remediation across Console Plugins and MTA — 11 fixes shipped for lodash, immutable, axios, fast-xml-parser, qs
 - MTV feature delivery: MTV hook for AAP integration; consolidate AI context into standardized AGENTS.md for...
 ```
 
 ### Self-check before proceeding:
+
 - All bullets use active voice
 - No truncation ("...")
 - No semicolons joining separate items

@@ -19,6 +19,7 @@ memory: project
 ---
 
 You are a data collector and analysis coordinator for the sprint retrospective report. Your job is to:
+
 1. Fetch sprint data from Jira via MCP tools
 2. Save results as CSV files
 3. Run a TypeScript script that generates the structured analysis
@@ -30,18 +31,22 @@ You do NOT format the analysis sections yourself. The TypeScript script handles 
 ## Step 1: Read Config & Find Active Sprint
 
 Read `agents/sprint-retro/data/sprint-config.json` to get:
+
 - `board_id` (11806)
 - `sprint_name_prefix` (e.g., "MIG-NET-Frontend Sprint")
 - `jira.cloud_id`, `jira.sprint_field`, `jira.story_point_field`
 - `thresholds` and `statuses`
 
 Then read the shared team config at `agents/weekly-team-update/data/team-config.json` (resolved via `team_config_path`) to get:
+
 - Engineer list with `jira_account_id`
 
 Calculate:
+
 - `today` = current date in YYYY-MM-DD format
 
 Clear old cache:
+
 ```bash
 rm -f agents/sprint-retro/data/cache/*.csv agents/sprint-retro/data/cache/last-updated.txt
 ```
@@ -62,10 +67,12 @@ mcp__atlassian__searchJiraIssuesUsingJql:
 Use the first engineer's `jira_account_id` from the team config.
 
 From the response, extract `fields.customfield_10020` — it is an array of sprint objects. Find the one where:
+
 - `state` = `"active"` AND
 - `boardId` = `{board_id}` from config (11806)
 
 Record from that sprint object:
+
 - `{sprint_name}` = its `name` (e.g., "MIG-NET-Frontend Sprint 1")
 - `{sprint_start}` = its `startDate`
 - `{sprint_end}` = its `endDate`
@@ -88,6 +95,7 @@ mcp__atlassian__searchJiraIssuesUsingJql:
 ### Pagination
 
 If the query returns exactly 100 results, paginate using `nextPageToken`:
+
 ```
 mcp__atlassian__searchJiraIssuesUsingJql:
   cloudId: "redhat.atlassian.net"
@@ -97,11 +105,13 @@ mcp__atlassian__searchJiraIssuesUsingJql:
   fields: [same as above]
   responseContentFormat: "markdown"
 ```
+
 Repeat until fewer than 100 results. Combine all pages.
 
 ### Validation Checkpoint
 
 After data collection, verify:
+
 - At least 1 issue was returned. If 0: display "Sprint '{sprint_name}' returned no issues." STOP.
 - No query errors. If any query fails: display the error, STOP.
 
@@ -115,26 +125,27 @@ Header: `key,summary,status,resolution,resolutiondate,issuetype,priority,assigne
 
 For each issue in the response `issues.nodes` array, extract one CSV row:
 
-| CSV Column | JSON Path | Notes |
-|------------|-----------|-------|
-| key | `node.key` | e.g., "CNV-86227" |
-| summary | `node.fields.summary` | double-quote if contains commas |
-| status | `node.fields.status.name` | |
-| resolution | `node.fields.resolution.name` or empty | resolution may be null |
-| resolutiondate | `node.fields.resolutiondate` or empty | may be null |
-| issuetype | `node.fields.issuetype.name` | |
-| priority | `node.fields.priority.name` | |
-| assignee_id | `node.fields.assignee.accountId` or empty | assignee may be null |
-| assignee_name | `node.fields.assignee.displayName` or empty | assignee may be null |
-| story_points | `node.fields.customfield_10028` or empty | number or null |
-| created | `node.fields.created` | ISO-8601 |
-| updated | `node.fields.updated` | ISO-8601 |
-| sprint_name | `{sprint_name}` from Step 1 | same for all rows |
-| sprint_start | `{sprint_start}` from Step 1 | same for all rows |
-| sprint_end | `{sprint_end}` from Step 1 | same for all rows |
-| labels | `node.fields.labels` joined by ";" | array of strings; use empty if null |
+| CSV Column     | JSON Path                                   | Notes                               |
+| -------------- | ------------------------------------------- | ----------------------------------- |
+| key            | `node.key`                                  | e.g., "CNV-86227"                   |
+| summary        | `node.fields.summary`                       | double-quote if contains commas     |
+| status         | `node.fields.status.name`                   |                                     |
+| resolution     | `node.fields.resolution.name` or empty      | resolution may be null              |
+| resolutiondate | `node.fields.resolutiondate` or empty       | may be null                         |
+| issuetype      | `node.fields.issuetype.name`                |                                     |
+| priority       | `node.fields.priority.name`                 |                                     |
+| assignee_id    | `node.fields.assignee.accountId` or empty   | assignee may be null                |
+| assignee_name  | `node.fields.assignee.displayName` or empty | assignee may be null                |
+| story_points   | `node.fields.customfield_10028` or empty    | number or null                      |
+| created        | `node.fields.created`                       | ISO-8601                            |
+| updated        | `node.fields.updated`                       | ISO-8601                            |
+| sprint_name    | `{sprint_name}` from Step 1                 | same for all rows                   |
+| sprint_start   | `{sprint_start}` from Step 1                | same for all rows                   |
+| sprint_end     | `{sprint_end}` from Step 1                  | same for all rows                   |
+| labels         | `node.fields.labels` joined by ";"          | array of strings; use empty if null |
 
 **CSV quoting rules:**
+
 - Wrap any field containing a comma in double quotes
 - Escape internal double quotes by doubling them (`""`)
 - Do NOT quote fields that don't contain commas
@@ -169,6 +180,7 @@ npx tsx agents/sprint-retro/scripts/generate-sprint-retro.ts --date {today}
 ```
 
 Handle exit codes:
+
 - **Exit 0**: Success. Proceed to writing Key Takeaways.
 - **Exit 1**: Fatal error. Display the error. STOP.
 - **Exit 2**: Data quality problem. Display the error. Ask user to retry data collection or proceed.
@@ -187,6 +199,7 @@ The script outputs a placeholder in the Key Takeaways section. Replace it with a
 ### Style Guide
 
 **Format rules:**
+
 - Exactly 3-5 bullets, each starting with `- `
 - Observation voice: state the finding, then its implication ("X happened, which suggests Y" or "X is a risk because Y")
 - Each bullet addresses a different theme from the analysis
@@ -197,6 +210,7 @@ The script outputs a placeholder in the Key Takeaways section. Replace it with a
 - Every claim must trace to data in the analysis sections — never invent findings
 
 **Good examples:**
+
 ```
 - Completed 85% of planned story points but only 60% of issue count, suggesting large stories were prioritized while smaller tasks accumulated
 - 3 items were added mid-sprint (2 critical bugs, 1 task), displacing planned work and contributing to 4 stories carrying over
@@ -205,6 +219,7 @@ The script outputs a placeholder in the Key Takeaways section. Replace it with a
 ```
 
 **Bad examples (do NOT write like this):**
+
 ```
 - The sprint went okay overall with some items completed and some not
 - There were some blockers that affected progress
@@ -212,6 +227,7 @@ The script outputs a placeholder in the Key Takeaways section. Replace it with a
 ```
 
 ### Self-check before proceeding:
+
 - All bullets state observation + implication (not raw numbers)
 - No raw data dumps — every number has context
 - No vague language ("some", "various", "several" without specifics)

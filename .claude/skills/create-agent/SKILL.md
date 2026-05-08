@@ -17,12 +17,14 @@ Use AskUserQuestion to collect the following. You may combine related questions 
 ### 1.1 Purpose & Workflow
 
 Ask:
+
 - **What does this agent do?** — one-sentence description of the agent's purpose
 - **What are the main steps?** — the high-level workflow (e.g., "fetch data, process it, generate output")
 
 ### 1.2 Data Sources & Scripts
 
 Ask:
+
 - **Which MCP servers does it need?** Options:
   - GitHub MCP — PR/commit data from github.com
   - GitLab MCP — MR/commit data from gitlab.cee.redhat.com
@@ -37,12 +39,14 @@ Ask:
 ### 1.3 Config & Data
 
 Ask:
+
 - **Does this agent need a config file?** If yes, what does it configure? (e.g., team members, project list, thresholds, API endpoints). Default: yes for data-fetching agents, no for simple tools.
 - **Does the agent write any prose output itself** (vs. delegating all formatting to scripts)? If yes, what kind? (e.g., summary bullets, analysis paragraphs, recommendations). A style guide will be generated for any agent-written prose.
 
 ### 1.4 Model & Memory
 
 Ask:
+
 - **Which model?** Options:
   - `opus` — complex reasoning, multi-step workflows, large context (recommended for data-heavy agents)
   - `sonnet` — balanced speed and capability (recommended for most agents)
@@ -55,6 +59,7 @@ Ask:
 ### 1.5 Skill & Validation
 
 Ask:
+
 - **Skill name** — the `/slash-command` name (default: same as agent name)
 - **Should Claude auto-invoke this?** Or manual-only via `/command`?
   - Auto-invoke (default) — Claude detects when to use it from conversation
@@ -77,6 +82,7 @@ touch agents/{name}/data/cache/.gitkeep agents/{name}/data/output/.gitkeep
 **If TypeScript was selected**, also generate:
 
 **`agents/{name}/package.json`:**
+
 ```json
 {
   "name": "{name}",
@@ -88,6 +94,7 @@ touch agents/{name}/data/cache/.gitkeep agents/{name}/data/output/.gitkeep
     "test": "vitest run"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^3.2.0"
@@ -98,6 +105,7 @@ touch agents/{name}/data/cache/.gitkeep agents/{name}/data/output/.gitkeep
 Adjust the `scripts` section: include only scripts that apply. If the agent has no validation script, omit the `"validate"` entry. If no tests, omit `"test"` and `vitest`.
 
 **`agents/{name}/tsconfig.json`:**
+
 ```json
 {
   "compilerOptions": {
@@ -120,6 +128,7 @@ Adjust the `scripts` section: include only scripts that apply. If the agent has 
 **If Python was selected**, generate:
 
 **`agents/{name}/requirements.txt`:**
+
 ```
 # Add dependencies here
 ```
@@ -130,12 +139,12 @@ Adjust the `scripts` section: include only scripts that apply. If the agent has 
 
 Generate the agent spec with this structure:
 
-```markdown
+````markdown
 ---
-name: {name}
+name: { name }
 description: "{description with trigger phrases and examples}"
-model: {model}
-memory: {memory or omit if none}
+model: { model }
+memory: { memory or omit if none }
 ---
 
 {Role statement — one sentence defining what the agent does and doesn't do.}
@@ -155,6 +164,7 @@ Include explicit error handling: "If X fails: display the error, STOP, ask user 
 ### Validation Checkpoint
 
 After data collection, verify:
+
 - {Expected data is present (e.g., "At least one PR was returned")}
 - {Data quality checks (e.g., "No duplicate entries")}
 
@@ -170,11 +180,12 @@ npx tsx agents/{name}/scripts/{main-script}.ts {--args}
 \```
 
 Handle exit codes:
+
 - **Exit 0**: Success. Proceed.
 - **Exit 1**: Error. Display the message. STOP.
 - **Exit 2**: Data quality problem. Display. Ask user to retry or proceed.
 - **Exit 3**: Warnings. Output was generated. Note warnings, proceed.
-```
+````
 
 **If the agent writes prose output**, add a dedicated step with this structure:
 
@@ -234,7 +245,7 @@ Create the skill directory and generate the skill spec:
 mkdir -p .claude/skills/{skill-name}
 ```
 
-```markdown
+````markdown
 ---
 name: {skill-name}
 description: {One-line description}
@@ -265,13 +276,13 @@ Launches the `{name}` agent which:
 ## Critical Rules
 
 {List 2-4 rules the user should know about — formatting, privacy, resolution criteria, etc.}
-```
+````
 
 ### 2.4 Agent README — `agents/{name}/README.md`
 
 Generate the agent README:
 
-```markdown
+````markdown
 # {Agent Title}
 
 {One-line description.}
@@ -309,20 +320,20 @@ If no config: "No configuration needed."}
 \```
 agents/{name}/
 ├── README.md
-├── package.json        # if TypeScript
-├── tsconfig.json       # if TypeScript
+├── package.json # if TypeScript
+├── tsconfig.json # if TypeScript
 ├── scripts/
-│   ├── {main-script}.ts
-│   └── validate-output.ts  # if validation
+│ ├── {main-script}.ts
+│ └── validate-output.ts # if validation
 └── data/
-    ├── config.json     # if config file
-    ├── cache/          # temporary data (gitignored)
-    └── output/         # generated output (gitignored)
+├── config.json # if config file
+├── cache/ # temporary data (gitignored)
+└── output/ # generated output (gitignored)
 \```
 
 > Cache and output directories are gitignored via the repo-level `.gitignore`
 > (`agents/*/data/cache/*` and `agents/*/data/output/*.md`).
-```
+````
 
 ### 2.5 Config File (if applicable)
 
@@ -331,21 +342,21 @@ If the user said the agent needs a config file, generate a starter config:
 **`agents/{name}/data/config.json`:**
 
 Structure the config following the pattern from `weekly-team-update/data/team-config.json`:
+
 - Top-level keys for major sections (team, projects, thresholds, etc.)
 - Arrays of objects for lists of things (members, repos, products)
 - Each object has a human-readable `"name"` and a machine `"key"`
 - Populate with realistic placeholder values based on what the user described
 
 Example skeleton:
+
 ```json
 {
   "name": "My Agent Config",
   "projects": [
     { "key": "PROJ", "name": "Project Name", "repos": ["org/repo"] }
   ],
-  "engineers": [
-    { "name": "Jane Doe", "username": "jdoe" }
-  ]
+  "engineers": [{ "name": "Jane Doe", "username": "jdoe" }]
 }
 ```
 
@@ -354,6 +365,7 @@ The agent spec must reference this file by path and never hardcode any values fr
 ### 2.6 Starter Scripts (if scripts were requested)
 
 Generate runnable starter scripts tailored to the agent's workflow. Each script must:
+
 - Parse CLI arguments using a simple arg-parsing loop
 - Use exit codes consistently (0 = success, 1 = error, 2 = data quality issue, 3 = warnings)
 - Print a usage message with `--help`
@@ -363,10 +375,7 @@ Generate runnable starter scripts tailored to the agent's workflow. Each script 
 
 ```typescript
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { resolve } from "node:path";
 
 interface Config {
   // Define config shape based on agents/{name}/data/config.json
@@ -391,12 +400,13 @@ function loadConfig(configPath: string): Config {
     console.error(`Config not found: ${configPath}`);
     process.exit(1);
   }
-  return JSON.parse(readFileSync(configPath, "utf-8"));
+  return JSON.parse(readFileSync(configPath, "utf-8")) as Config;
 }
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  const configPath = args.config ?? resolve(__dirname, "../data/config.json");
+  const configPath =
+    args.config ?? resolve(import.meta.dirname, "../data/config.json");
   const config = loadConfig(configPath);
 
   // TODO: Load cached data, process, generate output
@@ -470,25 +480,37 @@ Adapt both scripts to the agent's actual workflow — replace placeholders with 
 Append a row to each of these tables:
 
 **`AGENTS.md`** — Available Agents table:
+
 ```
 | [{name}](agents/{name}/) | {description} | [README](agents/{name}/README.md) |
 ```
 
 **`README.md`** — Available Agents table:
+
 ```
 | [{name}](agents/{name}/) | `/{skill-name}` | {description} |
 ```
 
 **`CLAUDE.md`** — Available Skills table:
+
 ```
 | `/{skill-name}` | {description} | `{name}` |
 ```
+
+**If TypeScript**, also add a reference to `tsconfig.json` in the repo root:
+
+```json
+{ "path": "agents/{name}" }
+```
+
+Append to the `"references"` array in the root `tsconfig.json`.
 
 ## Phase 3: Save Memory
 
 Save a **project** memory so future conversations know this agent exists. Write to the memory system at `/home/rlavi/.claude/projects/-home-rlavi-Projects-ninja-agents/memory/`:
 
 1. Create `agent_{name}.md` with frontmatter:
+
    ```markdown
    ---
    name: agent-{name}
@@ -516,21 +538,33 @@ Save a **project** memory so future conversations know this agent exists. Write 
 If TypeScript or Python scripts were generated, install dependencies:
 
 **TypeScript:**
+
 ```bash
 npm --prefix agents/{name} install
 ```
 
 **Python:**
+
 ```bash
 pip install -r agents/{name}/requirements.txt
 ```
 
 Verify the starter script compiles and runs without errors:
+
 ```bash
 npx tsx agents/{name}/scripts/{main-script}.ts --help  # or equivalent dry-run
 ```
 
 If the script errors, fix the issue before proceeding. The user should have a runnable skeleton.
+
+Then run linting and formatting from the repo root to ensure the new code follows project conventions:
+
+```bash
+npm run lint        # ESLint — fix any errors before proceeding
+npm run format      # Prettier — auto-format all new files
+```
+
+If ESLint reports errors, fix them (common issues: add type assertions to `JSON.parse` calls, use `String(e)` in catch blocks instead of interpolating `unknown` directly).
 
 ## Phase 5: Review & Next Steps
 
@@ -550,7 +584,7 @@ After generating all files, display:
 
 ## Best Practices Quick Reference
 
-Quality rules for generated files. The Phase 2 templates above show *what* to generate — this section captures *how well*.
+Quality rules for generated files. The Phase 2 templates above show _what_ to generate — this section captures _how well_.
 
 ### Agent Spec
 
@@ -587,6 +621,17 @@ Quality rules for generated files. The Phase 2 templates above show *what* to ge
 - TypeScript agents: `package.json` + `tsconfig.json` at agent root
 - Python agents: `requirements.txt` at agent root
 - Config files in `agents/{name}/data/` — never hardcode team data in specs
+
+### TypeScript & Linting Conventions
+
+The repo uses ESLint (flat config) + Prettier at the root. All generated TypeScript must pass `npm run lint` and `npm run format` from the repo root.
+
+- Include `@types/node` in agent devDependencies — required for type-checked linting
+- Add a `{ "path": "agents/{name}" }` entry to the root `tsconfig.json` references
+- Always add type assertions to `JSON.parse` calls: `JSON.parse(...) as MyType`
+- Use `import.meta.dirname` instead of the `dirname(fileURLToPath(import.meta.url))` pattern (Node 22+)
+- Use `String(e)` when interpolating caught errors in template literals (ESLint `restrict-template-expressions`)
+- Mark top-level async calls with `void` when not awaited (ESLint `no-floating-promises`)
 
 ### Validation
 

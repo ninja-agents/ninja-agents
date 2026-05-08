@@ -4,10 +4,10 @@ This repository is a shared playground for AI agents that help engineering teams
 
 ## Available Agents
 
-| Agent | Description | Docs |
-|-------|-------------|------|
+| Agent                                            | Description                                                                     | Docs                                          |
+| ------------------------------------------------ | ------------------------------------------------------------------------------- | --------------------------------------------- |
 | [weekly-team-update](agents/weekly-team-update/) | Generates a leadership-ready weekly status report from GitHub, GitLab, and Jira | [README](agents/weekly-team-update/README.md) |
-| [sprint-retro](agents/sprint-retro/) | Sprint retrospective analysis from active Jira sprint | [README](agents/sprint-retro/README.md) |
+| [sprint-retro](agents/sprint-retro/)             | Sprint retrospective analysis from active Jira sprint                           | [README](agents/sprint-retro/README.md)       |
 
 ## IDE Support
 

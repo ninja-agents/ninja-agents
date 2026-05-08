@@ -77,14 +77,18 @@ describe("classifyLinks", () => {
 
   it("classifies GitLab MR links", () => {
     const links = [
-      makeLink({ url: "https://gitlab.cee.redhat.com/org/repo/-/merge_requests/42" }),
+      makeLink({
+        url: "https://gitlab.cee.redhat.com/org/repo/-/merge_requests/42",
+      }),
     ];
     const classified = classifyLinks(links);
     expect(classified.gitlab_mr).toHaveLength(1);
   });
 
   it("classifies Jira links", () => {
-    const links = [makeLink({ url: "https://redhat.atlassian.net/browse/CNV-123" })];
+    const links = [
+      makeLink({ url: "https://redhat.atlassian.net/browse/CNV-123" }),
+    ];
     const classified = classifyLinks(links);
     expect(classified.jira).toHaveLength(1);
   });

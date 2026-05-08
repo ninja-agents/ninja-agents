@@ -67,6 +67,7 @@ Edit `data/team-config.json` to customize:
 - **Engineers** with GitHub/GitLab usernames and Jira account IDs (product is inferred from work item data)
 
 To find a Jira account ID:
+
 ```bash
 # In Claude Code:
 mcp__atlassian__lookupJiraAccountId with searchString: "user@company.com"

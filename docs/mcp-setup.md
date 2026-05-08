@@ -77,11 +77,11 @@ mcp__atlassian__searchJiraIssuesUsingJql with jql: "assignee = currentUser() ORD
 
 The MCP servers are defined in `.mcp.json` at the project root:
 
-| Server | Type | Endpoint |
-|--------|------|----------|
-| **github** | HTTP | `api.githubcopilot.com/mcp/` |
-| **gitlab** | stdio | `npx @zereight/mcp-gitlab` |
-| **atlassian** | HTTP | `mcp.atlassian.com/v1/mcp` |
+| Server        | Type  | Endpoint                     |
+| ------------- | ----- | ---------------------------- |
+| **github**    | HTTP  | `api.githubcopilot.com/mcp/` |
+| **gitlab**    | stdio | `npx @zereight/mcp-gitlab`   |
+| **atlassian** | HTTP  | `mcp.atlassian.com/v1/mcp`   |
 
 Token references in `.mcp.json` use `${VAR_NAME}` syntax, which Claude Code resolves from your environment variables.
 

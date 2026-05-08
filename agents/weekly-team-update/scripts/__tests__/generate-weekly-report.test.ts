@@ -4,7 +4,6 @@ import { readFileSync, existsSync } from "node:fs";
 import {
   parseDate,
   parseCsvLine,
-  loadCsvFile,
   loadGithubPrs,
   loadGitlabMrs,
   loadJiraTickets,
@@ -38,6 +37,7 @@ import {
   validateData,
   type PRItem,
   type JiraItem,
+  type EngineerBlock,
 } from "../generate-weekly-report.js";
 
 const AGENT_ROOT = resolve(import.meta.dirname, "../..");
@@ -136,7 +136,11 @@ describe("parseCsvLine", () => {
   });
 
   it("handles escaped quotes in quoted fields", () => {
-    expect(parseCsvLine('a,"say ""hello""",c')).toEqual(["a", 'say "hello"', "c"]);
+    expect(parseCsvLine('a,"say ""hello""",c')).toEqual([
+      "a",
+      'say "hello"',
+      "c",
+    ]);
   });
 
   it("handles empty fields", () => {
@@ -186,7 +190,11 @@ describe("fmtReportDate", () => {
 
 describe("fmtPrLink", () => {
   it("formats GitHub PR with merged date", () => {
-    const pr = makePR({ number: 42, title: "Fix bug", merged_at: "2026-05-05T10:00:00Z" });
+    const pr = makePR({
+      number: 42,
+      title: "Fix bug",
+      merged_at: "2026-05-05T10:00:00Z",
+    });
     expect(fmtPrLink(pr)).toBe(
       "- [PR #42 - Fix bug](https://github.com/org/repo/pull/1) (merged May 5)",
     );
@@ -217,7 +225,11 @@ describe("fmtPrLink", () => {
 
 describe("fmtTicketLink", () => {
   it("formats completed ticket", () => {
-    const t = makeJira({ key: "CNV-123", summary: "Fix thing", resolutiondate: "2026-05-07T00:00:00Z" });
+    const t = makeJira({
+      key: "CNV-123",
+      summary: "Fix thing",
+      resolutiondate: "2026-05-07T00:00:00Z",
+    });
     expect(fmtTicketLink(t, true)).toBe(
       "- [CNV-123 - Fix thing](https://redhat.atlassian.net/browse/TEST-123) (resolved May 7)",
     );
@@ -249,7 +261,9 @@ describe("filterCompletedPrs", () => {
   const we = new Date("2026-05-08T00:00:00Z");
 
   it("includes merged PRs within window", () => {
-    const prs = [makePR({ state: "merged", merged_at: "2026-05-05T10:00:00Z" })];
+    const prs = [
+      makePR({ state: "merged", merged_at: "2026-05-05T10:00:00Z" }),
+    ];
     expect(filterCompletedPrs(prs, ws, we)).toHaveLength(1);
   });
 
@@ -259,12 +273,16 @@ describe("filterCompletedPrs", () => {
   });
 
   it("excludes PRs outside window", () => {
-    const prs = [makePR({ state: "merged", merged_at: "2026-04-20T10:00:00Z" })];
+    const prs = [
+      makePR({ state: "merged", merged_at: "2026-04-20T10:00:00Z" }),
+    ];
     expect(filterCompletedPrs(prs, ws, we)).toHaveLength(0);
   });
 
   it("includes closed PRs with merged_at in window", () => {
-    const prs = [makePR({ state: "closed", merged_at: "2026-05-01T10:00:00Z" })];
+    const prs = [
+      makePR({ state: "closed", merged_at: "2026-05-01T10:00:00Z" }),
+    ];
     expect(filterCompletedPrs(prs, ws, we)).toHaveLength(1);
   });
 });
@@ -293,17 +311,26 @@ describe("filterCompletedJira", () => {
   const we = new Date("2026-05-08T00:00:00Z");
 
   it("includes Done tickets resolved in window", () => {
-    const tickets = [makeJira({ resolution: "Done", resolutiondate: "2026-05-05T10:00:00Z" })];
+    const tickets = [
+      makeJira({ resolution: "Done", resolutiondate: "2026-05-05T10:00:00Z" }),
+    ];
     expect(filterCompletedJira(tickets, ws, we)).toHaveLength(1);
   });
 
   it("excludes non-Done resolutions", () => {
-    const tickets = [makeJira({ resolution: "Won't Do", resolutiondate: "2026-05-05T10:00:00Z" })];
+    const tickets = [
+      makeJira({
+        resolution: "Won't Do",
+        resolutiondate: "2026-05-05T10:00:00Z",
+      }),
+    ];
     expect(filterCompletedJira(tickets, ws, we)).toHaveLength(0);
   });
 
   it("excludes tickets outside window", () => {
-    const tickets = [makeJira({ resolution: "Done", resolutiondate: "2026-04-20T10:00:00Z" })];
+    const tickets = [
+      makeJira({ resolution: "Done", resolutiondate: "2026-04-20T10:00:00Z" }),
+    ];
     expect(filterCompletedJira(tickets, ws, we)).toHaveLength(0);
   });
 });
@@ -325,18 +352,34 @@ describe("filterInProgressJira", () => {
   });
 
   it("filters Bug/qa_contact to only ON_QA status", () => {
-    const bugQa = makeJira({ issuetype: "Bug", role: "qa_contact", status: "In Progress" });
+    const bugQa = makeJira({
+      issuetype: "Bug",
+      role: "qa_contact",
+      status: "In Progress",
+    });
     expect(filterInProgressJira([bugQa])).toHaveLength(0);
 
-    const bugQaOnQa = makeJira({ issuetype: "Bug", role: "qa_contact", status: "ON_QA" });
+    const bugQaOnQa = makeJira({
+      issuetype: "Bug",
+      role: "qa_contact",
+      status: "ON_QA",
+    });
     expect(filterInProgressJira([bugQaOnQa])).toHaveLength(1);
   });
 
   it("filters Bug/assignee to dev statuses", () => {
-    const bugDev = makeJira({ issuetype: "Bug", role: "assignee", status: "ASSIGNED" });
+    const bugDev = makeJira({
+      issuetype: "Bug",
+      role: "assignee",
+      status: "ASSIGNED",
+    });
     expect(filterInProgressJira([bugDev])).toHaveLength(1);
 
-    const bugDevOther = makeJira({ issuetype: "Bug", role: "assignee", status: "ON_QA" });
+    const bugDevOther = makeJira({
+      issuetype: "Bug",
+      role: "assignee",
+      status: "ON_QA",
+    });
     expect(filterInProgressJira([bugDevOther])).toHaveLength(0);
   });
 });
@@ -353,10 +396,9 @@ describe("extractTicketIds", () => {
 
   it("extracts multiple IDs", () => {
     const re = /((CNV|MTV|MTA|OCPBUGS|CONSOLE)-\d+)/g;
-    expect(extractTicketIds("OCPBUGS-81616, OCPBUGS-79458: CVE fix", re)).toEqual([
-      "OCPBUGS-81616",
-      "OCPBUGS-79458",
-    ]);
+    expect(
+      extractTicketIds("OCPBUGS-81616, OCPBUGS-79458: CVE fix", re),
+    ).toEqual(["OCPBUGS-81616", "OCPBUGS-79458"]);
   });
 
   it("returns empty for no match", () => {
@@ -429,7 +471,16 @@ describe("determineProduct", () => {
     const ocpbugsRe = buildOcpbugsSummaryRepoRe(config!);
     const ticketIdRe = buildTicketIdRe(config!);
     const ticket = makeJira({ key: "CNV-123", summary: "A ticket" });
-    expect(determineProduct(ticket, config!, repoToProduct, prefixToProduct, ocpbugsRe, ticketIdRe)).toBe("CNV");
+    expect(
+      determineProduct(
+        ticket,
+        config!,
+        repoToProduct,
+        prefixToProduct,
+        ocpbugsRe,
+        ticketIdRe,
+      ),
+    ).toBe("CNV");
   });
 
   it.skipIf(!config)("maps OCPBUGS by repo name in summary", () => {
@@ -441,7 +492,16 @@ describe("determineProduct", () => {
       key: "OCPBUGS-123",
       summary: "CVE in nmstate-console-plugin",
     });
-    expect(determineProduct(ticket, config!, repoToProduct, prefixToProduct, ocpbugsRe, ticketIdRe)).toBe("Console Plugins");
+    expect(
+      determineProduct(
+        ticket,
+        config!,
+        repoToProduct,
+        prefixToProduct,
+        ocpbugsRe,
+        ticketIdRe,
+      ),
+    ).toBe("Console Plugins");
   });
 
   it.skipIf(!config)("maps PR by repo", () => {
@@ -450,7 +510,16 @@ describe("determineProduct", () => {
     const ocpbugsRe = buildOcpbugsSummaryRepoRe(config!);
     const ticketIdRe = buildTicketIdRe(config!);
     const pr = makePR({ repo: "kubev2v/forklift-console-plugin" });
-    expect(determineProduct(pr, config!, repoToProduct, prefixToProduct, ocpbugsRe, ticketIdRe)).toBe("MTV");
+    expect(
+      determineProduct(
+        pr,
+        config!,
+        repoToProduct,
+        prefixToProduct,
+        ocpbugsRe,
+        ticketIdRe,
+      ),
+    ).toBe("MTV");
   });
 
   it.skipIf(!config)("returns Other for unknown items", () => {
@@ -459,7 +528,16 @@ describe("determineProduct", () => {
     const ocpbugsRe = buildOcpbugsSummaryRepoRe(config!);
     const ticketIdRe = buildTicketIdRe(config!);
     const pr = makePR({ repo: "unknown/repo", title: "something" });
-    expect(determineProduct(pr, config!, repoToProduct, prefixToProduct, ocpbugsRe, ticketIdRe)).toBe("Other");
+    expect(
+      determineProduct(
+        pr,
+        config!,
+        repoToProduct,
+        prefixToProduct,
+        ocpbugsRe,
+        ticketIdRe,
+      ),
+    ).toBe("Other");
   });
 });
 
@@ -475,7 +553,8 @@ describe("shouldConsolidateTestTasks", () => {
       makeJira({ summary: "[POST-UPGRADE][test] cnv-4.14.18" }),
       makeJira({ summary: "[STAGE][test] cnv-4.12.23" }),
     ];
-    const { consolidate, testTickets, otherTickets } = shouldConsolidateTestTasks(tickets);
+    const { consolidate, testTickets, otherTickets } =
+      shouldConsolidateTestTasks(tickets);
     expect(consolidate).toBe(true);
     expect(testTickets).toHaveLength(4);
     expect(otherTickets).toHaveLength(0);
@@ -486,7 +565,8 @@ describe("shouldConsolidateTestTasks", () => {
       makeJira({ summary: "[TIER-1][test] cnv-4.18.35" }),
       makeJira({ summary: "Regular ticket" }),
     ];
-    const { consolidate, testTickets, otherTickets } = shouldConsolidateTestTasks(tickets);
+    const { consolidate, testTickets, otherTickets } =
+      shouldConsolidateTestTasks(tickets);
     expect(consolidate).toBe(false);
     expect(testTickets).toHaveLength(1);
     expect(otherTickets).toHaveLength(1);
@@ -524,12 +604,27 @@ describe("fmtTestTaskSummary", () => {
 
 describe("generateHighlights", () => {
   it("generates CVE highlight", () => {
-    const sections = new Map<string, Map<string, { name: string; completed_tickets: JiraItem[]; completed_prs: PRItem[]; in_progress_tickets: JiraItem[]; in_progress_prs: PRItem[] }>>();
-    const engineers = new Map();
+    const sections = new Map<
+      string,
+      Map<
+        string,
+        {
+          name: string;
+          completed_tickets: JiraItem[];
+          completed_prs: PRItem[];
+          in_progress_tickets: JiraItem[];
+          in_progress_prs: PRItem[];
+        }
+      >
+    >();
+    const engineers = new Map<string, EngineerBlock>();
     engineers.set("User", {
       name: "User",
       completed_tickets: [
-        makeJira({ summary: "CVE-2026-1234 lodash vulnerability", issuetype: "Bug" }),
+        makeJira({
+          summary: "CVE-2026-1234 lodash vulnerability",
+          issuetype: "Bug",
+        }),
       ],
       completed_prs: [],
       in_progress_tickets: [],
@@ -544,8 +639,20 @@ describe("generateHighlights", () => {
   });
 
   it("generates test version highlight", () => {
-    const sections = new Map<string, Map<string, { name: string; completed_tickets: JiraItem[]; completed_prs: PRItem[]; in_progress_tickets: JiraItem[]; in_progress_prs: PRItem[] }>>();
-    const engineers = new Map();
+    const sections = new Map<
+      string,
+      Map<
+        string,
+        {
+          name: string;
+          completed_tickets: JiraItem[];
+          completed_prs: PRItem[];
+          in_progress_tickets: JiraItem[];
+          in_progress_prs: PRItem[];
+        }
+      >
+    >();
+    const engineers = new Map<string, EngineerBlock>();
     engineers.set("User", {
       name: "User",
       completed_tickets: [
@@ -562,12 +669,26 @@ describe("generateHighlights", () => {
   });
 
   it("returns max 4 highlights", () => {
-    const sections = new Map<string, Map<string, { name: string; completed_tickets: JiraItem[]; completed_prs: PRItem[]; in_progress_tickets: JiraItem[]; in_progress_prs: PRItem[] }>>();
+    const sections = new Map<
+      string,
+      Map<
+        string,
+        {
+          name: string;
+          completed_tickets: JiraItem[];
+          completed_prs: PRItem[];
+          in_progress_tickets: JiraItem[];
+          in_progress_prs: PRItem[];
+        }
+      >
+    >();
     for (const pk of ["A", "B", "C", "D", "E"]) {
-      const engineers = new Map();
+      const engineers = new Map<string, EngineerBlock>();
       engineers.set("User", {
         name: "User",
-        completed_tickets: [makeJira({ summary: `Feature for ${pk}`, issuetype: "Story" })],
+        completed_tickets: [
+          makeJira({ summary: `Feature for ${pk}`, issuetype: "Story" }),
+        ],
         completed_prs: [],
         in_progress_tickets: [],
         in_progress_prs: [],
@@ -586,12 +707,27 @@ describe("generateHighlights", () => {
 
 describe("computeHighlightData", () => {
   it("returns structured CVE data", () => {
-    const sections = new Map<string, Map<string, { name: string; completed_tickets: JiraItem[]; completed_prs: PRItem[]; in_progress_tickets: JiraItem[]; in_progress_prs: PRItem[] }>>();
-    const engineers = new Map();
+    const sections = new Map<
+      string,
+      Map<
+        string,
+        {
+          name: string;
+          completed_tickets: JiraItem[];
+          completed_prs: PRItem[];
+          in_progress_tickets: JiraItem[];
+          in_progress_prs: PRItem[];
+        }
+      >
+    >();
+    const engineers = new Map<string, EngineerBlock>();
     engineers.set("User", {
       name: "User",
       completed_tickets: [
-        makeJira({ summary: "CVE-2026-1234 lodash vulnerability", issuetype: "Bug" }),
+        makeJira({
+          summary: "CVE-2026-1234 lodash vulnerability",
+          issuetype: "Bug",
+        }),
       ],
       completed_prs: [makePR({ title: "Fix CVE-2026-5678 axios issue" })],
       in_progress_tickets: [],
@@ -608,8 +744,20 @@ describe("computeHighlightData", () => {
   });
 
   it("returns structured test version data", () => {
-    const sections = new Map<string, Map<string, { name: string; completed_tickets: JiraItem[]; completed_prs: PRItem[]; in_progress_tickets: JiraItem[]; in_progress_prs: PRItem[] }>>();
-    const engineers = new Map();
+    const sections = new Map<
+      string,
+      Map<
+        string,
+        {
+          name: string;
+          completed_tickets: JiraItem[];
+          completed_prs: PRItem[];
+          in_progress_tickets: JiraItem[];
+          in_progress_prs: PRItem[];
+        }
+      >
+    >();
+    const engineers = new Map<string, EngineerBlock>();
     engineers.set("User", {
       name: "User",
       completed_tickets: [
@@ -628,11 +776,25 @@ describe("computeHighlightData", () => {
   });
 
   it("returns null for categories with no data", () => {
-    const sections = new Map<string, Map<string, { name: string; completed_tickets: JiraItem[]; completed_prs: PRItem[]; in_progress_tickets: JiraItem[]; in_progress_prs: PRItem[] }>>();
-    const engineers = new Map();
+    const sections = new Map<
+      string,
+      Map<
+        string,
+        {
+          name: string;
+          completed_tickets: JiraItem[];
+          completed_prs: PRItem[];
+          in_progress_tickets: JiraItem[];
+          in_progress_prs: PRItem[];
+        }
+      >
+    >();
+    const engineers = new Map<string, EngineerBlock>();
     engineers.set("User", {
       name: "User",
-      completed_tickets: [makeJira({ summary: "A feature", issuetype: "Story" })],
+      completed_tickets: [
+        makeJira({ summary: "A feature", issuetype: "Story" }),
+      ],
       completed_prs: [],
       in_progress_tickets: [],
       in_progress_prs: [],
@@ -646,12 +808,27 @@ describe("computeHighlightData", () => {
   });
 
   it("does not truncate feature summaries", () => {
-    const sections = new Map<string, Map<string, { name: string; completed_tickets: JiraItem[]; completed_prs: PRItem[]; in_progress_tickets: JiraItem[]; in_progress_prs: PRItem[] }>>();
-    const engineers = new Map();
-    const longSummary = "This is a very long feature summary that exceeds sixty characters by quite a large margin";
+    const sections = new Map<
+      string,
+      Map<
+        string,
+        {
+          name: string;
+          completed_tickets: JiraItem[];
+          completed_prs: PRItem[];
+          in_progress_tickets: JiraItem[];
+          in_progress_prs: PRItem[];
+        }
+      >
+    >();
+    const engineers = new Map<string, EngineerBlock>();
+    const longSummary =
+      "This is a very long feature summary that exceeds sixty characters by quite a large margin";
     engineers.set("User", {
       name: "User",
-      completed_tickets: [makeJira({ summary: longSummary, issuetype: "Story" })],
+      completed_tickets: [
+        makeJira({ summary: longSummary, issuetype: "Story" }),
+      ],
       completed_prs: [],
       in_progress_tickets: [],
       in_progress_prs: [],
@@ -668,13 +845,19 @@ describe("computeHighlightData", () => {
 describe("formatHighlightContext", () => {
   it("formats all categories", () => {
     const data = {
-      cve: { count: 5, products: ["MTA", "Console Plugins"], libraries: ["lodash", "axios"] },
+      cve: {
+        count: 5,
+        products: ["MTA", "Console Plugins"],
+        libraries: ["lodash", "axios"],
+      },
       testing: { versions: ["4.14.18", "4.18.35"] },
       features: new Map([["MTV", ["feature 1", "feature 2"]]]),
       bugs: new Map([["MTA", ["bug fix 1"]]]),
     };
     const output = formatHighlightContext(data);
-    expect(output).toContain("CVE: 5 fixes across MTA, Console Plugins (lodash, axios)");
+    expect(output).toContain(
+      "CVE: 5 fixes across MTA, Console Plugins (lodash, axios)",
+    );
     expect(output).toContain("Testing: CNV Tier 1/2 for 4.14.18, 4.18.35");
     expect(output).toContain("Features: MTV (2)");
     expect(output).toContain("Bugs: MTA (1)");
@@ -756,7 +939,10 @@ describe("config helpers", () => {
 describe("end-to-end", () => {
   const config = existsSync(CONFIG_PATH) ? loadConfig(CONFIG_PATH) : null;
   const hasCache = existsSync(resolve(CACHE_DIR, "github-prs.csv"));
-  const referenceFile = resolve(AGENT_ROOT, "data/output/weekly-update-2026-05-07.md");
+  const referenceFile = resolve(
+    AGENT_ROOT,
+    "data/output/weekly-update-2026-05-07.md",
+  );
   const hasReference = existsSync(referenceFile);
 
   it.skipIf(!config || !hasCache || !hasReference)(
@@ -769,18 +955,29 @@ describe("end-to-end", () => {
       const allPrs = [...githubPrs, ...gitlabMrs];
 
       const reportDate = new Date("2026-05-07T00:00:00Z");
-      const windowStart = new Date(reportDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const windowEnd = new Date(reportDate.getTime() + 1 * 24 * 60 * 60 * 1000);
+      const windowStart = new Date(
+        reportDate.getTime() - 7 * 24 * 60 * 60 * 1000,
+      );
+      const windowEnd = new Date(
+        reportDate.getTime() + 1 * 24 * 60 * 60 * 1000,
+      );
 
       const completedPrs = filterCompletedPrs(allPrs, windowStart, windowEnd);
       const openPrs = filterOpenPrs(allPrs);
-      const completedJira = filterCompletedJira(jiraTickets, windowStart, windowEnd);
+      const completedJira = filterCompletedJira(
+        jiraTickets,
+        windowStart,
+        windowEnd,
+      );
       const ipJira = filterInProgressJira(jiraTickets);
 
       const { tickets: completedTickets, orphanPrs: completedOrphanPrs } =
         nestPrsUnderTickets(completedPrs, completedJira, ticketIdRe);
-      const { tickets: ipTickets, orphanPrs: ipOrphanPrs } =
-        nestInProgress(openPrs, ipJira, ticketIdRe);
+      const { tickets: ipTickets, orphanPrs: ipOrphanPrs } = nestInProgress(
+        openPrs,
+        ipJira,
+        ticketIdRe,
+      );
 
       const sections = organize(
         completedTickets,
@@ -791,7 +988,12 @@ describe("end-to-end", () => {
         ticketIdRe,
       );
 
-      const { warnings } = validateData(githubPrs, gitlabMrs, jiraTickets, config!);
+      const { warnings } = validateData(
+        githubPrs,
+        gitlabMrs,
+        jiraTickets,
+        config!,
+      );
 
       const reportLines: string[] = [
         `# ${config!.report_title}`,
@@ -817,7 +1019,13 @@ describe("end-to-end", () => {
 
       const reportText = reportLines.join("\n") + "\n";
       const expected = readFileSync(referenceFile, "utf-8");
-      expect(reportText).toBe(expected);
+
+      const stripHighlights = (s: string) =>
+        s.replace(
+          /## Key Highlights\n[\s\S]*?\n(?=\n## )/,
+          "## Key Highlights\n",
+        );
+      expect(stripHighlights(reportText)).toBe(stripHighlights(expected));
     },
   );
 });

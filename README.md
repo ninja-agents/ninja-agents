@@ -18,10 +18,10 @@ claude                # Claude Code
 
 ## Available Agents
 
-| Agent | Skill | Description |
-|-------|-------|-------------|
-| [weekly-team-update](agents/weekly-team-update/) | `/team-update` | Weekly team report for leadership from GitHub, GitLab, and Jira |
-| [sprint-retro](agents/sprint-retro/) | `/sprint-retro` | Sprint retrospective analysis from active Jira sprint |
+| Agent                                            | Skill           | Description                                                     |
+| ------------------------------------------------ | --------------- | --------------------------------------------------------------- |
+| [weekly-team-update](agents/weekly-team-update/) | `/team-update`  | Weekly team report for leadership from GitHub, GitLab, and Jira |
+| [sprint-retro](agents/sprint-retro/)             | `/sprint-retro` | Sprint retrospective analysis from active Jira sprint           |
 
 Each agent has its own README with setup and usage instructions.
 
@@ -29,11 +29,11 @@ Each agent has its own README with setup and usage instructions.
 
 You need an AI-powered IDE plus MCP servers for the agents you want to use:
 
-| Data Source | MCP Server | CLI Alternative |
-|-------------|-----------|-----------------|
-| **Jira** | [Atlassian Rovo MCP](https://www.npmjs.com/package/@anthropic-ai/mcp-atlassian) | N/A |
-| **GitHub** | [GitHub MCP](https://github.com/github/github-mcp-server) | `gh` CLI |
-| **GitLab** | [@zereight/mcp-gitlab](https://www.npmjs.com/package/@zereight/mcp-gitlab) | `glab` CLI |
+| Data Source | MCP Server                                                                      | CLI Alternative |
+| ----------- | ------------------------------------------------------------------------------- | --------------- |
+| **Jira**    | [Atlassian Rovo MCP](https://www.npmjs.com/package/@anthropic-ai/mcp-atlassian) | N/A             |
+| **GitHub**  | [GitHub MCP](https://github.com/github/github-mcp-server)                       | `gh` CLI        |
+| **GitLab**  | [@zereight/mcp-gitlab](https://www.npmjs.com/package/@zereight/mcp-gitlab)      | `glab` CLI      |
 
 ### Token Setup
 
@@ -65,7 +65,7 @@ To add a new agent:
    - Create `.claude/skills/your-skill.md` (skill shortcut)
 4. Update the agent table in this README and in `AGENTS.md`
 
-See [agents/_template/README.md](agents/_template/README.md) for the full guide.
+See [agents/\_template/README.md](agents/_template/README.md) for the full guide.
 
 ## Project Structure
 

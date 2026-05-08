@@ -1,0 +1,5 @@
+node_modules/
+dist/
+agents/*/data/cache/
+agents/*/data/output/
+package-lock.json

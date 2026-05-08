@@ -52,8 +52,18 @@ export interface EngineerBlock {
 interface TeamConfig {
   team_name: string;
   report_title: string;
-  jira: { cloud_id: string; team_filter_id: string; base_url: string; projects: string[] };
-  products: { key: string; name: string; jira_prefixes: string[]; repos: string[] }[];
+  jira: {
+    cloud_id: string;
+    team_filter_id: string;
+    base_url: string;
+    projects: string[];
+  };
+  products: {
+    key: string;
+    name: string;
+    jira_prefixes: string[];
+    repos: string[];
+  }[];
   engineers: {
     name: string;
     directory: string;
@@ -71,17 +81,21 @@ interface TeamConfig {
 
 export function loadConfig(configPath: string): TeamConfig {
   if (!existsSync(configPath)) {
-    process.stderr.write(`${RED}ERROR: team config not found: ${configPath}${RESET}\n`);
+    process.stderr.write(
+      `${RED}ERROR: team config not found: ${configPath}${RESET}\n`,
+    );
     process.exit(1);
   }
-  return JSON.parse(readFileSync(configPath, "utf-8"));
+  return JSON.parse(readFileSync(configPath, "utf-8")) as TeamConfig;
 }
 
 export function buildAccountIdToName(config: TeamConfig): Map<string, string> {
   return new Map(config.engineers.map((e) => [e.jira_account_id, e.name]));
 }
 
-export function buildJiraDisplayToName(config: TeamConfig): Map<string, string> {
+export function buildJiraDisplayToName(
+  config: TeamConfig,
+): Map<string, string> {
   const mapping = new Map<string, string>();
   for (const e of config.engineers) {
     for (const dn of e.jira_display_names ?? []) {
@@ -265,8 +279,10 @@ export function loadGithubPrs(cacheDir: string): PRItem[] {
         source: "github",
         issue_refs: refs,
       });
-    } catch (e) {
-      process.stderr.write(`${YELLOW}WARN: skipping malformed GitHub PR row: ${e}${RESET}\n`);
+    } catch (e: unknown) {
+      process.stderr.write(
+        `${YELLOW}WARN: skipping malformed GitHub PR row: ${String(e)}${RESET}\n`,
+      );
     }
   }
   return items;
@@ -289,14 +305,19 @@ export function loadGitlabMrs(cacheDir: string): PRItem[] {
         source: "gitlab",
         issue_refs: [],
       });
-    } catch (e) {
-      process.stderr.write(`${YELLOW}WARN: skipping malformed GitLab MR row: ${e}${RESET}\n`);
+    } catch (e: unknown) {
+      process.stderr.write(
+        `${YELLOW}WARN: skipping malformed GitLab MR row: ${String(e)}${RESET}\n`,
+      );
     }
   }
   return items;
 }
 
-export function loadJiraTickets(cacheDir: string, config: TeamConfig): JiraItem[] {
+export function loadJiraTickets(
+  cacheDir: string,
+  config: TeamConfig,
+): JiraItem[] {
   const rows = loadCsvFile(resolve(cacheDir, "jira-tickets.csv"));
   const accountIdToName = buildAccountIdToName(config);
   const jiraDisplayToName = buildJiraDisplayToName(config);
@@ -309,7 +330,8 @@ export function loadJiraTickets(cacheDir: string, config: TeamConfig): JiraItem[
     }
 
     let engineer = r.engineer ?? "";
-    let role: "assignee" | "qa_contact" = (r.role as "assignee" | "qa_contact") ?? "assignee";
+    let role: "assignee" | "qa_contact" =
+      (r.role as "assignee" | "qa_contact") ?? "assignee";
 
     if (!engineer) {
       const assigneeId = r.assignee_id ?? "";
@@ -375,9 +397,13 @@ export function validateData(
     (p) => (p.state === "merged" || p.state === "closed") && p.merged_at,
   );
   if (mergedPrs.length < 5) {
-    warnings.push(`Only ${mergedPrs.length} merged GitHub PRs found (expected 10-50)`);
+    warnings.push(
+      `Only ${mergedPrs.length} merged GitHub PRs found (expected 10-50)`,
+    );
   } else if (mergedPrs.length < 10) {
-    warnings.push(`Low GitHub PR count: ${mergedPrs.length} merged (expected 15-50)`);
+    warnings.push(
+      `Low GitHub PR count: ${mergedPrs.length} merged (expected 15-50)`,
+    );
   }
 
   const engineerNames = new Set(config.engineers.map((e) => e.name));
@@ -476,9 +502,7 @@ export function extractTicketIds(title: string, ticketIdRe: RegExp): string[] {
   return results;
 }
 
-function buildGithubRefIndex(
-  tickets: JiraItem[],
-): Map<string, string> {
+function buildGithubRefIndex(tickets: JiraItem[]): Map<string, string> {
   const index = new Map<string, string>();
   for (const t of tickets) {
     const m = JIRA_GITHUB_REF_RE.exec(t.summary);
@@ -524,7 +548,9 @@ export function nestPrsUnderTickets(
     }
     if (matched) continue;
 
-    const repoName = pr.repo.includes("/") ? pr.repo.split("/").pop()! : pr.repo;
+    const repoName = pr.repo.includes("/")
+      ? pr.repo.split("/").pop()!
+      : pr.repo;
     for (const ref of pr.issue_refs) {
       const ticketKey = githubRefIndex.get(`${repoName}|${ref}|${pr.engineer}`);
       if (ticketKey && ticketMap.has(ticketKey)) {
@@ -558,9 +584,14 @@ export function determineProduct(
   ocpbugsSummaryRe: RegExp,
   ticketIdRe: RegExp,
 ): string {
-  if ("key" in item && "summary" in item && "status" in item && !("source" in item)) {
+  if (
+    "key" in item &&
+    "summary" in item &&
+    "status" in item &&
+    !("source" in item)
+  ) {
     // JiraItem
-    const jira = item as JiraItem;
+    const jira = item;
     const prefix = jira.key.includes("-") ? jira.key.split("-")[0] : "";
 
     if (prefix === "OCPBUGS") {
@@ -577,8 +608,11 @@ export function determineProduct(
       }
       for (const pr of jira.nested_prs) {
         if (repoToProduct.has(pr.repo)) return repoToProduct.get(pr.repo)!;
-        const prRepoName = pr.repo.includes("/") ? pr.repo.split("/").pop()! : pr.repo;
-        if (repoToProduct.has(prRepoName)) return repoToProduct.get(prRepoName)!;
+        const prRepoName = pr.repo.includes("/")
+          ? pr.repo.split("/").pop()!
+          : pr.repo;
+        if (repoToProduct.has(prRepoName))
+          return repoToProduct.get(prRepoName)!;
       }
     }
 
@@ -601,9 +635,11 @@ export function determineProduct(
   return "Other";
 }
 
-export function shouldConsolidateTestTasks(
-  tickets: JiraItem[],
-): { consolidate: boolean; testTickets: JiraItem[]; otherTickets: JiraItem[] } {
+export function shouldConsolidateTestTasks(tickets: JiraItem[]): {
+  consolidate: boolean;
+  testTickets: JiraItem[];
+  otherTickets: JiraItem[];
+} {
   const testPattern = /^\[(?:TIER-\d|POST-UPGRADE|STAGE)/i;
   const testTickets = tickets.filter((t) => testPattern.test(t.summary));
   const otherTickets = tickets.filter((t) => !testPattern.test(t.summary));
@@ -651,19 +687,47 @@ export function organize(
   }
 
   for (const t of completedTickets) {
-    const product = determineProduct(t, config, repoToProduct, prefixToProduct, ocpbugsSummaryRe, ticketIdRe);
+    const product = determineProduct(
+      t,
+      config,
+      repoToProduct,
+      prefixToProduct,
+      ocpbugsSummaryRe,
+      ticketIdRe,
+    );
     getBlock(product, t.engineer).completed_tickets.push(t);
   }
   for (const p of completedOrphanPrs) {
-    const product = determineProduct(p, config, repoToProduct, prefixToProduct, ocpbugsSummaryRe, ticketIdRe);
+    const product = determineProduct(
+      p,
+      config,
+      repoToProduct,
+      prefixToProduct,
+      ocpbugsSummaryRe,
+      ticketIdRe,
+    );
     getBlock(product, p.engineer).completed_prs.push(p);
   }
   for (const t of ipTickets) {
-    const product = determineProduct(t, config, repoToProduct, prefixToProduct, ocpbugsSummaryRe, ticketIdRe);
+    const product = determineProduct(
+      t,
+      config,
+      repoToProduct,
+      prefixToProduct,
+      ocpbugsSummaryRe,
+      ticketIdRe,
+    );
     getBlock(product, t.engineer).in_progress_tickets.push(t);
   }
   for (const p of ipOrphanPrs) {
-    const product = determineProduct(p, config, repoToProduct, prefixToProduct, ocpbugsSummaryRe, ticketIdRe);
+    const product = determineProduct(
+      p,
+      config,
+      repoToProduct,
+      prefixToProduct,
+      ocpbugsSummaryRe,
+      ticketIdRe,
+    );
     getBlock(product, p.engineer).in_progress_prs.push(p);
   }
 
@@ -685,13 +749,33 @@ export function organize(
 // ---------------------------------------------------------------------------
 
 const MONTH_NAMES = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
 const FULL_MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 export function fmtDate(datestr: string): string {
@@ -740,12 +824,14 @@ export function fmtTestTaskSummary(testTickets: JiraItem[]): string {
       versions.add(m[1]);
     }
   }
-  const versionStr = versions.size > 0 ? [...versions].sort().join(", ") : "multiple versions";
+  const versionStr =
+    versions.size > 0 ? [...versions].sort().join(", ") : "multiple versions";
   const links = testTickets
     .slice(0, 5)
     .map((t) => `[${t.key}](${t.url})`)
     .join(", ");
-  const extra = testTickets.length > 5 ? `, and ${testTickets.length - 5} more` : "";
+  const extra =
+    testTickets.length > 5 ? `, and ${testTickets.length - 5} more` : "";
   return `- ${testTickets.length} CNV release test execution tasks completed — Tier 1/2 testing for CNV ${versionStr} (${links}${extra})`;
 }
 
@@ -760,7 +846,10 @@ export function formatCompletedSection(
   for (const [pk, engineers] of sections) {
     let hasCompleted = false;
     for (const [, block] of engineers) {
-      if (block.completed_tickets.length > 0 || block.completed_prs.length > 0) {
+      if (
+        block.completed_tickets.length > 0 ||
+        block.completed_prs.length > 0
+      ) {
         hasCompleted = true;
         break;
       }
@@ -771,12 +860,15 @@ export function formatCompletedSection(
     lines.push(pn !== pk ? `\n### ${pk} (${pn})\n` : `\n### ${pk}\n`);
 
     for (const [engName, block] of engineers) {
-      if (block.completed_tickets.length === 0 && block.completed_prs.length === 0) continue;
+      if (
+        block.completed_tickets.length === 0 &&
+        block.completed_prs.length === 0
+      )
+        continue;
       lines.push(`**${engName}:**`);
 
-      const { consolidate, testTickets, otherTickets } = shouldConsolidateTestTasks(
-        block.completed_tickets,
-      );
+      const { consolidate, testTickets, otherTickets } =
+        shouldConsolidateTestTasks(block.completed_tickets);
 
       for (const t of otherTickets) {
         lines.push(fmtTicketLink(t, true));
@@ -815,7 +907,10 @@ export function formatInProgressSection(
   for (const [pk, engineers] of sections) {
     let hasIp = false;
     for (const [, block] of engineers) {
-      if (block.in_progress_tickets.length > 0 || block.in_progress_prs.length > 0) {
+      if (
+        block.in_progress_tickets.length > 0 ||
+        block.in_progress_prs.length > 0
+      ) {
         hasIp = true;
         break;
       }
@@ -826,7 +921,11 @@ export function formatInProgressSection(
     lines.push(pn !== pk ? `\n### ${pk} (${pn})\n` : `\n### ${pk}\n`);
 
     for (const [engName, block] of engineers) {
-      if (block.in_progress_tickets.length === 0 && block.in_progress_prs.length === 0) continue;
+      if (
+        block.in_progress_tickets.length === 0 &&
+        block.in_progress_prs.length === 0
+      )
+        continue;
       lines.push(`**${engName}:**`);
 
       for (const t of block.in_progress_tickets) {
@@ -856,7 +955,11 @@ function cleanSummary(summary: string): string {
   s = s.replace(/^\[(?:UI|QE|RFE|TP)\]\s*/i, "");
   s = s.replace(/^\[tackle2-ui#\d+\]\s*/, "");
   s = s.trim();
-  if (s.length > 0 && s[0] === s[0].toUpperCase() && (s.length < 2 || s[1] !== s[1].toUpperCase())) {
+  if (
+    s.length > 0 &&
+    s[0] === s[0].toUpperCase() &&
+    (s.length < 2 || s[1] !== s[1].toUpperCase())
+  ) {
     s = s[0].toLowerCase() + s.slice(1);
   }
   return s;
@@ -942,10 +1045,16 @@ export function computeHighlightData(
   }
 
   return {
-    cve: cveCount > 0
-      ? { count: cveCount, products: [...cveProducts].sort(), libraries: extractCveLibs(cveTexts) }
-      : null,
-    testing: testVersions.size > 0 ? { versions: [...testVersions].sort() } : null,
+    cve:
+      cveCount > 0
+        ? {
+            count: cveCount,
+            products: [...cveProducts].sort(),
+            libraries: extractCveLibs(cveTexts),
+          }
+        : null,
+    testing:
+      testVersions.size > 0 ? { versions: [...testVersions].sort() } : null,
     features,
     bugs,
   };
@@ -954,14 +1063,23 @@ export function computeHighlightData(
 export function formatHighlightContext(data: HighlightData): string {
   const lines: string[] = ["--- Highlight Context ---"];
   if (data.cve) {
-    const libStr = data.cve.libraries.length > 0 ? ` (${data.cve.libraries.join(", ")})` : "";
-    lines.push(`  CVE: ${data.cve.count} fixes across ${data.cve.products.join(", ")}${libStr}`);
+    const libStr =
+      data.cve.libraries.length > 0
+        ? ` (${data.cve.libraries.join(", ")})`
+        : "";
+    lines.push(
+      `  CVE: ${data.cve.count} fixes across ${data.cve.products.join(", ")}${libStr}`,
+    );
   }
   if (data.testing) {
-    lines.push(`  Testing: CNV Tier 1/2 for ${data.testing.versions.join(", ")}`);
+    lines.push(
+      `  Testing: CNV Tier 1/2 for ${data.testing.versions.join(", ")}`,
+    );
   }
   const fmtMap = (label: string, m: Map<string, string[]>) => {
-    const parts = [...m.entries()].filter(([, v]) => v.length > 0).map(([k, v]) => `${k} (${v.length})`);
+    const parts = [...m.entries()]
+      .filter(([, v]) => v.length > 0)
+      .map(([k, v]) => `${k} (${v.length})`);
     if (parts.length > 0) lines.push(`  ${label}: ${parts.join(", ")}`);
   };
   fmtMap("Features", data.features);
@@ -976,7 +1094,10 @@ export function generateHighlights(
   const highlights: string[] = [];
 
   if (data.cve) {
-    const libStr = data.cve.libraries.length > 0 ? ` for ${data.cve.libraries.join(", ")}` : "";
+    const libStr =
+      data.cve.libraries.length > 0
+        ? ` for ${data.cve.libraries.join(", ")}`
+        : "";
     highlights.push(
       `- CVE remediation across ${data.cve.products.join(" and ")} — ${data.cve.count} fixes shipped${libStr}`,
     );
@@ -1088,7 +1209,12 @@ export function main(argv: string[] = process.argv): void {
   console.log(`  Jira tickets: ${jiraTickets.length} rows`);
 
   // Validate
-  const { warnings, errors } = validateData(githubPrs, gitlabMrs, jiraTickets, config);
+  const { warnings, errors } = validateData(
+    githubPrs,
+    gitlabMrs,
+    jiraTickets,
+    config,
+  );
   if (errors.length > 0) {
     for (const e of errors) {
       process.stderr.write(`${RED}ERROR: ${e}${RESET}\n`);
@@ -1102,7 +1228,11 @@ export function main(argv: string[] = process.argv): void {
   // Filter
   const completedPrs = filterCompletedPrs(allPrs, windowStart, windowEnd);
   const openPrs = filterOpenPrs(allPrs);
-  const completedJira = filterCompletedJira(jiraTickets, windowStart, windowEnd);
+  const completedJira = filterCompletedJira(
+    jiraTickets,
+    windowStart,
+    windowEnd,
+  );
   const ipJira = filterInProgressJira(jiraTickets);
 
   const wsStr = windowStart.toISOString().slice(0, 10);
@@ -1114,18 +1244,30 @@ export function main(argv: string[] = process.argv): void {
   console.log(`  Jira in progress: ${ipJira.length}`);
 
   if (completedJira.length === 0) {
-    warnings.push("0 Jira tickets resolved in window — report may be incomplete");
+    warnings.push(
+      "0 Jira tickets resolved in window — report may be incomplete",
+    );
   }
 
   // Nest PRs under Jira tickets
   const { tickets: completedTickets, orphanPrs: completedOrphanPrs } =
     nestPrsUnderTickets(completedPrs, completedJira, ticketIdRe);
-  const { tickets: ipTickets, orphanPrs: ipOrphanPrs } =
-    nestInProgress(openPrs, ipJira, ticketIdRe);
+  const { tickets: ipTickets, orphanPrs: ipOrphanPrs } = nestInProgress(
+    openPrs,
+    ipJira,
+    ticketIdRe,
+  );
 
-  const nestedCount = completedTickets.reduce((s, t) => s + t.nested_prs.length, 0);
-  const ticketsWithPrs = completedTickets.filter((t) => t.nested_prs.length > 0).length;
-  console.log(`\nNesting: ${nestedCount} PRs nested under ${ticketsWithPrs} Jira tickets`);
+  const nestedCount = completedTickets.reduce(
+    (s, t) => s + t.nested_prs.length,
+    0,
+  );
+  const ticketsWithPrs = completedTickets.filter(
+    (t) => t.nested_prs.length > 0,
+  ).length;
+  console.log(
+    `\nNesting: ${nestedCount} PRs nested under ${ticketsWithPrs} Jira tickets`,
+  );
 
   // Organize by product
   const sections = organize(
@@ -1176,8 +1318,12 @@ export function main(argv: string[] = process.argv): void {
   const totalCompleted = completedPrs.length + completedJira.length;
   const totalIp = openPrs.length + ipJira.length;
   console.log(`\n--- Report Statistics ---`);
-  console.log(`  GitHub PRs merged: ${completedPrs.filter((p) => p.source === "github").length}`);
-  console.log(`  GitLab MRs merged: ${completedPrs.filter((p) => p.source === "gitlab").length}`);
+  console.log(
+    `  GitHub PRs merged: ${completedPrs.filter((p) => p.source === "github").length}`,
+  );
+  console.log(
+    `  GitLab MRs merged: ${completedPrs.filter((p) => p.source === "gitlab").length}`,
+  );
   console.log(`  Jira tickets closed (Done): ${completedJira.length}`);
   console.log(`  Total completed items: ${totalCompleted}`);
   console.log(`  Total in-progress items: ${totalIp}`);
@@ -1195,7 +1341,9 @@ export function main(argv: string[] = process.argv): void {
 }
 
 // Run if executed directly
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.url.replace("file://", ""));
+const isMain =
+  process.argv[1] &&
+  resolve(process.argv[1]) === resolve(import.meta.url.replace("file://", ""));
 if (isMain) {
   main();
 }

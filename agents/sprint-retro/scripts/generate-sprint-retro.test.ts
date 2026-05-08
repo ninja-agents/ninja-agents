@@ -38,7 +38,10 @@ const BASE_CONFIG: SprintConfig = {
   thresholds: {
     long_in_progress_days: 5,
     scope_change_buffer_days: 2,
-    estimation_accuracy: { fast_completion_ratio: 0.25, slow_completion_ratio: 3.0 },
+    estimation_accuracy: {
+      fast_completion_ratio: 0.25,
+      slow_completion_ratio: 3.0,
+    },
     low_item_warning: 5,
   },
   statuses: {
@@ -52,8 +55,18 @@ const BASE_CONFIG: SprintConfig = {
 const BASE_TEAM: TeamConfig = {
   team_name: "Test Team",
   engineers: [
-    { name: "Alice", jira_account_id: "alice-id", jira_display_names: ["Alice Smith"], role: "dev" },
-    { name: "Bob", jira_account_id: "bob-id", jira_display_names: ["Bob Jones", "Robert Jones"], role: "qe" },
+    {
+      name: "Alice",
+      jira_account_id: "alice-id",
+      jira_display_names: ["Alice Smith"],
+      role: "dev",
+    },
+    {
+      name: "Bob",
+      jira_account_id: "bob-id",
+      jira_display_names: ["Bob Jones", "Robert Jones"],
+      role: "qe",
+    },
   ],
 };
 
@@ -93,7 +106,11 @@ describe("parseCsvLine", () => {
   });
 
   it("handles escaped quotes inside quoted fields", () => {
-    expect(parseCsvLine('a,"say ""hello""",c')).toEqual(["a", 'say "hello"', "c"]);
+    expect(parseCsvLine('a,"say ""hello""",c')).toEqual([
+      "a",
+      'say "hello"',
+      "c",
+    ]);
   });
 
   it("handles empty fields", () => {
@@ -150,16 +167,27 @@ describe("daysBetween", () => {
 
 describe("isCompleted", () => {
   it("returns true for resolution = Done", () => {
-    expect(isCompleted(makeIssue({ resolution: "Done" }), BASE_CONFIG)).toBe(true);
+    expect(isCompleted(makeIssue({ resolution: "Done" }), BASE_CONFIG)).toBe(
+      true,
+    );
   });
 
   it("returns true for status in done list", () => {
-    expect(isCompleted(makeIssue({ status: "Closed" }), BASE_CONFIG)).toBe(true);
-    expect(isCompleted(makeIssue({ status: "Verified" }), BASE_CONFIG)).toBe(true);
+    expect(isCompleted(makeIssue({ status: "Closed" }), BASE_CONFIG)).toBe(
+      true,
+    );
+    expect(isCompleted(makeIssue({ status: "Verified" }), BASE_CONFIG)).toBe(
+      true,
+    );
   });
 
   it("returns false for in-progress status without Done resolution", () => {
-    expect(isCompleted(makeIssue({ status: "In Progress", resolution: "" }), BASE_CONFIG)).toBe(false);
+    expect(
+      isCompleted(
+        makeIssue({ status: "In Progress", resolution: "" }),
+        BASE_CONFIG,
+      ),
+    ).toBe(false);
   });
 
   it("returns false for New status", () => {
@@ -249,7 +277,7 @@ describe("computeCompletionByType", () => {
       makeIssue({ issuetype: "Story" }),
     ];
     const result = computeCompletionByType(issues, BASE_CONFIG);
-    expect(result[0]!.type).toBe("Bug");
+    expect(result[0].type).toBe("Bug");
   });
 });
 
@@ -263,11 +291,21 @@ describe("computeCompletionByEngineer", () => {
 
   it("matches engineers by account ID", () => {
     const issues = [
-      makeIssue({ assignee_id: "alice-id", resolution: "Done", story_points: 5 }),
+      makeIssue({
+        assignee_id: "alice-id",
+        resolution: "Done",
+        story_points: 5,
+      }),
       makeIssue({ assignee_id: "alice-id", resolution: "", story_points: 3 }),
       makeIssue({ assignee_id: "bob-id", resolution: "Done", story_points: 2 }),
     ];
-    const result = computeCompletionByEngineer(issues, BASE_CONFIG, BASE_TEAM, accountIdToName, displayToName);
+    const result = computeCompletionByEngineer(
+      issues,
+      BASE_CONFIG,
+      BASE_TEAM,
+      accountIdToName,
+      displayToName,
+    );
     const alice = result.find((r) => r.name === "Alice")!;
     const bob = result.find((r) => r.name === "Bob")!;
     expect(alice.assigned).toBe(2);
@@ -280,24 +318,48 @@ describe("computeCompletionByEngineer", () => {
 
   it("shows engineers with zero items", () => {
     const issues = [makeIssue({ assignee_id: "alice-id" })];
-    const result = computeCompletionByEngineer(issues, BASE_CONFIG, BASE_TEAM, accountIdToName, displayToName);
+    const result = computeCompletionByEngineer(
+      issues,
+      BASE_CONFIG,
+      BASE_TEAM,
+      accountIdToName,
+      displayToName,
+    );
     const bob = result.find((r) => r.name === "Bob")!;
     expect(bob.assigned).toBe(0);
   });
 
   it("matches by display name when account ID not found", () => {
     const issues = [
-      makeIssue({ assignee_id: "unknown-id", assignee_name: "Robert Jones", resolution: "Done" }),
+      makeIssue({
+        assignee_id: "unknown-id",
+        assignee_name: "Robert Jones",
+        resolution: "Done",
+      }),
     ];
-    const result = computeCompletionByEngineer(issues, BASE_CONFIG, BASE_TEAM, accountIdToName, displayToName);
+    const result = computeCompletionByEngineer(
+      issues,
+      BASE_CONFIG,
+      BASE_TEAM,
+      accountIdToName,
+      displayToName,
+    );
     const bob = result.find((r) => r.name === "Bob")!;
     expect(bob.assigned).toBe(1);
     expect(bob.completed).toBe(1);
   });
 
   it("creates entry for unknown engineers", () => {
-    const issues = [makeIssue({ assignee_id: "unknown-id", assignee_name: "Charlie Brown" })];
-    const result = computeCompletionByEngineer(issues, BASE_CONFIG, BASE_TEAM, accountIdToName, displayToName);
+    const issues = [
+      makeIssue({ assignee_id: "unknown-id", assignee_name: "Charlie Brown" }),
+    ];
+    const result = computeCompletionByEngineer(
+      issues,
+      BASE_CONFIG,
+      BASE_TEAM,
+      accountIdToName,
+      displayToName,
+    );
     const charlie = result.find((r) => r.name === "Charlie Brown")!;
     expect(charlie.assigned).toBe(1);
   });
@@ -335,8 +397,8 @@ describe("computeEstimationFlags", () => {
     ];
     const flags = computeEstimationFlags(issues, BASE_CONFIG);
     expect(flags).toHaveLength(1);
-    expect(flags[0]!.kind).toBe("slow");
-    expect(flags[0]!.days_taken).toBe(10);
+    expect(flags[0].kind).toBe("slow");
+    expect(flags[0].days_taken).toBe(10);
   });
 
   it("flags fast items (ratio <= 0.25)", () => {
@@ -350,12 +412,16 @@ describe("computeEstimationFlags", () => {
     ];
     const flags = computeEstimationFlags(issues, BASE_CONFIG);
     expect(flags).toHaveLength(1);
-    expect(flags[0]!.kind).toBe("fast");
+    expect(flags[0].kind).toBe("fast");
   });
 
   it("skips items without story points", () => {
     const issues = [
-      makeIssue({ resolution: "Done", story_points: null, resolutiondate: "2026-05-07T00:00:00Z" }),
+      makeIssue({
+        resolution: "Done",
+        story_points: null,
+        resolutiondate: "2026-05-07T00:00:00Z",
+      }),
     ];
     expect(computeEstimationFlags(issues, BASE_CONFIG)).toHaveLength(0);
   });
@@ -389,8 +455,8 @@ describe("computeScopeChanges", () => {
     ];
     const changes = computeScopeChanges(issues, [], BASE_CONFIG);
     expect(changes).toHaveLength(1);
-    expect(changes[0]!.key).toBe("NEW-1");
-    expect(changes[0]!.kind).toBe("added");
+    expect(changes[0].key).toBe("NEW-1");
+    expect(changes[0].kind).toBe("added");
   });
 
   it("ignores items created within buffer period", () => {
@@ -403,22 +469,24 @@ describe("computeScopeChanges", () => {
 
   it("detects removed items from changelog", () => {
     const issues = [makeIssue({ key: "STAY-1" })];
-    const changelog: ChangelogIssue[] = [{
-      key: "GONE-1",
-      summary: "Removed issue",
-      status: "New",
-      resolution: "",
-      issuetype: "Story",
-      assignee_name: "Alice",
-      story_points: 3,
-      created: "2026-04-20T00:00:00Z",
-      updated: "2026-05-03T00:00:00Z",
-      sprint_names: ["Test Sprint 1"],
-    }];
+    const changelog: ChangelogIssue[] = [
+      {
+        key: "GONE-1",
+        summary: "Removed issue",
+        status: "New",
+        resolution: "",
+        issuetype: "Story",
+        assignee_name: "Alice",
+        story_points: 3,
+        created: "2026-04-20T00:00:00Z",
+        updated: "2026-05-03T00:00:00Z",
+        sprint_names: ["Test Sprint 1"],
+      },
+    ];
     const changes = computeScopeChanges(issues, changelog, BASE_CONFIG);
     const removed = changes.filter((c) => c.kind === "removed");
     expect(removed).toHaveLength(1);
-    expect(removed[0]!.key).toBe("GONE-1");
+    expect(removed[0].key).toBe("GONE-1");
   });
 });
 
@@ -433,34 +501,68 @@ describe("computeCarryover", () => {
   });
 
   it("classifies high risk for Blocker/Critical priority", () => {
-    const issues = [makeIssue({ priority: "Blocker", story_points: 2, resolution: "" })];
+    const issues = [
+      makeIssue({ priority: "Blocker", story_points: 2, resolution: "" }),
+    ];
     const result = computeCarryover(issues, BASE_CONFIG);
-    expect(result[0]!.risk).toBe("high");
+    expect(result[0].risk).toBe("high");
   });
 
   it("classifies high risk for large story points (> 5)", () => {
-    const issues = [makeIssue({ priority: "Normal", story_points: 8, resolution: "" })];
+    const issues = [
+      makeIssue({ priority: "Normal", story_points: 8, resolution: "" }),
+    ];
     const result = computeCarryover(issues, BASE_CONFIG);
-    expect(result[0]!.risk).toBe("high");
+    expect(result[0].risk).toBe("high");
   });
 
   it("classifies medium risk for in-progress items", () => {
-    const issues = [makeIssue({ status: "In Progress", priority: "Normal", story_points: 3, resolution: "" })];
+    const issues = [
+      makeIssue({
+        status: "In Progress",
+        priority: "Normal",
+        story_points: 3,
+        resolution: "",
+      }),
+    ];
     const result = computeCarryover(issues, BASE_CONFIG);
-    expect(result[0]!.risk).toBe("medium");
+    expect(result[0].risk).toBe("medium");
   });
 
   it("classifies low risk for not-started normal items", () => {
-    const issues = [makeIssue({ status: "New", priority: "Normal", story_points: 2, resolution: "" })];
+    const issues = [
+      makeIssue({
+        status: "New",
+        priority: "Normal",
+        story_points: 2,
+        resolution: "",
+      }),
+    ];
     const result = computeCarryover(issues, BASE_CONFIG);
-    expect(result[0]!.risk).toBe("low");
+    expect(result[0].risk).toBe("low");
   });
 
   it("sorts by risk then by story points", () => {
     const issues = [
-      makeIssue({ key: "LOW-1", status: "New", priority: "Normal", story_points: 2, resolution: "" }),
-      makeIssue({ key: "HIGH-1", priority: "Critical", story_points: 3, resolution: "" }),
-      makeIssue({ key: "HIGH-2", priority: "Blocker", story_points: 8, resolution: "" }),
+      makeIssue({
+        key: "LOW-1",
+        status: "New",
+        priority: "Normal",
+        story_points: 2,
+        resolution: "",
+      }),
+      makeIssue({
+        key: "HIGH-1",
+        priority: "Critical",
+        story_points: 3,
+        resolution: "",
+      }),
+      makeIssue({
+        key: "HIGH-2",
+        priority: "Blocker",
+        story_points: 8,
+        resolution: "",
+      }),
     ];
     const result = computeCarryover(issues, BASE_CONFIG);
     expect(result.map((r) => r.key)).toEqual(["HIGH-2", "HIGH-1", "LOW-1"]);
@@ -478,22 +580,32 @@ describe("computeBlockers", () => {
     const issues = [makeIssue({ status: "BLOCKED", resolution: "" })];
     const result = computeBlockers(issues, BASE_CONFIG, today);
     expect(result).toHaveLength(1);
-    expect(result[0]!.kind).toBe("blocked");
+    expect(result[0].kind).toBe("blocked");
   });
 
   it("detects stalled in-progress items", () => {
     const issues = [
-      makeIssue({ status: "In Progress", updated: "2026-04-30T00:00:00Z", resolution: "" }),
+      makeIssue({
+        status: "In Progress",
+        updated: "2026-04-30T00:00:00Z",
+        resolution: "",
+      }),
     ];
     const result = computeBlockers(issues, BASE_CONFIG, today);
     expect(result).toHaveLength(1);
-    expect(result[0]!.kind).toBe("stalled");
-    expect(result[0]!.days_stalled).toBe(daysBetween(new Date("2026-04-30T00:00:00Z"), today));
+    expect(result[0].kind).toBe("stalled");
+    expect(result[0].days_stalled).toBe(
+      daysBetween(new Date("2026-04-30T00:00:00Z"), today),
+    );
   });
 
   it("skips recently-updated in-progress items", () => {
     const issues = [
-      makeIssue({ status: "In Progress", updated: "2026-05-05T00:00:00Z", resolution: "" }),
+      makeIssue({
+        status: "In Progress",
+        updated: "2026-05-05T00:00:00Z",
+        resolution: "",
+      }),
     ];
     expect(computeBlockers(issues, BASE_CONFIG, today)).toHaveLength(0);
   });
@@ -505,11 +617,21 @@ describe("computeBlockers", () => {
 
   it("sorts by days stalled descending", () => {
     const issues = [
-      makeIssue({ key: "B-1", status: "In Progress", updated: "2026-05-01T00:00:00Z", resolution: "" }),
-      makeIssue({ key: "B-2", status: "In Progress", updated: "2026-04-25T00:00:00Z", resolution: "" }),
+      makeIssue({
+        key: "B-1",
+        status: "In Progress",
+        updated: "2026-05-01T00:00:00Z",
+        resolution: "",
+      }),
+      makeIssue({
+        key: "B-2",
+        status: "In Progress",
+        updated: "2026-04-25T00:00:00Z",
+        resolution: "",
+      }),
     ];
     const result = computeBlockers(issues, BASE_CONFIG, today);
-    expect(result[0]!.key).toBe("B-2");
+    expect(result[0].key).toBe("B-2");
   });
 });
 
@@ -539,7 +661,9 @@ describe("identifyAutomationOpportunities", () => {
   });
 
   it("detects high bug count", () => {
-    const issues = Array.from({ length: 6 }, (_, i) => makeIssue({ key: `BUG-${i}`, issuetype: "Bug" }));
+    const issues = Array.from({ length: 6 }, (_, i) =>
+      makeIssue({ key: `BUG-${i}`, issuetype: "Bug" }),
+    );
     const ops = identifyAutomationOpportunities(issues);
     expect(ops.some((o) => o.includes("bugs"))).toBe(true);
   });

@@ -39,18 +39,22 @@ Launches the `weekly-team-update` agent which:
 A weekly report with:
 
 ### Key Highlights
+
 - 3-5 polished theme summaries written by the agent (active voice, no truncation, leadership-friendly)
 
 ### Completed This Week
+
 - Organized by product, then by engineer
 - PRs/MRs with merge dates, Jira tickets resolved as Done
 - Strict 7-day window: only items merged/resolved in the last 7 days
 
 ### In Progress
+
 - Organized by product, then by engineer
 - Open PRs with age, Jira tickets with status
 
 ### Blockers & Critical Issues (optional)
+
 - Real external blockers only
 - Omitted entirely if no blockers exist
 

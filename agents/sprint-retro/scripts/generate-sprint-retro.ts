@@ -59,7 +59,10 @@ export interface SprintConfig {
   thresholds: {
     long_in_progress_days: number;
     scope_change_buffer_days: number;
-    estimation_accuracy: { fast_completion_ratio: number; slow_completion_ratio: number };
+    estimation_accuracy: {
+      fast_completion_ratio: number;
+      slow_completion_ratio: number;
+    };
     low_item_warning: number;
   };
   statuses: {
@@ -72,7 +75,12 @@ export interface SprintConfig {
 
 export interface TeamConfig {
   team_name: string;
-  engineers: { name: string; jira_account_id: string; jira_display_names: string[]; role: string }[];
+  engineers: {
+    name: string;
+    jira_account_id: string;
+    jira_display_names: string[];
+    role: string;
+  }[];
 }
 
 interface SprintSummary {
@@ -154,16 +162,19 @@ function loadConfig(configPath: string): SprintConfig {
     console.error(`${RED}Config not found: ${configPath}${RESET}`);
     process.exit(1);
   }
-  return JSON.parse(readFileSync(configPath, "utf-8"));
+  return JSON.parse(readFileSync(configPath, "utf-8")) as SprintConfig;
 }
 
-function loadTeamConfig(sprintConfig: SprintConfig, configDir: string): TeamConfig {
+function loadTeamConfig(
+  sprintConfig: SprintConfig,
+  configDir: string,
+): TeamConfig {
   const teamPath = resolve(configDir, sprintConfig.team_config_path);
   if (!existsSync(teamPath)) {
     console.error(`${RED}Team config not found: ${teamPath}${RESET}`);
     process.exit(1);
   }
-  return JSON.parse(readFileSync(teamPath, "utf-8"));
+  return JSON.parse(readFileSync(teamPath, "utf-8")) as TeamConfig;
 }
 
 export function buildDisplayToName(team: TeamConfig): Map<string, string> {
@@ -284,7 +295,9 @@ export function parseDate(s: string): Date | null {
 }
 
 export function daysBetween(a: Date, b: Date): number {
-  return Math.round(Math.abs(b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.round(
+    Math.abs(b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24),
+  );
 }
 
 function formatDate(d: Date): string {
@@ -296,10 +309,16 @@ function formatDate(d: Date): string {
 // ---------------------------------------------------------------------------
 
 export function isCompleted(issue: SprintIssue, config: SprintConfig): boolean {
-  return issue.resolution === "Done" || config.statuses.done.includes(issue.status);
+  return (
+    issue.resolution === "Done" || config.statuses.done.includes(issue.status)
+  );
 }
 
-export function computeSprintSummary(issues: SprintIssue[], config: SprintConfig, today: Date): SprintSummary {
+export function computeSprintSummary(
+  issues: SprintIssue[],
+  config: SprintConfig,
+  today: Date,
+): SprintSummary {
   const first = issues[0];
   const sprintStart = parseDate(first?.sprint_start ?? "");
   const sprintEnd = parseDate(first?.sprint_end ?? "");
@@ -308,25 +327,36 @@ export function computeSprintSummary(issues: SprintIssue[], config: SprintConfig
   const hasPoints = issues.some((i) => i.story_points !== null);
 
   const round2 = (n: number) => Math.round(n * 100) / 100;
-  const totalSp = hasPoints ? round2(issues.reduce((s, i) => s + (i.story_points ?? 0), 0)) : null;
-  const completedSp = hasPoints ? round2(completed.reduce((s, i) => s + (i.story_points ?? 0), 0)) : null;
+  const totalSp = hasPoints
+    ? round2(issues.reduce((s, i) => s + (i.story_points ?? 0), 0))
+    : null;
+  const completedSp = hasPoints
+    ? round2(completed.reduce((s, i) => s + (i.story_points ?? 0), 0))
+    : null;
 
   return {
     sprint_name: first?.sprint_name ?? "Unknown Sprint",
     sprint_start: first?.sprint_start ?? "",
     sprint_end: first?.sprint_end ?? "",
     days_elapsed: sprintStart ? daysBetween(sprintStart, today) : 0,
-    total_days: sprintStart && sprintEnd ? daysBetween(sprintStart, sprintEnd) : 0,
+    total_days:
+      sprintStart && sprintEnd ? daysBetween(sprintStart, sprintEnd) : 0,
     total_issues: issues.length,
     completed_issues: completed.length,
     remaining_issues: issues.length - completed.length,
     total_sp: totalSp,
     completed_sp: completedSp,
-    remaining_sp: totalSp !== null && completedSp !== null ? round2(totalSp - completedSp) : null,
+    remaining_sp:
+      totalSp !== null && completedSp !== null
+        ? round2(totalSp - completedSp)
+        : null,
   };
 }
 
-export function computeCompletionByType(issues: SprintIssue[], config: SprintConfig): TypeCompletion[] {
+export function computeCompletionByType(
+  issues: SprintIssue[],
+  config: SprintConfig,
+): TypeCompletion[] {
   const map = new Map<string, { total: number; completed: number }>();
   for (const i of issues) {
     const entry = map.get(i.issuetype) ?? { total: 0, completed: 0 };
@@ -335,7 +365,12 @@ export function computeCompletionByType(issues: SprintIssue[], config: SprintCon
     map.set(i.issuetype, entry);
   }
   return [...map.entries()]
-    .map(([type, v]) => ({ type, total: v.total, completed: v.completed, remaining: v.total - v.completed }))
+    .map(([type, v]) => ({
+      type,
+      total: v.total,
+      completed: v.completed,
+      remaining: v.total - v.completed,
+    }))
     .sort((a, b) => b.total - a.total);
 }
 
@@ -348,16 +383,32 @@ export function computeCompletionByEngineer(
 ): EngineerCompletion[] {
   const map = new Map<string, EngineerCompletion>();
   for (const eng of team.engineers) {
-    map.set(eng.name, { name: eng.name, assigned: 0, completed: 0, remaining: 0, sp_completed: 0, sp_remaining: 0 });
+    map.set(eng.name, {
+      name: eng.name,
+      assigned: 0,
+      completed: 0,
+      remaining: 0,
+      sp_completed: 0,
+      sp_remaining: 0,
+    });
   }
 
   for (const i of issues) {
     const name =
-      accountIdToName.get(i.assignee_id) ?? displayToName.get(i.assignee_name.toLowerCase()) ?? i.assignee_name;
+      accountIdToName.get(i.assignee_id) ??
+      displayToName.get(i.assignee_name.toLowerCase()) ??
+      i.assignee_name;
     if (!name) continue;
     let entry = map.get(name);
     if (!entry) {
-      entry = { name, assigned: 0, completed: 0, remaining: 0, sp_completed: 0, sp_remaining: 0 };
+      entry = {
+        name,
+        assigned: 0,
+        completed: 0,
+        remaining: 0,
+        sp_completed: 0,
+        sp_remaining: 0,
+      };
       map.set(name, entry);
     }
     entry.assigned++;
@@ -373,7 +424,10 @@ export function computeCompletionByEngineer(
   return [...map.values()].sort((a, b) => b.assigned - a.assigned);
 }
 
-export function computeCompletionByPriority(issues: SprintIssue[], config: SprintConfig): TypeCompletion[] {
+export function computeCompletionByPriority(
+  issues: SprintIssue[],
+  config: SprintConfig,
+): TypeCompletion[] {
   const map = new Map<string, { total: number; completed: number }>();
   for (const i of issues) {
     const entry = map.get(i.priority) ?? { total: 0, completed: 0 };
@@ -381,9 +435,22 @@ export function computeCompletionByPriority(issues: SprintIssue[], config: Sprin
     if (isCompleted(i, config)) entry.completed++;
     map.set(i.priority, entry);
   }
-  const order = ["Blocker", "Critical", "Major", "Normal", "Minor", "Trivial", "Undefined"];
+  const order = [
+    "Blocker",
+    "Critical",
+    "Major",
+    "Normal",
+    "Minor",
+    "Trivial",
+    "Undefined",
+  ];
   return [...map.entries()]
-    .map(([type, v]) => ({ type, total: v.total, completed: v.completed, remaining: v.total - v.completed }))
+    .map(([type, v]) => ({
+      type,
+      total: v.total,
+      completed: v.completed,
+      remaining: v.total - v.completed,
+    }))
     .sort((a, b) => {
       const ai = order.indexOf(a.type);
       const bi = order.indexOf(b.type);
@@ -391,24 +458,47 @@ export function computeCompletionByPriority(issues: SprintIssue[], config: Sprin
     });
 }
 
-export function computeEstimationFlags(issues: SprintIssue[], config: SprintConfig): EstimationFlag[] {
+export function computeEstimationFlags(
+  issues: SprintIssue[],
+  config: SprintConfig,
+): EstimationFlag[] {
   const flags: EstimationFlag[] = [];
   const sprintStart = parseDate(issues[0]?.sprint_start ?? "");
   if (!sprintStart) return flags;
 
-  const { fast_completion_ratio, slow_completion_ratio } = config.thresholds.estimation_accuracy;
+  const { fast_completion_ratio, slow_completion_ratio } =
+    config.thresholds.estimation_accuracy;
 
   for (const i of issues) {
-    if (!isCompleted(i, config) || i.story_points === null || i.story_points === 0) continue;
+    if (
+      !isCompleted(i, config) ||
+      i.story_points === null ||
+      i.story_points === 0
+    )
+      continue;
     const resolved = parseDate(i.resolutiondate);
     if (!resolved) continue;
     const days = Math.max(1, daysBetween(sprintStart, resolved));
     const ratio = days / i.story_points;
     const url = `${config.jira.base_url}/${i.key}`;
     if (ratio >= slow_completion_ratio) {
-      flags.push({ key: i.key, summary: i.summary, url, story_points: i.story_points, days_taken: days, kind: "slow" });
+      flags.push({
+        key: i.key,
+        summary: i.summary,
+        url,
+        story_points: i.story_points,
+        days_taken: days,
+        kind: "slow",
+      });
     } else if (ratio <= fast_completion_ratio) {
-      flags.push({ key: i.key, summary: i.summary, url, story_points: i.story_points, days_taken: days, kind: "fast" });
+      flags.push({
+        key: i.key,
+        summary: i.summary,
+        url,
+        story_points: i.story_points,
+        days_taken: days,
+        kind: "fast",
+      });
     }
   }
   return flags;
@@ -423,7 +513,8 @@ export function computeScopeChanges(
   const sprintStart = parseDate(issues[0]?.sprint_start ?? "");
   if (!sprintStart) return changes;
 
-  const bufferMs = config.thresholds.scope_change_buffer_days * 24 * 60 * 60 * 1000;
+  const bufferMs =
+    config.thresholds.scope_change_buffer_days * 24 * 60 * 60 * 1000;
   const cutoff = new Date(sprintStart.getTime() + bufferMs);
 
   for (const i of issues) {
@@ -445,7 +536,11 @@ export function computeScopeChanges(
   const sprintName = issues[0]?.sprint_name ?? "";
   for (const c of changelog) {
     if (sprintKeys.has(c.key)) continue;
-    if (c.sprint_names.some((sn) => sn.includes(sprintName) || sprintName.includes(sn))) {
+    if (
+      c.sprint_names.some(
+        (sn) => sn.includes(sprintName) || sprintName.includes(sn),
+      )
+    ) {
       changes.push({
         key: c.key,
         summary: c.summary,
@@ -461,9 +556,19 @@ export function computeScopeChanges(
   return changes;
 }
 
-export function computeCarryover(issues: SprintIssue[], config: SprintConfig): CarryoverItem[] {
+export function computeCarryover(
+  issues: SprintIssue[],
+  config: SprintConfig,
+): CarryoverItem[] {
   const items: CarryoverItem[] = [];
-  const priorityWeight: Record<string, number> = { Blocker: 5, Critical: 4, Major: 3, Normal: 2, Minor: 1, Trivial: 0 };
+  const priorityWeight: Record<string, number> = {
+    Blocker: 5,
+    Critical: 4,
+    Major: 3,
+    Normal: 2,
+    Minor: 1,
+    Trivial: 0,
+  };
 
   for (const i of issues) {
     if (isCompleted(i, config)) continue;
@@ -491,12 +596,17 @@ export function computeCarryover(issues: SprintIssue[], config: SprintConfig): C
 
   return items.sort((a, b) => {
     const riskOrder = { high: 0, medium: 1, low: 2 };
-    if (riskOrder[a.risk] !== riskOrder[b.risk]) return riskOrder[a.risk] - riskOrder[b.risk];
+    if (riskOrder[a.risk] !== riskOrder[b.risk])
+      return riskOrder[a.risk] - riskOrder[b.risk];
     return (b.story_points ?? 0) - (a.story_points ?? 0);
   });
 }
 
-export function computeBlockers(issues: SprintIssue[], config: SprintConfig, today: Date): BlockerItem[] {
+export function computeBlockers(
+  issues: SprintIssue[],
+  config: SprintConfig,
+  today: Date,
+): BlockerItem[] {
   const items: BlockerItem[] = [];
 
   for (const i of issues) {
@@ -515,7 +625,10 @@ export function computeBlockers(issues: SprintIssue[], config: SprintConfig, tod
       });
     } else if (config.statuses.in_progress.includes(i.status)) {
       const updated = parseDate(i.updated);
-      if (updated && daysBetween(updated, today) >= config.thresholds.long_in_progress_days) {
+      if (
+        updated &&
+        daysBetween(updated, today) >= config.thresholds.long_in_progress_days
+      ) {
         items.push({
           key: i.key,
           summary: i.summary,
@@ -532,11 +645,15 @@ export function computeBlockers(issues: SprintIssue[], config: SprintConfig, tod
   return items.sort((a, b) => b.days_stalled - a.days_stalled);
 }
 
-export function identifyAutomationOpportunities(issues: SprintIssue[]): string[] {
+export function identifyAutomationOpportunities(
+  issues: SprintIssue[],
+): string[] {
   const opportunities: string[] = [];
 
   const cveCount = issues.filter(
-    (i) => i.issuetype === "Vulnerability" || i.summary.toLowerCase().includes("cve"),
+    (i) =>
+      i.issuetype === "Vulnerability" ||
+      i.summary.toLowerCase().includes("cve"),
   ).length;
   if (cveCount >= 3) {
     opportunities.push(
@@ -571,7 +688,21 @@ export function identifyAutomationOpportunities(issues: SprintIssue[]): string[]
   }
   const repeatedPatterns = [...wordFreq.entries()]
     .filter(([, count]) => count >= 4)
-    .filter(([word]) => !["with", "from", "that", "this", "should", "when", "after", "before", "does", "have"].includes(word))
+    .filter(
+      ([word]) =>
+        ![
+          "with",
+          "from",
+          "that",
+          "this",
+          "should",
+          "when",
+          "after",
+          "before",
+          "does",
+          "have",
+        ].includes(word),
+    )
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
   for (const [word, count] of repeatedPatterns) {
@@ -621,7 +752,9 @@ function formatReport(
   ln(`# Sprint Retrospective: ${summary.sprint_name}`);
   ln();
   ln(`Analysis generated: ${formatDate(new Date())}`);
-  ln(`Sprint period: ${summary.sprint_start.slice(0, 10)} to ${summary.sprint_end.slice(0, 10)} (${summary.days_elapsed} of ${summary.total_days} days elapsed)`);
+  ln(
+    `Sprint period: ${summary.sprint_start.slice(0, 10)} to ${summary.sprint_end.slice(0, 10)} (${summary.days_elapsed} of ${summary.total_days} days elapsed)`,
+  );
   ln();
 
   // Key Takeaways placeholder
@@ -637,11 +770,15 @@ function formatReport(
   ln("| Metric | Value |");
   ln("|--------|-------|");
   ln(`| Total Issues | ${summary.total_issues} |`);
-  ln(`| Completed | ${summary.completed_issues} (${pct(summary.completed_issues, summary.total_issues)}%) |`);
+  ln(
+    `| Completed | ${summary.completed_issues} (${pct(summary.completed_issues, summary.total_issues)}%) |`,
+  );
   ln(`| Remaining | ${summary.remaining_issues} |`);
   if (hasStoryPoints) {
     ln(`| Story Points Planned | ${spStr(summary.total_sp)} |`);
-    ln(`| Story Points Completed | ${spStr(summary.completed_sp)} (${summary.total_sp ? pct(summary.completed_sp ?? 0, summary.total_sp) : "N/A"}%) |`);
+    ln(
+      `| Story Points Completed | ${spStr(summary.completed_sp)} (${summary.total_sp ? pct(summary.completed_sp ?? 0, summary.total_sp) : "N/A"}%) |`,
+    );
     ln(`| Story Points Remaining | ${spStr(summary.remaining_sp)} |`);
   }
   ln();
@@ -654,17 +791,25 @@ function formatReport(
   ln("| Type | Total | Completed | Remaining | % Complete |");
   ln("|------|-------|-----------|-----------|------------|");
   for (const t of byType) {
-    ln(`| ${t.type} | ${t.total} | ${t.completed} | ${t.remaining} | ${pct(t.completed, t.total)}% |`);
+    ln(
+      `| ${t.type} | ${t.total} | ${t.completed} | ${t.remaining} | ${pct(t.completed, t.total)}% |`,
+    );
   }
   ln();
 
   ln("### By Engineer");
   ln();
   if (hasStoryPoints) {
-    ln("| Engineer | Assigned | Completed | Remaining | SP Completed | SP Remaining |");
-    ln("|----------|----------|-----------|-----------|--------------|--------------|");
+    ln(
+      "| Engineer | Assigned | Completed | Remaining | SP Completed | SP Remaining |",
+    );
+    ln(
+      "|----------|----------|-----------|-----------|--------------|--------------|",
+    );
     for (const e of byEngineer) {
-      ln(`| ${e.name} | ${e.assigned} | ${e.completed} | ${e.remaining} | ${e.sp_completed} | ${e.sp_remaining} |`);
+      ln(
+        `| ${e.name} | ${e.assigned} | ${e.completed} | ${e.remaining} | ${e.sp_completed} | ${e.sp_remaining} |`,
+      );
     }
   } else {
     ln("| Engineer | Assigned | Completed | Remaining |");
@@ -680,7 +825,9 @@ function formatReport(
   ln("| Priority | Total | Completed | % Complete |");
   ln("|----------|-------|-----------|------------|");
   for (const p of byPriority) {
-    ln(`| ${p.type} | ${p.total} | ${p.completed} | ${pct(p.completed, p.total)}% |`);
+    ln(
+      `| ${p.type} | ${p.total} | ${p.completed} | ${pct(p.completed, p.total)}% |`,
+    );
   }
   ln();
 
@@ -688,9 +835,13 @@ function formatReport(
   ln("## Estimation Accuracy");
   ln();
   if (!hasStoryPoints) {
-    ln("Estimation accuracy analysis unavailable -- no story points assigned to sprint items.");
+    ln(
+      "Estimation accuracy analysis unavailable -- no story points assigned to sprint items.",
+    );
   } else {
-    ln(`Overall: ${spStr(summary.completed_sp)} of ${spStr(summary.total_sp)} story points completed (${summary.total_sp ? pct(summary.completed_sp ?? 0, summary.total_sp) : "N/A"}%)`);
+    ln(
+      `Overall: ${spStr(summary.completed_sp)} of ${spStr(summary.total_sp)} story points completed (${summary.total_sp ? pct(summary.completed_sp ?? 0, summary.total_sp) : "N/A"}%)`,
+    );
     ln();
     const slow = estimationFlags.filter((f) => f.kind === "slow");
     const fast = estimationFlags.filter((f) => f.kind === "fast");
@@ -698,7 +849,9 @@ function formatReport(
       ln("### Items That Took Longer Than Expected");
       ln();
       for (const f of slow) {
-        ln(`- [${f.key} - ${truncate(f.summary, 60)}](${f.url}) -- ${f.story_points} SP, took ${f.days_taken} days`);
+        ln(
+          `- [${f.key} - ${truncate(f.summary, 60)}](${f.url}) -- ${f.story_points} SP, took ${f.days_taken} days`,
+        );
       }
       ln();
     }
@@ -706,7 +859,9 @@ function formatReport(
       ln("### Items Completed Faster Than Expected");
       ln();
       for (const f of fast) {
-        ln(`- [${f.key} - ${truncate(f.summary, 60)}](${f.url}) -- ${f.story_points} SP, completed in ${f.days_taken} day${f.days_taken === 1 ? "" : "s"}`);
+        ln(
+          `- [${f.key} - ${truncate(f.summary, 60)}](${f.url}) -- ${f.story_points} SP, completed in ${f.days_taken} day${f.days_taken === 1 ? "" : "s"}`,
+        );
       }
       ln();
     }
@@ -726,13 +881,17 @@ function formatReport(
   if (scopeChanges.length === 0) {
     ln("No scope changes detected.");
   } else {
-    ln(`${added.length} item${added.length !== 1 ? "s" : ""} added mid-sprint, ${removed.length} item${removed.length !== 1 ? "s" : ""} removed. Net scope change: ${addedSp - removedSp >= 0 ? "+" : ""}${addedSp - removedSp} story points.`);
+    ln(
+      `${added.length} item${added.length !== 1 ? "s" : ""} added mid-sprint, ${removed.length} item${removed.length !== 1 ? "s" : ""} removed. Net scope change: ${addedSp - removedSp >= 0 ? "+" : ""}${addedSp - removedSp} story points.`,
+    );
     ln();
     if (added.length > 0) {
       ln("### Added Mid-Sprint");
       ln();
       for (const s of added) {
-        ln(`- [${s.key} - ${truncate(s.summary, 60)}](${s.url}) -- added ${s.date}, ${spStr(s.story_points)} SP, ${s.priority} priority`);
+        ln(
+          `- [${s.key} - ${truncate(s.summary, 60)}](${s.url}) -- added ${s.date}, ${spStr(s.story_points)} SP, ${s.priority} priority`,
+        );
       }
       ln();
     }
@@ -740,7 +899,9 @@ function formatReport(
       ln("### Removed Mid-Sprint");
       ln();
       for (const s of removed) {
-        ln(`- [${s.key} - ${truncate(s.summary, 60)}](${s.url}) -- removed ~${s.date}, ${spStr(s.story_points)} SP`);
+        ln(
+          `- [${s.key} - ${truncate(s.summary, 60)}](${s.url}) -- removed ~${s.date}, ${spStr(s.story_points)} SP`,
+        );
       }
       ln();
     }
@@ -753,8 +914,13 @@ function formatReport(
   if (carryover.length === 0) {
     ln("All items completed -- no carryover expected.");
   } else {
-    const carryoverSp = carryover.reduce((s, i) => s + (i.story_points ?? 0), 0);
-    ln(`${carryover.length} item${carryover.length !== 1 ? "s" : ""} (${carryoverSp} story points) likely to carry over to next sprint.`);
+    const carryoverSp = carryover.reduce(
+      (s, i) => s + (i.story_points ?? 0),
+      0,
+    );
+    ln(
+      `${carryover.length} item${carryover.length !== 1 ? "s" : ""} (${carryoverSp} story points) likely to carry over to next sprint.`,
+    );
     ln();
     for (const risk of ["high", "medium", "low"] as const) {
       const items = carryover.filter((c) => c.risk === risk);
@@ -762,7 +928,9 @@ function formatReport(
       ln(`### ${risk.charAt(0).toUpperCase() + risk.slice(1)} Risk`);
       ln();
       for (const c of items) {
-        ln(`- [${c.key} - ${truncate(c.summary, 60)}](${c.url}) -- ${c.status}, ${spStr(c.story_points)} SP, ${c.priority} priority, assigned to ${c.assignee || "Unassigned"}`);
+        ln(
+          `- [${c.key} - ${truncate(c.summary, 60)}](${c.url}) -- ${c.status}, ${spStr(c.story_points)} SP, ${c.priority} priority, assigned to ${c.assignee || "Unassigned"}`,
+        );
       }
       ln();
     }
@@ -781,15 +949,21 @@ function formatReport(
       ln("### Currently Blocked");
       ln();
       for (const b of blocked) {
-        ln(`- [${b.key} - ${truncate(b.summary, 60)}](${b.url}) -- blocked for ${b.days_stalled} day${b.days_stalled !== 1 ? "s" : ""}, assigned to ${b.assignee || "Unassigned"}, ${b.priority} priority`);
+        ln(
+          `- [${b.key} - ${truncate(b.summary, 60)}](${b.url}) -- blocked for ${b.days_stalled} day${b.days_stalled !== 1 ? "s" : ""}, assigned to ${b.assignee || "Unassigned"}, ${b.priority} priority`,
+        );
       }
       ln();
     }
     if (stalled.length > 0) {
-      ln(`### Stalled (no updates in ${stalled[0]?.days_stalled ?? "N/A"}+ days)`);
+      ln(
+        `### Stalled (no updates in ${stalled[0]?.days_stalled ?? "N/A"}+ days)`,
+      );
       ln();
       for (const b of stalled) {
-        ln(`- [${b.key} - ${truncate(b.summary, 60)}](${b.url}) -- last updated ${b.days_stalled} day${b.days_stalled !== 1 ? "s" : ""} ago, assigned to ${b.assignee || "Unassigned"}`);
+        ln(
+          `- [${b.key} - ${truncate(b.summary, 60)}](${b.url}) -- last updated ${b.days_stalled} day${b.days_stalled !== 1 ? "s" : ""} ago, assigned to ${b.assignee || "Unassigned"}`,
+        );
       }
       ln();
     }
@@ -799,7 +973,9 @@ function formatReport(
   // Time Distribution
   ln("## Time Distribution");
   ln();
-  ln("See **Completion Analysis > By Engineer** above for detailed workload distribution.");
+  ln(
+    "See **Completion Analysis > By Engineer** above for detailed workload distribution.",
+  );
   ln();
 
   // Automation Opportunities
@@ -849,15 +1025,23 @@ function printRetroContext(
   const topRisk = carryover[0];
 
   console.log(`\n${BOLD}--- Retro Context ---${RESET}`);
-  console.log(`  Completion: ${summary.completed_issues}/${summary.total_issues} issues (${pct(summary.completed_issues, summary.total_issues)}%)${hasStoryPoints ? `, ${spStr(summary.completed_sp)}/${spStr(summary.total_sp)} SP (${summary.total_sp ? pct(summary.completed_sp ?? 0, summary.total_sp) : "N/A"}%)` : ""}`);
+  console.log(
+    `  Completion: ${summary.completed_issues}/${summary.total_issues} issues (${pct(summary.completed_issues, summary.total_issues)}%)${hasStoryPoints ? `, ${spStr(summary.completed_sp)}/${spStr(summary.total_sp)} SP (${summary.total_sp ? pct(summary.completed_sp ?? 0, summary.total_sp) : "N/A"}%)` : ""}`,
+  );
   console.log(`  Scope changes: +${added} added, -${removed} removed`);
   console.log(`  Blockers: ${blockedCount} blocked, ${stalledCount} stalled`);
   if (hasStoryPoints) {
-    console.log(`  Estimation: ${summary.total_sp ? pct(summary.completed_sp ?? 0, summary.total_sp) : "N/A"}% SP accuracy, ${slow + fast} items flagged (${slow} slow, ${fast} fast)`);
+    console.log(
+      `  Estimation: ${summary.total_sp ? pct(summary.completed_sp ?? 0, summary.total_sp) : "N/A"}% SP accuracy, ${slow + fast} items flagged (${slow} slow, ${fast} fast)`,
+    );
   }
-  console.log(`  Carryover risk: ${carryover.length} items (${carryoverSp} SP)`);
+  console.log(
+    `  Carryover risk: ${carryover.length} items (${carryoverSp} SP)`,
+  );
   if (topRisk) {
-    console.log(`  Top risk: ${topRisk.key} (${spStr(topRisk.story_points)} SP, ${topRisk.priority}, ${topRisk.status})`);
+    console.log(
+      `  Top risk: ${topRisk.key} (${spStr(topRisk.story_points)} SP, ${topRisk.priority}, ${topRisk.status})`,
+    );
   }
   console.log();
 }
@@ -870,11 +1054,13 @@ function parseArgs(argv: string[]): Record<string, string> {
   const args: Record<string, string> = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--help") {
-      console.log("Usage: generate-sprint-retro.ts --date <YYYY-MM-DD> [--cache-dir <path>] [--config <path>] [--output <path>]");
+      console.log(
+        "Usage: generate-sprint-retro.ts --date <YYYY-MM-DD> [--cache-dir <path>] [--config <path>] [--output <path>]",
+      );
       process.exit(0);
     }
-    if (argv[i]!.startsWith("--") && i + 1 < argv.length) {
-      args[argv[i]!.slice(2)] = argv[++i]!;
+    if (argv[i].startsWith("--") && i + 1 < argv.length) {
+      args[argv[i].slice(2)] = argv[++i]!;
     }
   }
   return args;
@@ -894,7 +1080,8 @@ function main() {
     process.exit(1);
   }
 
-  const configPath = args.config ?? resolve(__dirname, "../data/sprint-config.json");
+  const configPath =
+    args.config ?? resolve(__dirname, "../data/sprint-config.json");
   const cachePath = args["cache-dir"] ?? resolve(__dirname, "../data/cache");
   const config = loadConfig(configPath);
   const team = loadTeamConfig(config, dirname(configPath));
@@ -908,22 +1095,34 @@ function main() {
 
   const warnings: string[] = [];
   if (issues.length === 0) {
-    console.error(`${RED}No sprint issues found in cache. Run the agent to fetch data first.${RESET}`);
+    console.error(
+      `${RED}No sprint issues found in cache. Run the agent to fetch data first.${RESET}`,
+    );
     process.exit(2);
   }
   if (issues.length < config.thresholds.low_item_warning) {
-    warnings.push(`Sprint has only ${issues.length} items (threshold: ${config.thresholds.low_item_warning}). Analysis may not be representative.`);
+    warnings.push(
+      `Sprint has only ${issues.length} items (threshold: ${config.thresholds.low_item_warning}). Analysis may not be representative.`,
+    );
   }
 
   const hasStoryPoints = issues.some((i) => i.story_points !== null);
   if (!hasStoryPoints) {
-    warnings.push("No story points found on any sprint items. Estimation accuracy analysis will be skipped.");
+    warnings.push(
+      "No story points found on any sprint items. Estimation accuracy analysis will be skipped.",
+    );
   }
 
   // Run analysis
   const summary = computeSprintSummary(issues, config, today);
   const byType = computeCompletionByType(issues, config);
-  const byEngineer = computeCompletionByEngineer(issues, config, team, accountIdToName, displayToName);
+  const byEngineer = computeCompletionByEngineer(
+    issues,
+    config,
+    team,
+    accountIdToName,
+    displayToName,
+  );
   const byPriority = computeCompletionByPriority(issues, config);
   const estimationFlags = computeEstimationFlags(issues, config);
   const scopeChanges = computeScopeChanges(issues, changelog, config);
@@ -933,17 +1132,34 @@ function main() {
 
   // Format report
   const report = formatReport(
-    summary, byType, byEngineer, byPriority, estimationFlags,
-    scopeChanges, carryover, blockers, automationOps, hasStoryPoints, warnings,
+    summary,
+    byType,
+    byEngineer,
+    byPriority,
+    estimationFlags,
+    scopeChanges,
+    carryover,
+    blockers,
+    automationOps,
+    hasStoryPoints,
+    warnings,
   );
 
   // Write output
-  const outputPath = args.output ?? resolve(__dirname, `../data/output/sprint-retro-${date}.md`);
+  const outputPath =
+    args.output ?? resolve(__dirname, `../data/output/sprint-retro-${date}.md`);
   writeFileSync(outputPath, report);
   console.log(`${GREEN}Report written to ${outputPath}${RESET}`);
 
   // Print context for agent
-  printRetroContext(summary, scopeChanges, blockers, estimationFlags, carryover, hasStoryPoints);
+  printRetroContext(
+    summary,
+    scopeChanges,
+    blockers,
+    estimationFlags,
+    carryover,
+    hasStoryPoints,
+  );
 
   // Exit code
   if (warnings.length > 0) {

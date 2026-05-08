@@ -37,15 +37,19 @@ interface EngineerMaps {
 
 export function loadEngineerMaps(configPath: string): EngineerMaps {
   if (!existsSync(configPath)) {
-    console.log(`${YELLOW}WARN: team config not found at ${configPath}, author checks disabled${RESET}`);
+    console.log(
+      `${YELLOW}WARN: team config not found at ${configPath}, author checks disabled${RESET}`,
+    );
     return { github: new Map(), gitlab: new Map() };
   }
-  const config = JSON.parse(readFileSync(configPath, "utf-8"));
+  const config = JSON.parse(readFileSync(configPath, "utf-8")) as {
+    engineers: { name: string; github: string; gitlab: string }[];
+  };
   const github = new Map<string, string>(
-    config.engineers.map((e: { name: string; github: string }) => [e.name, e.github]),
+    config.engineers.map((e) => [e.name, e.github]),
   );
   const gitlab = new Map<string, string>(
-    config.engineers.map((e: { name: string; gitlab: string }) => [e.name, e.gitlab]),
+    config.engineers.map((e) => [e.name, e.gitlab]),
   );
   return { github, gitlab };
 }
@@ -83,14 +87,25 @@ export function parseLinks(content: string): LinkInfo[] {
   return links;
 }
 
-export function classifyLinks(
-  links: LinkInfo[],
-): { github_pr: LinkInfo[]; gitlab_mr: LinkInfo[]; jira: LinkInfo[]; other: LinkInfo[] } {
-  const classified = { github_pr: [] as LinkInfo[], gitlab_mr: [] as LinkInfo[], jira: [] as LinkInfo[], other: [] as LinkInfo[] };
+export function classifyLinks(links: LinkInfo[]): {
+  github_pr: LinkInfo[];
+  gitlab_mr: LinkInfo[];
+  jira: LinkInfo[];
+  other: LinkInfo[];
+} {
+  const classified = {
+    github_pr: [] as LinkInfo[],
+    gitlab_mr: [] as LinkInfo[],
+    jira: [] as LinkInfo[],
+    other: [] as LinkInfo[],
+  };
   for (const link of links) {
     if (link.url.includes("github.com") && link.url.includes("/pull/")) {
       classified.github_pr.push(link);
-    } else if (link.url.includes("gitlab") && link.url.includes("/merge_requests/")) {
+    } else if (
+      link.url.includes("gitlab") &&
+      link.url.includes("/merge_requests/")
+    ) {
       classified.gitlab_mr.push(link);
     } else if (link.url.includes("atlassian.net/browse/")) {
       classified.jira.push(link);
@@ -117,7 +132,10 @@ async function apiGet(
     headers.Authorization = `Bearer ${token}`;
   }
   try {
-    const resp = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+    const resp = await fetch(url, {
+      headers,
+      signal: AbortSignal.timeout(15000),
+    });
     if (resp.status === 404) return null;
     if (!resp.ok) return null;
     return (await resp.json()) as Record<string, unknown>;
@@ -169,7 +187,11 @@ export function verifyGitlabMrSync(link: LinkInfo): LinkResult {
 export function verifyJira(link: LinkInfo): LinkResult {
   const m = link.url.match(/\/browse\/([A-Z]+-\d+)/);
   if (!m) {
-    return { link, status: "error", message: "Could not parse Jira ticket URL" };
+    return {
+      link,
+      status: "error",
+      message: "Could not parse Jira ticket URL",
+    };
   }
   const ticket = m[1];
 
@@ -212,7 +234,11 @@ export class ReportLinkValidator {
   async verifyGithubPr(link: LinkInfo): Promise<LinkResult> {
     const m = link.url.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
     if (!m) {
-      return { link, status: "error", message: "Could not parse GitHub PR URL" };
+      return {
+        link,
+        status: "error",
+        message: "Could not parse GitHub PR URL",
+      };
     }
 
     const [, owner, repo, prNum] = m;
@@ -227,17 +253,26 @@ export class ReportLinkValidator {
     }
 
     if (!this.githubToken) {
-      return { link, status: "warning", message: "No GITHUB_PAT — skipped API check" };
+      return {
+        link,
+        status: "warning",
+        message: "No GITHUB_PAT — skipped API check",
+      };
     }
 
     const apiUrl = `https://api.github.com/repos/${owner}/${repo}/pulls/${prNum}`;
     const data = await apiGet(apiUrl, this.githubToken);
 
     if (data === null) {
-      return { link, status: "error", message: `404 NOT FOUND: ${owner}/${repo}/pull/${prNum}` };
+      return {
+        link,
+        status: "error",
+        message: `404 NOT FOUND: ${owner}/${repo}/pull/${prNum}`,
+      };
     }
 
-    const actualAuthor = (data.user as Record<string, unknown>)?.login as string ?? "unknown";
+    const actualAuthor =
+      ((data.user as Record<string, unknown>)?.login as string) ?? "unknown";
     if (link.engineer) {
       const expected = this.engineerGithub.get(link.engineer);
       if (expected && actualAuthor !== expected) {
@@ -265,8 +300,8 @@ export class ReportLinkValidator {
       };
     }
 
-    const state = data.state as string ?? "unknown";
-    const merged = data.merged as boolean ?? false;
+    const state = (data.state as string) ?? "unknown";
+    const merged = (data.merged as boolean) ?? false;
     const statusStr = merged ? "merged" : state;
     return {
       link,
@@ -278,7 +313,11 @@ export class ReportLinkValidator {
   async verifyGitlabMr(link: LinkInfo): Promise<LinkResult> {
     const m = link.url.match(/gitlab[^/]*\/(.+?)\/-\/merge_requests\/(\d+)/);
     if (!m) {
-      return { link, status: "error", message: "Could not parse GitLab MR URL" };
+      return {
+        link,
+        status: "error",
+        message: "Could not parse GitLab MR URL",
+      };
     }
 
     const [, projectPath, mrIid] = m;
@@ -293,7 +332,11 @@ export class ReportLinkValidator {
     }
 
     if (!this.gitlabToken) {
-      return { link, status: "warning", message: "No GITLAB_PAT — skipped API check" };
+      return {
+        link,
+        status: "warning",
+        message: "No GITLAB_PAT — skipped API check",
+      };
     }
 
     const encodedPath = projectPath.replace(/\//g, "%2F");
@@ -301,10 +344,16 @@ export class ReportLinkValidator {
     const data = await apiGet(apiUrl, this.gitlabToken, "bearer");
 
     if (data === null) {
-      return { link, status: "error", message: `404 NOT FOUND: ${projectPath}!${mrIid}` };
+      return {
+        link,
+        status: "error",
+        message: `404 NOT FOUND: ${projectPath}!${mrIid}`,
+      };
     }
 
-    const actualAuthor = (data.author as Record<string, unknown>)?.username as string ?? "unknown";
+    const actualAuthor =
+      ((data.author as Record<string, unknown>)?.username as string) ??
+      "unknown";
     if (link.engineer) {
       const expected = this.engineerGitlab.get(link.engineer);
       if (expected && actualAuthor !== expected) {
@@ -316,7 +365,7 @@ export class ReportLinkValidator {
       }
     }
 
-    const state = data.state as string ?? "unknown";
+    const state = (data.state as string) ?? "unknown";
     return {
       link,
       status: "ok",
@@ -327,12 +376,18 @@ export class ReportLinkValidator {
   private printResult(result: LinkResult): void {
     if (result.status === "ok") {
       if (this.verbose) {
-        console.log(`  ${GREEN}✓${RESET} Line ${result.link.line_num}: ${result.message}`);
+        console.log(
+          `  ${GREEN}✓${RESET} Line ${result.link.line_num}: ${result.message}`,
+        );
       }
     } else if (result.status === "warning") {
-      console.log(`  ${YELLOW}⚠${RESET} Line ${result.link.line_num}: ${result.message}`);
+      console.log(
+        `  ${YELLOW}⚠${RESET} Line ${result.link.line_num}: ${result.message}`,
+      );
     } else {
-      console.log(`  ${RED}✗${RESET} Line ${result.link.line_num}: ${result.link.link_text}`);
+      console.log(
+        `  ${RED}✗${RESET} Line ${result.link.line_num}: ${result.link.link_text}`,
+      );
       console.log(`    ${RED}${result.message}${RESET}`);
     }
   }
@@ -370,7 +425,9 @@ export class ReportLinkValidator {
     const classified = classifyLinks(links);
 
     if (classified.github_pr.length > 0) {
-      console.log(`\n${BLUE}GitHub PRs (${classified.github_pr.length})${RESET}`);
+      console.log(
+        `\n${BLUE}GitHub PRs (${classified.github_pr.length})${RESET}`,
+      );
       for (const link of classified.github_pr) {
         const result = await this.verifyGithubPr(link);
         this.results.push(result);
@@ -379,7 +436,9 @@ export class ReportLinkValidator {
     }
 
     if (classified.gitlab_mr.length > 0) {
-      console.log(`\n${BLUE}GitLab MRs (${classified.gitlab_mr.length})${RESET}`);
+      console.log(
+        `\n${BLUE}GitLab MRs (${classified.gitlab_mr.length})${RESET}`,
+      );
       for (const link of classified.gitlab_mr) {
         const result = await this.verifyGitlabMr(link);
         this.results.push(result);
@@ -441,7 +500,9 @@ async function main(): Promise<void> {
   } else {
     filePath = findLatestReport(agentRoot);
     if (!filePath) {
-      console.log(`${RED}No weekly reports found in agents/weekly-team-update/data/output/${RESET}`);
+      console.log(
+        `${RED}No weekly reports found in agents/weekly-team-update/data/output/${RESET}`,
+      );
       process.exit(1);
     }
   }
@@ -460,5 +521,5 @@ const isMain =
   process.argv[1] &&
   resolve(process.argv[1]) === resolve(import.meta.url.replace("file://", ""));
 if (isMain) {
-  main();
+  void main();
 }

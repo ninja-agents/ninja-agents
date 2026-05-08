@@ -18,10 +18,11 @@ claude                # Claude Code
 
 ## Available Agents
 
-| Agent                                            | Skill           | Description                                                     |
-| ------------------------------------------------ | --------------- | --------------------------------------------------------------- |
-| [weekly-team-update](agents/weekly-team-update/) | `/team-update`  | Weekly team report for leadership from GitHub, GitLab, and Jira |
-| [sprint-retro](agents/sprint-retro/)             | `/sprint-retro` | Sprint retrospective analysis from active Jira sprint           |
+| Agent                                                  | Skill                    | Description                                                     |
+| ------------------------------------------------------ | ------------------------ | --------------------------------------------------------------- |
+| [weekly-team-update](agents/weekly-team-update/)       | `/team-update`           | Weekly team report for leadership from GitHub, GitLab, and Jira |
+| [sprint-retro](agents/sprint-retro/)                   | `/sprint-retro`          | Sprint retrospective analysis from active Jira sprint           |
+| [repo-contextification](agents/repo-contextification/) | `/repo-contextification` | Audit repo docs and AI-readiness, scaffold missing files        |
 
 Each agent has its own README with setup and usage instructions.
 

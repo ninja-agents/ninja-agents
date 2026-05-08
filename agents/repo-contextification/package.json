@@ -1,0 +1,17 @@
+{
+  "name": "repo-contextification",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "audit": "tsx scripts/audit-repo.ts",
+    "audit:dry-run": "tsx scripts/audit-repo.ts --dry-run",
+    "validate": "tsx scripts/validate-output.ts",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.0"
+  }
+}

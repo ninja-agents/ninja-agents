@@ -1,0 +1,64 @@
+# Repo Contextification
+
+Audit a repository for foundational documentation and AI-readiness, then scaffold missing files in one pass.
+
+## Prerequisites
+
+- [GitHub MCP server](https://github.com/github/github-mcp-server) for auditing remote GitHub repos
+- `GITHUB_PAT` environment variable for GitHub access
+- Tokens must be set as environment variables before launching Claude Code.
+
+For local-only audits, no MCP server is needed.
+
+## Usage
+
+### Claude Code
+
+```bash
+/repo-contextification
+```
+
+### Cursor / Manual
+
+```bash
+# Run the audit script directly
+npm run audit -- --repo-path /path/to/repo
+
+# Preview what would be generated (no files written)
+npm run audit:dry-run -- --repo-path /path/to/repo
+
+# Validate generated docs (checks sections, links, anchors, placeholders)
+npm run validate -- --repo-path /path/to/repo --verbose
+```
+
+## How It Works
+
+1. **Identify target** — specify a local path or GitHub `owner/repo`
+2. **Audit existing docs** — scan for README.md, CONTRIBUTING.md, AGENTS.md, ARCHITECTURE.md, .coderabbit.yaml
+3. **Gap analysis** — present a report with completeness scores and AI-readiness rating
+4. **Generate docs** — write all missing/incomplete files in one pass (skips complete files)
+5. **AI tooling config** — configure CodeRabbit
+6. **Validation** — verify all files exist with expected sections, working links and anchors
+
+## Configuration
+
+No configuration file needed. The agent discovers everything from the target repo.
+
+## File Layout
+
+```
+agents/repo-contextification/
+├── README.md
+├── package.json
+├── tsconfig.json
+├── scripts/
+│   ├── lib.ts                # shared types and utilities
+│   ├── audit-repo.ts
+│   └── validate-output.ts
+└── data/
+    ├── cache/              # temporary data (gitignored)
+    └── output/             # generated reports (gitignored)
+```
+
+> Cache and output directories are gitignored via the repo-level `.gitignore`
+> (`agents/*/data/cache/*` and `agents/*/data/output/*.md`).

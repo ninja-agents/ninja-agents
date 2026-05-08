@@ -23,6 +23,14 @@ Tokens must be set as environment variables before launching Claude Code — see
 
 Describe how to use this agent from Cursor (e.g., run scripts directly, use MCP tools manually).
 
+For TypeScript agents, scripts can be run directly:
+
+```bash
+cd agents/your-agent
+npm install
+npm run generate -- --date 2026-01-01
+```
+
 ## How It Works
 
 1. Step one
@@ -31,20 +39,28 @@ Describe how to use this agent from Cursor (e.g., run scripts directly, use MCP 
 
 ## Configuration
 
-Describe any config files in `data/` that need to be customized, or "No configuration needed."
+Edit `data/config.json` to customize the agent's behavior.
+
+Or, if no configuration: "No configuration needed."
 
 ## File Layout
 
 ```
 agents/your-agent/
 ├── README.md           # This file
+├── package.json        # Dependencies and scripts (TypeScript agents)
+├── tsconfig.json       # TypeScript config
 ├── scripts/            # Supporting scripts
-│   └── your-script.py
+│   ├── your-script.ts
+│   └── validate-output.ts  # Output validation
 └── data/
     ├── config.json     # Agent configuration
     ├── cache/          # Temporary data (gitignored)
     └── output/         # Generated output (gitignored)
 ```
+
+> Cache and output directories are gitignored via the repo-level `.gitignore`
+> (`agents/*/data/cache/*` and `agents/*/data/output/*.md`).
 
 ## Wiring Up
 
@@ -52,12 +68,12 @@ After creating your agent directory, wire it into the IDE tooling:
 
 1. **Agent spec** — create `.claude/agents/your-agent.md` with:
    - Frontmatter: `name`, `description` (with trigger phrases + examples), `model`, `memory`
-   - Body: role statement, numbered `## Step N` sections, `## Rules` section
+   - Body: role statement, numbered `## Step N` sections, validation checkpoints, `## Rules` section
    - See `.claude/agents/weekly-team-update.md` for a working example
 
-2. **Skill shortcut** — create `.claude/skills/your-skill.md` with:
-   - Frontmatter: `skill`, `description`, `user-invocable: true`
-   - Body: usage, what it does, expected output
+2. **Skill shortcut** — create `.claude/skills/your-skill/SKILL.md` with:
+   - Frontmatter: `name`, `description`, `user-invocable: true`
+   - Body: usage, what it does, expected output, critical rules
 
 3. **Permissions** — add any MCP tools or bash commands to `.claude/settings.json`
 

@@ -9,7 +9,7 @@ List the MCP servers or CLI tools this agent needs:
 - **GitHub MCP** — for PR and commit data
 - (add or remove as needed)
 
-Tokens must be set as environment variables before launching Claude Code — see [MCP setup guide](../../docs/mcp-setup.md).
+Tokens must be set as environment variables before launching your IDE — see [MCP setup guide](../../docs/mcp-setup.md).
 
 ## Usage
 
@@ -61,27 +61,33 @@ agents/your-agent/
 
 ## Wiring Up
 
-After creating your agent directory, wire it into the IDE tooling:
+After creating your agent directory, wire it into both IDEs:
+
+### Shared (required for both IDEs)
 
 1. **Agent spec** — create `.claude/agents/your-agent.md` with:
    - Frontmatter: `name`, `description` (with trigger phrases + examples), `model`, `memory`
    - Body: role statement, numbered `## Step N` sections, validation checkpoints, `## Rules` section
    - See `.claude/agents/weekly-team-update.md` for a working example
 
-2. **Skill shortcut** — create `.claude/skills/your-skill/SKILL.md` with:
-   - Frontmatter: `name`, `description`, `user-invocable: true`
-   - Body: usage, what it does, expected output, critical rules
-
-3. **Permissions** — add any MCP tools or bash commands to `.claude/settings.json`
-
-4. **Index files** — add a row to the agent tables in:
+2. **Index files** — add a row to the agent tables in:
    - `AGENTS.md`
    - `README.md`
    - `CLAUDE.md` (Available Skills table)
+
+### Claude Code
+
+3. **Skill shortcut** — create `.claude/skills/your-skill/SKILL.md` with:
+   - Frontmatter: `name`, `description`, `user-invocable: true`
+   - Body: usage, what it does, expected output, critical rules
+
+4. **Permissions** — add any MCP tools or bash commands to `.claude/settings.json`
+
+### Cursor
 
 5. **Cursor rule** — create `.cursor/rules/your-agent.mdc` with:
    - Frontmatter: `description` (purpose + trigger phrases), `alwaysApply: false`
    - Body: point to `.claude/agents/your-agent.md` as the source of truth
    - See existing `.cursor/rules/weekly-team-update.mdc` for the pattern
 
-Or just run `/create-agent your-agent-name` to do all of this automatically.
+In Claude Code, run `/create-agent your-agent-name` to scaffold all of this automatically. In Cursor, copy `agents/_template/` and follow the steps above.

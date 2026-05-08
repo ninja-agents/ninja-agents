@@ -7,7 +7,7 @@ Generates a leadership-ready weekly status report by querying GitHub, GitLab, an
 - **GitHub MCP** — for PR and commit data
 - **GitLab MCP** (`@zereight/mcp-gitlab`) — for MR data
 - **Atlassian Rovo MCP** — for Jira ticket data
-- Tokens set as environment variables — see [MCP setup guide](../../docs/mcp-setup.md)
+- Tokens set as environment variables before launching your IDE — see [MCP setup guide](../../docs/mcp-setup.md)
 
 ## Usage
 
@@ -73,7 +73,7 @@ Edit `data/team-config.json` to customize:
 To find a Jira account ID:
 
 ```bash
-# In Claude Code:
+# In your IDE:
 mcp__atlassian__lookupJiraAccountId with searchString: "user@company.com"
 ```
 

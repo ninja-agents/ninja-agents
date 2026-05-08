@@ -31,15 +31,15 @@ ninja-agents/
     sprint-retro/                 # Sprint retrospective agent
     repo-contextification/        # Documentation audit agent
   .claude/
-    agents/                       # Claude Code agent specs (workflow definitions)
-    skills/                       # Claude Code skill shortcuts (entry points)
+    agents/                       # Agent specs — shared source of truth for workflows
+    skills/                       # Skill shortcuts (Claude Code entry points)
     settings.json                 # MCP tool permission allowlist
   .cursor/
-    rules/                        # Cursor project rules (thin pointers)
-    mcp.json                      # Cursor MCP server config (mirrors .mcp.json)
+    rules/                        # Project rules (Cursor — point to agent specs)
+    mcp.json                      # MCP server config (Cursor — mirrors .mcp.json)
   docs/
     mcp-setup.md                  # Token setup and troubleshooting guide
-  .mcp.json                       # MCP server definitions (Claude Code)
+  .mcp.json                       # MCP server definitions (Claude Code; mirrored by .cursor/mcp.json)
   CLAUDE.md                       # Claude Code project context
   AGENTS.md                       # Agent index and conventions
 ```
@@ -65,13 +65,13 @@ agents/{name}/
 
 ### IDE Wiring
 
-Agent specs (`.claude/agents/{name}.md`) are the single source of truth for each workflow. Other files point to them:
+Agent specs (`.claude/agents/{name}.md`) are the single source of truth for each workflow. Both IDEs point to the same specs:
 
 ```text
 .claude/agents/{name}.md     <-- full workflow definition (steps, rules, validation)
   ^
-  |-- .claude/skills/{name}/SKILL.md   (skill shortcut for Claude Code)
-  |-- .cursor/rules/{name}.mdc         (thin pointer for Cursor)
+  |-- .claude/skills/{name}/SKILL.md   (Claude Code: skill shortcut, invoked via /command)
+  |-- .cursor/rules/{name}.mdc         (Cursor: project rule, invoked via @name in chat)
 ```
 
 ## Data Flow Pipeline

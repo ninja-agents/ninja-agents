@@ -1,6 +1,6 @@
 # Contributing
 
-This repo is a shared playground -- contributions range from new agents to improvements to existing ones. For initial setup (cloning, token configuration, and launching Claude Code), see [README.md](README.md#quick-start).
+This repo is a shared playground -- contributions range from new agents to improvements to existing ones. For initial setup (cloning, token configuration, and launching your IDE), see [README.md](README.md#quick-start).
 
 ## Adding a New Agent
 
@@ -16,11 +16,11 @@ Or run the scaffolding skill in Claude Code:
 /create-agent your-agent-name
 ```
 
-Both approaches produce the standard layout described in [agents/\_template/README.md](agents/_template/README.md). After creating the agent directory, wire it into the IDE tooling:
+Both approaches produce the standard layout described in [agents/\_template/README.md](agents/_template/README.md). After creating the agent directory, wire it into both IDEs:
 
-1. Agent spec at `.claude/agents/your-agent.md`
-2. Skill shortcut at `.claude/skills/your-skill/SKILL.md`
-3. Cursor rule at `.cursor/rules/your-agent.mdc`
+1. Agent spec at `.claude/agents/your-agent.md` (shared source of truth)
+2. Skill shortcut at `.claude/skills/your-skill/SKILL.md` (Claude Code)
+3. Cursor rule at `.cursor/rules/your-agent.mdc` (Cursor — points to the agent spec)
 4. Rows added to the agent tables in `README.md`, `AGENTS.md`, and `CLAUDE.md`
 
 ## Coding Standards

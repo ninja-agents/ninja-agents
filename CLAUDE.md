@@ -2,6 +2,8 @@
 
 A shared playground for AI agents that help engineering teams. Each agent lives in its own directory under `agents/`.
 
+> **Cursor users:** This file is Claude Code's project context. For Cursor, see `.cursor/rules/` for equivalent project rules and `.cursor/mcp.json` for MCP config.
+
 ## Project Structure
 
 - `agents/{name}/` — self-contained agent directories (scripts, data, config, README)

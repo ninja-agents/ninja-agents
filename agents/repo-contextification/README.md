@@ -6,7 +6,7 @@ Audit a repository for foundational documentation and AI-readiness, then scaffol
 
 - [GitHub MCP server](https://github.com/github/github-mcp-server) for auditing remote GitHub repos
 - `GITHUB_PAT` environment variable for GitHub access
-- Tokens must be set as environment variables before launching Claude Code.
+- Tokens must be set as environment variables before launching your IDE.
 
 For local-only audits, no MCP server is needed.
 

@@ -1,10 +1,10 @@
 # MCP Server Setup
 
-This guide walks you through configuring the MCP servers that agents in this repo depend on. The server definitions live in `.mcp.json` (committed to the repo); you only need to supply your personal tokens as environment variables when launching Claude Code.
+This guide walks you through configuring the MCP servers that agents in this repo depend on. The server definitions are committed to the repo; you only need to supply your personal tokens as environment variables when launching your IDE.
 
 ## Prerequisites
 
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed
+- An AI-powered IDE: [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Cursor](https://cursor.com)
 - [Node.js](https://nodejs.org/) 18+ (for the GitLab stdio server)
 
 ## Quick Start
@@ -12,7 +12,9 @@ This guide walks you through configuring the MCP servers that agents in this rep
 ```bash
 export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
 export GITLAB_PAT=glpat-xxxxxxxxxxxxxxxxxxxx
-claude
+
+claude          # Claude Code
+# or open the project in Cursor
 ```
 
 You can add these exports to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) so they persist across sessions.
@@ -48,11 +50,13 @@ Used by the GitLab MCP server for MR data from `gitlab.cee.redhat.com`.
 
 ### 3. Atlassian (no token needed)
 
-The Atlassian Rovo MCP server authenticates via browser OAuth. On first use, Claude Code will open a browser window for you to log in to your Atlassian account. No environment variable is needed.
+The Atlassian Rovo MCP server authenticates via browser OAuth. On first use, your IDE will open a browser window for you to log in to your Atlassian account. No environment variable is needed.
 
 ## Verification
 
-After exporting your tokens, launch Claude Code and run:
+After exporting your tokens, launch your IDE and verify the MCP servers are connected.
+
+**Claude Code:**
 
 ```
 /mcp
@@ -60,7 +64,11 @@ After exporting your tokens, launch Claude Code and run:
 
 You should see three servers listed: **github**, **gitlab**, and **atlassian**.
 
-To test each server individually:
+**Cursor:**
+
+Open the MCP settings (Cursor Settings > MCP) and verify the three servers show a green status indicator.
+
+To test each server, ask your IDE to run a simple query:
 
 ```bash
 # GitHub — search for your own PRs
@@ -75,7 +83,14 @@ mcp__atlassian__searchJiraIssuesUsingJql with jql: "assignee = currentUser() ORD
 
 ## How It Works
 
-The MCP servers are defined in `.mcp.json` at the project root:
+MCP server definitions live in two files (one per IDE):
+
+| IDE         | Config File        |
+| ----------- | ------------------ |
+| Claude Code | `.mcp.json`        |
+| Cursor      | `.cursor/mcp.json` |
+
+Both files define the same three servers:
 
 | Server        | Type  | Endpoint                     |
 | ------------- | ----- | ---------------------------- |
@@ -83,26 +98,26 @@ The MCP servers are defined in `.mcp.json` at the project root:
 | **gitlab**    | stdio | `npx @zereight/mcp-gitlab`   |
 | **atlassian** | HTTP  | `mcp.atlassian.com/v1/mcp`   |
 
-Token references in `.mcp.json` use `${VAR_NAME}` syntax, which Claude Code resolves from your environment variables.
+Token references use `${VAR_NAME}` syntax, which both IDEs resolve from your environment variables.
 
 ## Troubleshooting
 
-### `/mcp` shows no servers
+### MCP servers not showing up
 
-- Make sure `.mcp.json` exists in the project root (it should be committed to the repo)
-- Restart Claude Code after cloning or pulling
+- Make sure `.mcp.json` (Claude Code) or `.cursor/mcp.json` (Cursor) exists in the project
+- Restart your IDE after cloning or pulling
 
 ### Server shows but tools fail with auth errors
 
 - Check that the required environment variables are set: `echo $GITHUB_PAT`
 - For Atlassian, try re-authenticating by using an Atlassian MCP tool — it will reopen the browser OAuth flow
-- Restart Claude Code after changing environment variables
+- Restart your IDE after changing environment variables
 
 ### GitLab returns empty results
 
 - Always pass `scope: "all"` in GitLab MCP queries — without it, results may be empty
 - Verify your token has `api` or `read_api` scope
-- Check that `GITLAB_PAT` is set (not `GITLAB_PERSONAL_ACCESS_TOKEN` — the `.mcp.json` maps it for you)
+- Check that `GITLAB_PAT` is set (not `GITLAB_PERSONAL_ACCESS_TOKEN` — the MCP config maps it for you)
 
 ### GitHub token not working
 

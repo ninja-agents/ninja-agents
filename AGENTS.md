@@ -18,8 +18,8 @@ The repo follows a "data collector + deterministic script" pattern: the AI agent
 
 This repo works with multiple AI-powered IDEs:
 
-- **Claude Code** -- agent specs in [`.claude/agents/`](.claude/agents/), skills in [`.claude/skills/`](.claude/skills/), project context in [`CLAUDE.md`](CLAUDE.md)
-- **Cursor** -- project rules in [`.cursor/rules/`](.cursor/rules/)
+- **Claude Code** -- agent specs in [`.claude/agents/`](.claude/agents/), skill shortcuts in [`.claude/skills/`](.claude/skills/), project context in [`CLAUDE.md`](CLAUDE.md). Invoke agents with `/skill-name` commands.
+- **Cursor** -- project rules in [`.cursor/rules/`](.cursor/rules/), MCP config in [`.cursor/mcp.json`](.cursor/mcp.json). Invoke agents by mentioning `@agent-name` in chat or describing what you need.
 
 ## Conventions and Patterns
 
@@ -84,4 +84,4 @@ When reviewing changes to this repo, check for:
 
 ## Contributing a New Agent
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contribution workflow, or run `/create-agent` in Claude Code to scaffold everything automatically.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contribution workflow. In Claude Code, run `/create-agent` to scaffold everything automatically. In Cursor, copy `agents/_template/` and follow the wiring guide in the template README.

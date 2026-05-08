@@ -16,20 +16,24 @@ npm install           # all dependencies (linting, TypeScript, testing)
 export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
 export GITLAB_PAT=glpat-xxxxxxxxxxxxxxxxxxxx
 
-# Launch Claude Code and invoke an agent
-claude
+# Launch your IDE and invoke an agent
+claude                # Claude Code
 # then type: /team-update
+
+# Or open the project in Cursor
+# then ask: @weekly-team-update or "generate a weekly team report"
 ```
 
 See [docs/mcp-setup.md](docs/mcp-setup.md) for the full token setup guide and troubleshooting.
 
 ## Available Agents
 
-| Agent                                                  | Skill                    | Description                                                     |
-| ------------------------------------------------------ | ------------------------ | --------------------------------------------------------------- |
-| [weekly-team-update](agents/weekly-team-update/)       | `/team-update`           | Weekly team report for leadership from GitHub, GitLab, and Jira |
-| [sprint-retro](agents/sprint-retro/)                   | `/sprint-retro`          | Sprint retrospective analysis from active Jira sprint           |
-| [repo-contextification](agents/repo-contextification/) | `/repo-contextification` | Audit repo docs and AI-readiness, scaffold missing files        |
+| Agent                                                  | Claude Code              | Cursor                   | Description                                                     |
+| ------------------------------------------------------ | ------------------------ | ------------------------ | --------------------------------------------------------------- |
+| [weekly-team-update](agents/weekly-team-update/)       | `/team-update`           | `@weekly-team-update`    | Weekly team report for leadership from GitHub, GitLab, and Jira |
+| [sprint-retro](agents/sprint-retro/)                   | `/sprint-retro`          | `@sprint-retro`          | Sprint retrospective analysis from active Jira sprint           |
+| [repo-contextification](agents/repo-contextification/) | `/repo-contextification` | `@repo-contextification` | Audit repo docs and AI-readiness, scaffold missing files        |
+| _(scaffold a new agent)_                               | `/create-agent`          | copy `agents/_template/` | Scaffold a new agent with best-practice structure and specs     |
 
 Each agent has its own README with setup and usage instructions.
 
@@ -50,7 +54,7 @@ See [docs/mcp-setup.md](docs/mcp-setup.md) for the full step-by-step guide. The 
 ```bash
 export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
 export GITLAB_PAT=glpat-xxxxxxxxxxxxxxxxxxxx
-claude   # launch Claude Code with tokens in your environment
+claude   # Claude Code — or open the project in Cursor
 ```
 
 ## Contributing a New Agent
@@ -66,11 +70,12 @@ agents/your-agent/
 
 To add a new agent:
 
-1. Copy `agents/_template/` to `agents/your-agent/`
+1. Run `/create-agent` in Claude Code, or copy `agents/_template/` manually
 2. Add your scripts, config, and a README
-3. Wire it up for Claude Code:
-   - Create `.claude/agents/your-agent.md` (agent spec)
-   - Create `.claude/skills/your-skill.md` (skill shortcut)
+3. Wire it into both IDEs:
+   - Create `.claude/agents/your-agent.md` (agent spec — shared source of truth)
+   - Create `.claude/skills/your-skill/SKILL.md` (Claude Code skill shortcut)
+   - Create `.cursor/rules/your-agent.mdc` (Cursor rule — points to the agent spec)
 4. Update the agent table in this README and in `AGENTS.md`
 
 See [agents/\_template/README.md](agents/_template/README.md) for the full guide.
@@ -79,16 +84,17 @@ See [agents/\_template/README.md](agents/_template/README.md) for the full guide
 
 ```
 ninja-agents/
-├── AGENTS.md                          # Agent index (org-required)
+├── AGENTS.md                          # Agent index and conventions
 ├── CLAUDE.md                          # Claude Code project context
 ├── README.md                          # This file
-├── .mcp.json                          # MCP server definitions (uses env vars)
+├── .mcp.json                          # MCP server definitions (Claude Code)
 ├── .claude/
-│   ├── agents/                        # Claude Code agent specs
-│   ├── skills/                        # Claude Code skill shortcuts
-│   └── settings.json                  # Permission allowlist
+│   ├── agents/                        # Agent specs (shared source of truth)
+│   ├── skills/                        # Skill shortcuts (Claude Code)
+│   └── settings.json                  # Permission allowlist (Claude Code)
 ├── .cursor/
-│   └── rules/                         # Cursor project rules
+│   ├── mcp.json                       # MCP server config (Cursor)
+│   └── rules/                         # Project rules (Cursor)
 └── agents/                            # Self-contained agent directories
     ├── _template/                     # Skeleton for new agents
     └── weekly-team-update/            # Weekly team report agent

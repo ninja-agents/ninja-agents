@@ -6,7 +6,7 @@ Analyze the currently active Jira sprint and generate a data-driven retrospectiv
 
 - **Atlassian Rovo MCP** — for Jira sprint data from redhat.atlassian.net
 
-Tokens must be set as environment variables before launching Claude Code.
+Tokens must be set as environment variables before launching your IDE.
 
 ## Usage
 

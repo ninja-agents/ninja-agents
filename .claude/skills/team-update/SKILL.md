@@ -22,14 +22,15 @@ Launches the `weekly-team-update` agent which:
    - Batch 1: GitHub PRs (merged + open) for all engineers + Jira team filter (parallel calls)
    - Batch 2: GitLab MRs (merged + open) for all engineers (parallel calls)
 2. **Saves data to CSV** in `agents/weekly-team-update/data/cache/` (github-prs.csv, gitlab-mrs.csv, jira-tickets.csv)
-3. **Runs `agents/weekly-team-update/scripts/generate-weekly-report.py`** which deterministically:
+3. **Runs `agents/weekly-team-update/scripts/generate-weekly-report.ts`** which deterministically:
    - Filters by date window and resolution
    - Nests PRs under their parent Jira tickets
    - Organizes by product and engineer
-   - Generates formatted markdown
-4. **Validates all links** via `agents/weekly-team-update/scripts/validate-report-links.py`
-5. **Saves to file**: `agents/weekly-team-update/data/output/weekly-update-{YYYY-MM-DD}.md`
-6. **Displays** the report
+   - Generates formatted markdown (with a placeholder for highlights)
+4. **Writes Key Highlights** — the agent reads the completed work and writes polished, leadership-friendly theme summaries
+5. **Validates all links** via `agents/weekly-team-update/scripts/validate-report-links.ts`
+6. **Saves to file**: `agents/weekly-team-update/data/output/weekly-update-{YYYY-MM-DD}.md`
+7. **Displays** the report
 
 **Time:** ~30-40 seconds
 
@@ -38,7 +39,7 @@ Launches the `weekly-team-update` agent which:
 A weekly report with:
 
 ### Key Highlights
-- 3-4 auto-generated factual bullets (major completions, notable work)
+- 3-5 polished theme summaries written by the agent (active voice, no truncation, leadership-friendly)
 
 ### Completed This Week
 - Organized by product, then by engineer

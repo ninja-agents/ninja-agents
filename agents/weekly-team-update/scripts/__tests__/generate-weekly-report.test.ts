@@ -33,6 +33,8 @@ import {
   formatCompletedSection,
   formatInProgressSection,
   generateHighlights,
+  computeHighlightData,
+  formatHighlightContext,
   validateData,
   type PRItem,
   type JiraItem,
@@ -579,6 +581,118 @@ describe("generateHighlights", () => {
 });
 
 // ---------------------------------------------------------------------------
+// computeHighlightData
+// ---------------------------------------------------------------------------
+
+describe("computeHighlightData", () => {
+  it("returns structured CVE data", () => {
+    const sections = new Map<string, Map<string, { name: string; completed_tickets: JiraItem[]; completed_prs: PRItem[]; in_progress_tickets: JiraItem[]; in_progress_prs: PRItem[] }>>();
+    const engineers = new Map();
+    engineers.set("User", {
+      name: "User",
+      completed_tickets: [
+        makeJira({ summary: "CVE-2026-1234 lodash vulnerability", issuetype: "Bug" }),
+      ],
+      completed_prs: [makePR({ title: "Fix CVE-2026-5678 axios issue" })],
+      in_progress_tickets: [],
+      in_progress_prs: [],
+    });
+    sections.set("MTA", engineers);
+
+    const data = computeHighlightData(sections);
+    expect(data.cve).not.toBeNull();
+    expect(data.cve!.count).toBe(2);
+    expect(data.cve!.products).toEqual(["MTA"]);
+    expect(data.cve!.libraries).toContain("lodash");
+    expect(data.cve!.libraries).toContain("axios");
+  });
+
+  it("returns structured test version data", () => {
+    const sections = new Map<string, Map<string, { name: string; completed_tickets: JiraItem[]; completed_prs: PRItem[]; in_progress_tickets: JiraItem[]; in_progress_prs: PRItem[] }>>();
+    const engineers = new Map();
+    engineers.set("User", {
+      name: "User",
+      completed_tickets: [
+        makeJira({ summary: "[TIER-1][test-kubevirt] cnv-4.18.35" }),
+        makeJira({ summary: "[TIER-2][test-kubevirt] cnv-4.14.18" }),
+      ],
+      completed_prs: [],
+      in_progress_tickets: [],
+      in_progress_prs: [],
+    });
+    sections.set("CNV", engineers);
+
+    const data = computeHighlightData(sections);
+    expect(data.testing).not.toBeNull();
+    expect(data.testing!.versions).toEqual(["4.14.18", "4.18.35"]);
+  });
+
+  it("returns null for categories with no data", () => {
+    const sections = new Map<string, Map<string, { name: string; completed_tickets: JiraItem[]; completed_prs: PRItem[]; in_progress_tickets: JiraItem[]; in_progress_prs: PRItem[] }>>();
+    const engineers = new Map();
+    engineers.set("User", {
+      name: "User",
+      completed_tickets: [makeJira({ summary: "A feature", issuetype: "Story" })],
+      completed_prs: [],
+      in_progress_tickets: [],
+      in_progress_prs: [],
+    });
+    sections.set("MTV", engineers);
+
+    const data = computeHighlightData(sections);
+    expect(data.cve).toBeNull();
+    expect(data.testing).toBeNull();
+    expect(data.features.get("MTV")).toEqual(["A feature"]);
+  });
+
+  it("does not truncate feature summaries", () => {
+    const sections = new Map<string, Map<string, { name: string; completed_tickets: JiraItem[]; completed_prs: PRItem[]; in_progress_tickets: JiraItem[]; in_progress_prs: PRItem[] }>>();
+    const engineers = new Map();
+    const longSummary = "This is a very long feature summary that exceeds sixty characters by quite a large margin";
+    engineers.set("User", {
+      name: "User",
+      completed_tickets: [makeJira({ summary: longSummary, issuetype: "Story" })],
+      completed_prs: [],
+      in_progress_tickets: [],
+      in_progress_prs: [],
+    });
+    sections.set("MTV", engineers);
+
+    const data = computeHighlightData(sections);
+    const feature = data.features.get("MTV")![0];
+    expect(feature).not.toContain("...");
+    expect(feature.length).toBeGreaterThan(60);
+  });
+});
+
+describe("formatHighlightContext", () => {
+  it("formats all categories", () => {
+    const data = {
+      cve: { count: 5, products: ["MTA", "Console Plugins"], libraries: ["lodash", "axios"] },
+      testing: { versions: ["4.14.18", "4.18.35"] },
+      features: new Map([["MTV", ["feature 1", "feature 2"]]]),
+      bugs: new Map([["MTA", ["bug fix 1"]]]),
+    };
+    const output = formatHighlightContext(data);
+    expect(output).toContain("CVE: 5 fixes across MTA, Console Plugins (lodash, axios)");
+    expect(output).toContain("Testing: CNV Tier 1/2 for 4.14.18, 4.18.35");
+    expect(output).toContain("Features: MTV (2)");
+    expect(output).toContain("Bugs: MTA (1)");
+  });
+
+  it("omits empty categories", () => {
+    const data = {
+      cve: null,
+      testing: null,
+      features: new Map<string, string[]>(),
+      bugs: new Map<string, string[]>(),
+    };
+    const output = formatHighlightContext(data);
+    expect(output).toBe("--- Highlight Context ---");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // validateData
 // ---------------------------------------------------------------------------
 
@@ -677,7 +791,6 @@ describe("end-to-end", () => {
         ticketIdRe,
       );
 
-      const highlights = generateHighlights(sections);
       const { warnings } = validateData(githubPrs, gitlabMrs, jiraTickets, config!);
 
       const reportLines: string[] = [
@@ -685,10 +798,9 @@ describe("end-to-end", () => {
         fmtReportDate(reportDate),
         "",
         "## Key Highlights",
+        "<!-- HIGHLIGHTS_PLACEHOLDER -->",
+        "- (highlights pending)",
       ];
-      reportLines.push(
-        ...(highlights.length > 0 ? highlights : ["- Steady delivery across all products"]),
-      );
       reportLines.push("");
 
       if (warnings.length > 0) {

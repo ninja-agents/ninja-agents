@@ -177,6 +177,51 @@ Handle exit codes:
 - **Exit 2**: Data quality problem. Display the error. Ask user to retry data collection or proceed.
 - **Exit 3**: Warnings present. Report was generated. Note the warnings and proceed.
 
+## Step 6.5: Write Key Highlights
+
+The script outputs a placeholder in the Key Highlights section. Replace it with polished, leadership-friendly theme summaries.
+
+1. Read the report at `agents/weekly-team-update/data/output/weekly-update-{today}.md`
+2. Study the **Completed This Week** section to understand what the team shipped
+3. Use the **Highlight Context** printed by the script (CVE counts, test versions, feature/bug counts) as anchoring facts — do not recount items yourself
+4. Write 3-5 highlight bullets
+5. Replace everything between `## Key Highlights` and the next `##` heading with your bullets (remove the `<!-- HIGHLIGHTS_PLACEHOLDER -->` marker)
+
+### Highlight Style Guide
+
+**Format rules:**
+- Exactly 3-5 bullets, each starting with `- `
+- Active voice, past tense ("Shipped", "Completed", "Delivered", "Fixed", "Added")
+- Each bullet covers a *theme*, not an individual ticket — group related items
+- Never truncate with "..." — summarize instead
+- Never join items with semicolons — use "and" or restructure the sentence
+- Quantify when possible ("11 fixes", "three versions")
+- Include business context where available ("Tech Preview", "now in QA")
+- Do NOT include markdown links — the detailed sections have those
+- Every claim must trace to an item in "Completed This Week" — never invent work
+
+**Good examples:**
+```
+- Shipped 11 CVE fixes across Console Plugins and MTA, addressing vulnerabilities in lodash, axios, and 3 other libraries
+- Completed Tier 1/2 release testing for three CNV versions (4.12.23, 4.14.18, 4.18.35)
+- MTV delivered AAP hook integration (Tech Preview) and copy-offload UX improvements, both now in QA
+- CNV added CLI command display to the Create VM flow
+```
+
+**Bad examples (do NOT write like this):**
+```
+- CVE remediation across Console Plugins and MTA — 11 fixes shipped for lodash, immutable, axios, fast-xml-parser, qs
+- MTV feature delivery: MTV hook for AAP integration; consolidate AI context into standardized AGENTS.md for...
+```
+
+### Self-check before proceeding:
+- All bullets use active voice
+- No truncation ("...")
+- No semicolons joining separate items
+- Every fact matches an item in Completed This Week
+- 3-5 bullets total
+- Placeholder marker is removed from the file
+
 ## Step 7: Validate Links
 
 ```bash
@@ -192,7 +237,7 @@ Read and display `agents/weekly-team-update/data/output/weekly-update-{today}.md
 
 ## Rules
 
-1. Never write report markdown yourself — the TypeScript script generates it.
+1. Never write report sections yourself EXCEPT Key Highlights — the TypeScript script generates all other sections. You write only the Key Highlights bullets following the style guide in Step 6.5.
 2. Never skip Jira — it runs in Batch 1 with GitHub. If it fails, STOP.
 3. Never hardcode team data — read everything from `agents/weekly-team-update/data/team-config.json`.
 4. CSV quoting: wrap any field containing a comma in double quotes.

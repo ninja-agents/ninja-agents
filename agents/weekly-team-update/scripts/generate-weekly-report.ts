@@ -856,11 +856,6 @@ function cleanSummary(summary: string): string {
   s = s.replace(/^\[(?:UI|QE|RFE|TP)\]\s*/i, "");
   s = s.replace(/^\[tackle2-ui#\d+\]\s*/, "");
   s = s.trim();
-  if (s.length > 60) {
-    const cut = s.slice(0, 57);
-    const lastSpace = cut.lastIndexOf(" ");
-    s = (lastSpace > 0 ? cut.slice(0, lastSpace) : cut) + "...";
-  }
   if (s.length > 0 && s[0] === s[0].toUpperCase() && (s.length < 2 || s[1] !== s[1].toUpperCase())) {
     s = s[0].toLowerCase() + s.slice(1);
   }
@@ -891,9 +886,16 @@ function extractCveLibs(texts: string[]): string[] {
   return found;
 }
 
-export function generateHighlights(
+export interface HighlightData {
+  cve: { count: number; products: string[]; libraries: string[] } | null;
+  testing: { versions: string[] } | null;
+  features: Map<string, string[]>;
+  bugs: Map<string, string[]>;
+}
+
+export function computeHighlightData(
   sections: Map<string, Map<string, EngineerBlock>>,
-): string[] {
+): HighlightData {
   let cveCount = 0;
   const cveProducts = new Set<string>();
   const cveTexts: string[] = [];
@@ -939,31 +941,61 @@ export function generateHighlights(
     }
   }
 
+  return {
+    cve: cveCount > 0
+      ? { count: cveCount, products: [...cveProducts].sort(), libraries: extractCveLibs(cveTexts) }
+      : null,
+    testing: testVersions.size > 0 ? { versions: [...testVersions].sort() } : null,
+    features,
+    bugs,
+  };
+}
+
+export function formatHighlightContext(data: HighlightData): string {
+  const lines: string[] = ["--- Highlight Context ---"];
+  if (data.cve) {
+    const libStr = data.cve.libraries.length > 0 ? ` (${data.cve.libraries.join(", ")})` : "";
+    lines.push(`  CVE: ${data.cve.count} fixes across ${data.cve.products.join(", ")}${libStr}`);
+  }
+  if (data.testing) {
+    lines.push(`  Testing: CNV Tier 1/2 for ${data.testing.versions.join(", ")}`);
+  }
+  const fmtMap = (label: string, m: Map<string, string[]>) => {
+    const parts = [...m.entries()].filter(([, v]) => v.length > 0).map(([k, v]) => `${k} (${v.length})`);
+    if (parts.length > 0) lines.push(`  ${label}: ${parts.join(", ")}`);
+  };
+  fmtMap("Features", data.features);
+  fmtMap("Bugs", data.bugs);
+  return lines.join("\n");
+}
+
+export function generateHighlights(
+  sections: Map<string, Map<string, EngineerBlock>>,
+): string[] {
+  const data = computeHighlightData(sections);
   const highlights: string[] = [];
 
-  if (cveCount > 0) {
-    const libs = extractCveLibs(cveTexts);
-    const productsStr = [...cveProducts].sort().join(" and ");
-    const libStr = libs.length > 0 ? ` for ${libs.join(", ")}` : "";
+  if (data.cve) {
+    const libStr = data.cve.libraries.length > 0 ? ` for ${data.cve.libraries.join(", ")}` : "";
     highlights.push(
-      `- CVE remediation across ${productsStr} — ${cveCount} fixes shipped${libStr}`,
+      `- CVE remediation across ${data.cve.products.join(" and ")} — ${data.cve.count} fixes shipped${libStr}`,
     );
   }
 
-  if (testVersions.size > 0) {
+  if (data.testing) {
     highlights.push(
-      `- Completed Tier 1/2 release testing for CNV ${[...testVersions].sort().join(", ")}`,
+      `- Completed Tier 1/2 release testing for CNV ${data.testing.versions.join(", ")}`,
     );
   }
 
-  for (const [pk, items] of features) {
+  for (const [pk, items] of data.features) {
     if (items.length > 0) {
       const detail = items.slice(0, 3).join("; ");
       highlights.push(`- ${pk} feature delivery: ${detail}`);
     }
   }
 
-  for (const [pk, items] of bugs) {
+  for (const [pk, items] of data.bugs) {
     if (items.length > 0) {
       const detail = items.slice(0, 3).join("; ");
       highlights.push(`- ${pk} quality: ${detail}`);
@@ -1105,16 +1137,17 @@ export function main(argv: string[] = process.argv): void {
     ticketIdRe,
   );
 
-  // Generate report
-  const highlights = generateHighlights(sections);
+  // Compute highlight data (printed to stdout for agent consumption)
+  const highlightData = computeHighlightData(sections);
 
   const reportLines: string[] = [
     `# ${config.report_title}`,
     fmtReportDate(reportDate),
     "",
     "## Key Highlights",
+    "<!-- HIGHLIGHTS_PLACEHOLDER -->",
+    "- (highlights pending)",
   ];
-  reportLines.push(...(highlights.length > 0 ? highlights : ["- Steady delivery across all products"]));
   reportLines.push("");
 
   if (warnings.length > 0) {
@@ -1149,6 +1182,7 @@ export function main(argv: string[] = process.argv): void {
   console.log(`  Total completed items: ${totalCompleted}`);
   console.log(`  Total in-progress items: ${totalIp}`);
   console.log(`  Date range: ${wsStr} to ${rdStr}`);
+  console.log(`\n${formatHighlightContext(highlightData)}`);
 
   if (warnings.length > 0) {
     process.stderr.write(

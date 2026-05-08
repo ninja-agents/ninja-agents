@@ -34,15 +34,16 @@ npx tsx agents/weekly-team-update/scripts/validate-report-links.ts
    - Jira tickets (assignee + QA contact) for each engineer
    - GitLab MRs (merged + open) for each engineer
 3. Saves raw data as CSV in `data/cache/`
-4. Runs `scripts/generate-weekly-report.ts` for deterministic formatting
-5. Validates all links with `scripts/validate-report-links.ts`
-6. Saves report to `data/output/weekly-update-{date}.md`
+4. Runs `scripts/generate-weekly-report.ts` for deterministic formatting (body sections)
+5. Agent writes Key Highlights — polished theme summaries derived from the completed work data
+6. Validates all links with `scripts/validate-report-links.ts`
+7. Saves report to `data/output/weekly-update-{date}.md`
 
-The agent does NOT format the report itself — the TypeScript script handles all filtering, nesting, and formatting deterministically.
+The agent writes only the Key Highlights section. All other sections are generated deterministically by the TypeScript script.
 
 ## Output Format
 
-- **Key Highlights** — auto-generated factual bullets
+- **Key Highlights** — agent-written theme summaries (active voice, leadership-friendly)
 - **Completed This Week** — by product, then engineer, PRs nested under Jira tickets
 - **In Progress** — same structure
 - **Blockers & Critical Issues** — real external blockers only

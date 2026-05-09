@@ -2,7 +2,7 @@
 name: repo-contextification
 description: Audit a repository for foundational docs (README, CONTRIBUTING, AGENTS, ARCHITECTURE) and AI tooling config, then scaffold missing files in one pass
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 Audit a repository for documentation completeness and AI-readiness, then scaffold missing files in one pass. Skips already-complete files.

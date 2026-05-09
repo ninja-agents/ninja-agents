@@ -30,7 +30,6 @@ Every agent follows the layout defined in [agents/\_template/](agents/_template/
 ```text
 agents/{name}/
   README.md           # prerequisites, usage, how it works
-  tsconfig.json       # extends root tsconfig
   scripts/            # TypeScript scripts for deterministic output
   data/
     config.json       # agent-specific configuration

@@ -45,7 +45,7 @@ Prettier configuration (`prettier.config.mjs`):
 
 - Double quotes, trailing commas, semicolons
 
-All agent dependencies (`@types/node`, `tsx`, `typescript`, `vitest`) are managed in the root `package.json`. The root `tsconfig.json` uses project references to point to each agent's `tsconfig.json`.
+All agent dependencies (`@types/node`, `tsx`, `typescript`, `vitest`) are managed in the root `package.json`. The root `tsconfig.json` includes all agent scripts via a glob pattern (`agents/*/scripts/**/*.ts`).
 
 ## Testing
 

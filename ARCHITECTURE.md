@@ -51,7 +51,6 @@ Each agent follows the same internal structure:
 ```text
 agents/{name}/
   README.md                       # Usage docs, prerequisites, file layout
-  tsconfig.json                   # Extends root tsconfig for per-agent paths
   scripts/
     generate-*.ts                 # Deterministic report generator
     validate-*.ts                 # Output validation (links, format)
@@ -117,7 +116,7 @@ A validation script then checks the final output for broken links, missing secti
 | `eslint` + `typescript-eslint` | Linting with type-checked rules (flat config)                |
 | `eslint-config-prettier`       | Disables ESLint rules that conflict with Prettier            |
 | `prettier`                     | Code formatting (double quotes, trailing commas, semicolons) |
-| `typescript`                   | Type checking across all agents via project references       |
+| `typescript`                   | Type checking across all agents via root include glob        |
 
 All dependencies are managed in the root `package.json`. In addition to the linting/formatting tools, the root includes:
 
@@ -141,7 +140,7 @@ MCP server definitions live in `.mcp.json` (for Claude Code) and `.cursor/mcp.js
 
 ## Build and Execution
 
-There is no build step or compiled output. TypeScript files execute directly via `tsx`. The root `tsconfig.json` uses project references to validate types across all agents:
+There is no build step or compiled output. TypeScript files execute directly via `tsx`. The root `tsconfig.json` includes all agent scripts via a glob pattern (`agents/*/scripts/**/*.ts`):
 
 ```bash
 npx tsc --build           # type-check all agents

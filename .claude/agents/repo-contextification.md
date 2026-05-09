@@ -181,7 +181,6 @@ When drafting any documentation file, follow these rules strictly.
 - Include concrete examples: file paths, command snippets, config values
 - Link to other project files rather than duplicating content
 - Use code blocks with language identifiers for all commands and config — use `text` for ASCII diagrams, directory trees, and non-code blocks (never bare ` ``` `)
-- When documenting test file patterns for React/TSX projects, always mention both `.ts` and `.tsx` variants
 
 **Good examples:**
 
@@ -222,6 +221,14 @@ The validation checks:
 - Internal markdown links resolve to existing files and anchors resolve to real headings
 - No placeholder text remains (TODO, TBD, FIXME, WIP, etc.)
 
+### Manual checks (after the script)
+
+In addition to the automated validation, perform these checks yourself:
+
+1. **Cross-file consistency** — the same concept (i18n, testing patterns, import rules, component conventions) appears in multiple files (AGENTS.md, CONTRIBUTING.md, CLAUDE.md, .cursor/rules). Grep for key terms across all generated files and verify they are described consistently. If one file mentions a variant (e.g., `Trans` component), every file that discusses that topic must include it.
+
+2. **Verify file references in directory trees** — when a directory tree lists specific filenames (e.g., `selectors.ts`, `utils.ts`), run `ls` or `find` to confirm each file actually exists with that name. Do not infer filenames from concept descriptions — check the filesystem.
+
 ## Step 8: Display Summary
 
 Present a final summary:
@@ -241,6 +248,15 @@ Present a final summary:
 6. Never include secrets, internal URLs, or PII in generated documentation.
 7. If a GitHub MCP call fails: display the error, STOP, ask user how to proceed.
 8. Draft prose follows the style guide in Step 6 — no exceptions.
-9. CONTRIBUTING.md must not duplicate README.md content. Link to README for shared setup/prerequisites/install steps.
+9. Minimize duplication across files. Each file has a distinct audience and purpose — don't repeat the same content in multiple places. Apply the same link-don't-copy pattern throughout:
+   - **CONTRIBUTING.md → README.md**: link to README for setup/prerequisites/install steps.
+   - **AGENTS.md → CONTRIBUTING.md**: link to CONTRIBUTING.md for coding standards, linting, and PR process. AGENTS.md should focus on what's uniquely useful for AI agents: structural map, pattern recognition aids (how things connect), and review checklists.
+   - **CLAUDE.md / .cursor/rules → all others**: these are pointers and quick-reference summaries only, never full copies.
 10. Clone URLs must use the canonical repo (org/repo), not forks. Use `git remote get-url origin` for local repos or the GitHub org from MCP context. Never copy `package.json` repository fields blindly — they often point to forks.
 11. All markdown fenced code blocks must have a language specifier. Use `text` for ASCII diagrams, directory trees, and non-code blocks. Never use bare ` ``` `.
+12. Do not hardcode dependency versions in generated docs — they become stale. Describe versioning policies instead (e.g., "SDK version corresponds to the release branch"). If a version is relevant, phrase it as "currently X" so it reads as a snapshot, not a permanent fact.
+13. When showing directory structures or patterns as examples, qualify them ("A typical view may include...") rather than presenting them as universal ("Every view has..."). Codebases evolve unevenly — not every module follows the same structure.
+14. When documenting a pattern (e.g., i18n, styling, state management), search the codebase for ALL variants, not just the most common one. For example, i18n may use both a hook (`useTranslation`) AND a component (`Trans`). Grep for imports of related packages to find all usage patterns before writing.
+15. Check for component organization conventions: single component per file, co-location of hooks/utils/types, directory naming conventions (PascalCase, camelCase, kebab-case). Scan actual directory and file names to detect these patterns rather than assuming defaults.
+16. Read `OWNERS`, `CODEOWNERS`, or equivalent files carefully and describe the actual approval process (reviewers vs approvers, required counts, auto-ack rules). Do not simplify to "one approval required" if the process is more nuanced.
+17. Use the terminology the project uses. If the codebase calls something "selectors", don't call it "getters". Check for naming conventions in progress (recent renames, consistency efforts) and use the target terminology.

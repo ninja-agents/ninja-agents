@@ -47,6 +47,7 @@ npm run context:test
 5. **Generate docs** — write all missing/incomplete files in one pass (skips complete files)
 6. **AI tooling config** — configure CodeRabbit
 7. **Validation** — verify all files exist with expected sections, working links and anchors
+8. **Review & improve** — two review rounds verify content quality and codebase accuracy, then suggest agent improvements
 
 ## Configuration
 

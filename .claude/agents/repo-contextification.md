@@ -347,13 +347,94 @@ In addition to the automated validation, perform these checks yourself:
 
 2. **Verify file references in directory trees** — when a directory tree lists specific filenames (e.g., `selectors.ts`, `utils.ts`), run `ls` or `find` to confirm each file actually exists with that name. Do not infer filenames from concept descriptions — check the filesystem.
 
-## Step 9: Display Summary
+## Step 9: First Review — Content Quality
+
+Re-read each generated or updated file and evaluate it for content quality. This is a semantic review — Step 8 verified structure (headings, links, placeholders), this step evaluates whether the content is actually good.
+
+For each file, check:
+
+1. **Actionability** — every section contains concrete content: commands to run, file paths to navigate, patterns to follow. Flag sections that describe concepts without giving specifics.
+2. **Command accuracy** — verify each command mentioned in the docs. If README says `npm run test`, check that `package.json` has that script. If CONTRIBUTING says `make lint`, verify the Makefile target exists. Run or inspect each command reference.
+3. **Tone & style** — matches the Step 7 style guide: active voice, present tense, no filler, no self-referential language ("this document", "as mentioned above").
+4. **Section depth** — flag sections that are suspiciously thin (under 2 sentences for a substantive topic) or bloated with information that belongs in a different file.
+5. **Example quality** — code examples, file paths, and config snippets are pulled from the actual codebase, not generic templates.
+
+Fix all issues found directly in the files. After fixes, re-run validation:
+
+```bash
+npx tsx agents/repo-contextification/scripts/validate-output.ts --repo-path <path> --verbose
+```
+
+Proceed to Step 10 when all identified issues are fixed and validation passes.
+
+## Step 10: Second Review — Accuracy and Completeness
+
+Step back and examine the documentation as an interconnected system. The first review looked at each file individually — this review looks at cross-file coherence and codebase alignment.
+
+1. **Cross-file consistency** — pick 3-5 key concepts from the repo (e.g., primary framework, testing approach, state management, API patterns, build tool). Grep all generated files for each concept and verify they are described consistently. If AGENTS.md says "Vitest" but CONTRIBUTING.md says "Jest", fix it.
+2. **Codebase verification** — for each architectural claim in the docs (component relationships, data flows, key abstractions), read 2-3 actual source files to confirm the documentation matches reality. Flag anything that describes how the code "should" work rather than how it actually works.
+3. **Coverage gaps** — re-scan the codebase for important patterns or conventions the docs do not mention. Check for: error handling patterns, logging conventions, environment variable usage, database/API patterns, authentication flows, deployment configuration. Add missing content where it belongs.
+4. **Link-don't-copy audit** — verify Rule 9 is followed throughout. Check that CONTRIBUTING.md links to README for setup rather than repeating it. Check that CLAUDE.md and .cursor/rules are pointers and quick-reference only, not full copies.
+5. **Freshness** — check that no generated content will become stale quickly. Version numbers use "currently X" phrasing (Rule 12). Directory trees use "typical" qualifiers (Rule 13).
+
+Fix all issues found. After fixes, re-run validation:
+
+```bash
+npx tsx agents/repo-contextification/scripts/validate-output.ts --repo-path <path> --verbose
+```
+
+Proceed to Step 11 when all identified issues are fixed and validation passes.
+
+## Step 11: Agent Self-Improvement
+
+Reflect on this contextification run and identify improvements to the agent itself — the spec, scripts, or workflow.
+
+Consider:
+
+- **Spec improvements** — were any steps unclear or missing guidance? Did the rules fail to cover edge cases you hit during this run? Were there repo patterns the spec doesn't account for?
+- **Script improvements** — should any of the manual checks from Steps 9-10 be automated in `validate-output.ts` or `audit-repo.ts`? Are there validation gaps the scripts should catch?
+- **Workflow improvements** — was the step ordering optimal? Was any work redundant? Should new steps be added or existing ones merged?
+
+Write suggestions to:
+
+```bash
+agents/repo-contextification/data/output/self-improvement-suggestions.md
+```
+
+Use this format:
+
+```markdown
+# Self-Improvement Suggestions
+
+Generated: {ISO-8601 timestamp}
+Target repo: {repo name}
+
+## Spec Improvements
+
+- {what to change in the agent spec and why}
+
+## Script Improvements
+
+- {what to add/change in audit-repo.ts, validate-output.ts, or lib.ts}
+
+## Workflow Improvements
+
+- {step ordering, new steps, merged steps, or removed steps}
+```
+
+Do NOT modify the agent spec, scripts, or workflow files directly. Only write suggestions for the user to review.
+
+If no improvements are identified in a category, write "No improvements identified for this run."
+
+## Step 12: Display Summary
 
 Present a final summary:
 
 - Files created or updated (with paths)
 - Remaining gaps (if any)
+- Review improvements: issues found and fixed during review rounds (Steps 9-10)
 - Updated AI-readiness score
+- Agent self-improvement suggestions: `agents/repo-contextification/data/output/self-improvement-suggestions.md`
 - Suggested next steps
 
 ## Rules
@@ -378,3 +459,4 @@ Present a final summary:
 15. Check for component organization conventions: single component per file, co-location of hooks/utils/types, directory naming conventions (PascalCase, camelCase, kebab-case). Scan actual directory and file names to detect these patterns rather than assuming defaults.
 16. Read `OWNERS`, `CODEOWNERS`, or equivalent files carefully and describe the actual approval process (reviewers vs approvers, required counts, auto-ack rules). Do not simplify to "one approval required" if the process is more nuanced.
 17. Use the terminology the project uses. If the codebase calls something "selectors", don't call it "getters". Check for naming conventions in progress (recent renames, consistency efforts) and use the target terminology.
+18. Review rounds (Steps 9-10) fix issues in place — do not ask for per-file approval. Apply the same one-pass principle as generation (Rule 1).

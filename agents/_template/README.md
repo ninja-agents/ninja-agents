@@ -46,7 +46,6 @@ Or, if no configuration: "No configuration needed."
 ```
 agents/your-agent/
 ├── README.md           # This file
-├── tsconfig.json       # TypeScript config (extends root)
 ├── scripts/            # Supporting scripts
 │   ├── your-script.ts
 │   └── validate-output.ts  # Output validation

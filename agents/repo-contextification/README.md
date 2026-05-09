@@ -33,12 +33,15 @@ npm run context:audit:dry-run -- --repo-path /path/to/repo
 
 # Validate generated docs (checks sections, links, anchors, placeholders)
 npm run context:validate -- --repo-path /path/to/repo --verbose
+
+# Run unit tests
+npm run context:test
 ```
 
 ## How It Works
 
 1. **Identify target** — specify a local path or GitHub `owner/repo`
-2. **Audit existing docs** — scan for README.md, CONTRIBUTING.md, AGENTS.md, ARCHITECTURE.md, .coderabbit.yaml
+2. **Audit existing docs** — scan for README.md, CONTRIBUTING.md, AGENTS.md, ARCHITECTURE.md, .coderabbit.yaml, CLAUDE.md, .cursor/rules/*.mdc
 3. **Gap analysis** — present a report with completeness scores and AI-readiness rating
 4. **Generate docs** — write all missing/incomplete files in one pass (skips complete files)
 5. **AI tooling config** — configure CodeRabbit
@@ -56,6 +59,7 @@ agents/repo-contextification/
 ├── tsconfig.json
 ├── scripts/
 │   ├── lib.ts                # shared types and utilities
+│   ├── lib.test.ts           # unit tests (vitest)
 │   ├── audit-repo.ts
 │   └── validate-output.ts
 └── data/

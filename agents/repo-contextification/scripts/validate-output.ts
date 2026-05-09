@@ -9,7 +9,7 @@ import {
   headingToSlug,
 } from "./lib.js";
 
-function validateMarkdownLinks(
+export function validateMarkdownLinks(
   content: string,
   repoPath: string,
   sourceFile: string,
@@ -132,4 +132,6 @@ function main() {
   process.exit(errors.length > 0 ? 1 : warnings.length > 0 ? 3 : 0);
 }
 
-main();
+if (process.argv[1]?.endsWith("validate-output.ts")) {
+  main();
+}

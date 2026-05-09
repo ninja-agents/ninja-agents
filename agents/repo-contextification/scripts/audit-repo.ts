@@ -12,7 +12,7 @@ import {
   findThinSections,
 } from "./lib.js";
 
-function auditFile(repoPath: string, filePath: string): FileCheck {
+export function auditFile(repoPath: string, filePath: string): FileCheck {
   const fullPath = join(repoPath, filePath);
   const expected = REQUIRED_FILES[filePath] ?? [];
 
@@ -46,7 +46,7 @@ function auditFile(repoPath: string, filePath: string): FileCheck {
   };
 }
 
-function generateReport(report: AuditReport): string {
+export function generateReport(report: AuditReport): string {
   const lines: string[] = [
     "# Repo Contextification Audit",
     "",
@@ -142,7 +142,7 @@ function generateReport(report: AuditReport): string {
   return lines.join("\n");
 }
 
-function generateDryRunPlan(report: AuditReport): string {
+export function generateDryRunPlan(report: AuditReport): string {
   const lines: string[] = [
     "## Dry-Run Plan",
     "",
@@ -239,4 +239,6 @@ function main() {
   }
 }
 
-main();
+if (process.argv[1]?.endsWith("audit-repo.ts")) {
+  main();
+}

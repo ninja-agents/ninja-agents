@@ -1,4 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import {
   parseArgs,
   extractHeadings,
@@ -9,6 +12,9 @@ import {
   extractSections,
   findThinSections,
   headingToSlug,
+  parseGitRemoteUrl,
+  isCacheFresh,
+  prCacheFilePath,
   type ExpectedSection,
 } from "./lib.js";
 
@@ -209,5 +215,118 @@ describe("headingToSlug", () => {
 
   it("trims leading and trailing hyphens", () => {
     expect(headingToSlug("- Heading -")).toBe("heading");
+  });
+});
+
+describe("parseGitRemoteUrl", () => {
+  it("parses HTTPS URL with .git suffix", () => {
+    expect(parseGitRemoteUrl("https://github.com/facebook/react.git")).toEqual({
+      owner: "facebook",
+      repo: "react",
+    });
+  });
+
+  it("parses HTTPS URL without .git suffix", () => {
+    expect(parseGitRemoteUrl("https://github.com/facebook/react")).toEqual({
+      owner: "facebook",
+      repo: "react",
+    });
+  });
+
+  it("parses SSH URL with .git suffix", () => {
+    expect(parseGitRemoteUrl("git@github.com:facebook/react.git")).toEqual({
+      owner: "facebook",
+      repo: "react",
+    });
+  });
+
+  it("parses SSH URL without .git suffix", () => {
+    expect(parseGitRemoteUrl("git@github.com:facebook/react")).toEqual({
+      owner: "facebook",
+      repo: "react",
+    });
+  });
+
+  it("parses HTTPS URL with trailing slash", () => {
+    expect(parseGitRemoteUrl("https://github.com/facebook/react/")).toEqual({
+      owner: "facebook",
+      repo: "react",
+    });
+  });
+
+  it("returns null for non-GitHub HTTPS URLs", () => {
+    expect(parseGitRemoteUrl("https://gitlab.com/org/repo.git")).toBeNull();
+  });
+
+  it("returns null for non-GitHub SSH URLs", () => {
+    expect(parseGitRemoteUrl("git@bitbucket.org:org/repo.git")).toBeNull();
+  });
+
+  it("returns null for empty string", () => {
+    expect(parseGitRemoteUrl("")).toBeNull();
+  });
+
+  it("returns null when repo segment is missing", () => {
+    expect(parseGitRemoteUrl("https://github.com/facebook")).toBeNull();
+  });
+
+  it("extracts owner/repo from URL with extra path segments", () => {
+    expect(
+      parseGitRemoteUrl("https://github.com/facebook/react/tree/main"),
+    ).toEqual({ owner: "facebook", repo: "react" });
+  });
+});
+
+describe("isCacheFresh", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "cache-test-"));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("returns false when file does not exist", () => {
+    expect(isCacheFresh(join(tempDir, "missing.md"))).toBe(false);
+  });
+
+  it("returns true when file is within maxAgeMs", () => {
+    const filePath = join(tempDir, "fresh.md");
+    writeFileSync(filePath, "cached data");
+    expect(isCacheFresh(filePath, 60_000)).toBe(true);
+  });
+
+  it("returns false when maxAgeMs is zero", () => {
+    const filePath = join(tempDir, "stale.md");
+    writeFileSync(filePath, "cached data");
+    expect(isCacheFresh(filePath, 0)).toBe(false);
+  });
+
+  it("defaults to 24-hour TTL", () => {
+    const filePath = join(tempDir, "default.md");
+    writeFileSync(filePath, "cached data");
+    expect(isCacheFresh(filePath)).toBe(true);
+  });
+
+  it("treats empty files as valid", () => {
+    const filePath = join(tempDir, "empty.md");
+    writeFileSync(filePath, "");
+    expect(isCacheFresh(filePath, 60_000)).toBe(true);
+  });
+});
+
+describe("prCacheFilePath", () => {
+  it("returns the conventional cache path", () => {
+    expect(prCacheFilePath("facebook", "react")).toBe(
+      "agents/repo-contextification/data/cache/facebook-react-pr-research.md",
+    );
+  });
+
+  it("handles hyphenated owner and repo names", () => {
+    expect(prCacheFilePath("my-org", "my-repo")).toBe(
+      "agents/repo-contextification/data/cache/my-org-my-repo-pr-research.md",
+    );
   });
 });

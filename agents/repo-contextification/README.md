@@ -43,9 +43,10 @@ npm run context:test
 1. **Identify target** — specify a local path or GitHub `owner/repo`
 2. **Audit existing docs** — scan for README.md, CONTRIBUTING.md, AGENTS.md, ARCHITECTURE.md, .coderabbit.yaml, CLAUDE.md, .cursor/rules/*.mdc
 3. **Gap analysis** — present a report with completeness scores and AI-readiness rating
-4. **Generate docs** — write all missing/incomplete files in one pass (skips complete files)
-5. **AI tooling config** — configure CodeRabbit
-6. **Validation** — verify all files exist with expected sections, working links and anchors
+4. **PR research** — fetch recent PRs for context on active development, conventions, and review patterns (cached 24h)
+5. **Generate docs** — write all missing/incomplete files in one pass (skips complete files)
+6. **AI tooling config** — configure CodeRabbit
+7. **Validation** — verify all files exist with expected sections, working links and anchors
 
 ## Configuration
 

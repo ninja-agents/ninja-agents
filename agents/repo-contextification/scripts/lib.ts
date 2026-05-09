@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, statSync } from "node:fs";
 
 export interface FileCheck {
   path: string;
@@ -19,6 +19,11 @@ export interface AuditReport {
 export interface ExpectedSection {
   label: string;
   stems: string[];
+}
+
+export interface GitHubRepo {
+  owner: string;
+  repo: string;
 }
 
 export const REQUIRED_FILES: Record<string, ExpectedSection[]> = {
@@ -238,6 +243,30 @@ export function headingToSlug(heading: string): string {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+export function parseGitRemoteUrl(url: string): GitHubRepo | null {
+  const httpsMatch = /^https:\/\/github\.com\/([^/]+)\/([^/.]+)/.exec(url);
+  if (httpsMatch) return { owner: httpsMatch[1], repo: httpsMatch[2] };
+
+  const sshMatch = /^git@github\.com:([^/]+)\/([^/.]+)/.exec(url);
+  if (sshMatch) return { owner: sshMatch[1], repo: sshMatch[2] };
+
+  return null;
+}
+
+const DEFAULT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+export function isCacheFresh(
+  filePath: string,
+  maxAgeMs = DEFAULT_CACHE_MAX_AGE_MS,
+): boolean {
+  if (!existsSync(filePath)) return false;
+  return Date.now() - statSync(filePath).mtimeMs < maxAgeMs;
+}
+
+export function prCacheFilePath(owner: string, repo: string): string {
+  return `agents/repo-contextification/data/cache/${owner}-${repo}-pr-research.md`;
 }
 
 export function extractHeadingsFromFile(filePath: string): string[] {

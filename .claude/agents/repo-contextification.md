@@ -97,7 +97,7 @@ Read and display the audit report. The report shows:
 - **Missing files** with priority recommendation
 - **AI-readiness score** (0-100) based on file coverage
 
-The report includes a hidden `<!-- AUDIT_SUMMARY ... -->` block with machine-readable `COMPLETE_FILES` and `INCOMPLETE_FILES` lists. Use these to determine which files to skip in Step 5.
+The report includes a hidden `<!-- AUDIT_SUMMARY ... -->` block with machine-readable `COMPLETE_FILES` and `INCOMPLETE_FILES` lists. Use these to determine which files to skip in Step 6.
 
 ### Dry-Run Mode
 
@@ -113,11 +113,128 @@ In dry-run mode, a "Dry-Run Plan" section shows every file that WOULD be created
 
 After displaying the gap analysis:
 
-1. **If AI-readiness score is 100/100** — run validation (`validate-output.ts --repo-path <path> --verbose`). If validation also passes (exit 0), display "Repo is fully contextified — score 100/100, validation passed. No documentation changes needed." and STOP. Do not proceed to Step 4.
+1. **If AI-readiness score is 100/100** — run validation (`validate-output.ts --repo-path <path> --verbose`). If validation also passes (exit 0), display "Repo is fully contextified — score 100/100, validation passed. No documentation changes needed." and STOP. Do not proceed to Step 5.
 
-2. **If individual files score 100% with no issues** — skip those files during generation in Step 5. Only generate/update files listed in `INCOMPLETE_FILES`. Tell the user which files are being skipped.
+2. **If individual files score 100% with no issues** — skip those files during generation in Step 6. Only generate/update files listed in `INCOMPLETE_FILES`. Tell the user which files are being skipped.
 
-## Step 4: Gather Repo Context
+## Step 4: PR Research
+
+Fetch recent pull requests from the target repo to inform documentation generation. PR titles reveal what the project is actively working on. PR descriptions explain design decisions. Review comments reveal coding conventions, common mistakes, and patterns the team enforces.
+
+### Determine GitHub Owner/Repo
+
+**If the target is a GitHub repo** (provided as `owner/repo` in Step 1): use those values directly.
+
+**If the target is a local repo**: extract the GitHub remote. Check `upstream` first (canonical repo), fall back to `origin`. Fork remotes typically point to the user's copy, which has few or no PRs — the canonical repo's PRs are what matter.
+
+```bash
+git -C {repo_path} remote get-url upstream 2>/dev/null || git -C {repo_path} remote get-url origin
+```
+
+Parse the remote URL to extract `{owner}` and `{repo}`:
+- HTTPS: `https://github.com/{owner}/{repo}[.git]`
+- SSH: `git@github.com:{owner}/{repo}[.git]`
+
+Strip any trailing `.git` suffix.
+
+If the remote URL does not contain `github.com`: display "Target repo is not hosted on GitHub — skipping PR research." and proceed to Step 5.
+
+If neither `upstream` nor `origin` remotes exist: display "No GitHub remote found — skipping PR research." and proceed to Step 5.
+
+### Check Cache
+
+Check if a cached research file exists and is less than 24 hours old:
+
+```bash
+find agents/repo-contextification/data/cache/ -name "{owner}-{repo}-pr-research.md" -mmin -1440
+```
+
+If the command outputs the file path: the cache is fresh. Display "Using cached PR research (less than 24h old)." and proceed to Step 5.
+
+If the command produces no output: the cache is stale or missing. Continue with PR fetching below.
+
+### Fetch PRs
+
+Fetch the 50 most recently updated pull requests:
+
+```text
+mcp__github__list_pull_requests:
+  owner: {owner}
+  repo: {repo}
+  state: "all"
+  sort: "updated"
+  direction: "desc"
+  perPage: 50
+```
+
+If the call fails: display the error. This step is non-blocking — display "PR research unavailable — proceeding without it." and proceed to Step 5.
+
+If zero PRs are returned: display "No pull requests found — skipping PR research." and proceed to Step 5.
+
+Record the PR numbers, titles, descriptions (body text), authors, states, and creation dates.
+
+### Fetch Review Comments
+
+For each PR returned, fetch review comment threads. Launch these in parallel batches of 25:
+
+**Batch 1** — launch ALL of these in a single parallel tool call (first 25 PRs):
+
+```text
+mcp__github__pull_request_read:
+  method: "get_review_comments"
+  owner: {owner}
+  repo: {repo}
+  pullNumber: {pr_number}
+```
+
+**Batch 2** — after Batch 1 returns, launch the remaining PRs (up to 25) in a single parallel tool call.
+
+If individual review comment calls fail: skip that PR's comments silently. Do not STOP for review comment failures.
+
+### Write Research File
+
+Write the research file to `agents/repo-contextification/data/cache/{owner}-{repo}-pr-research.md` with this format:
+
+```markdown
+# PR Research: {owner}/{repo}
+
+Generated: {ISO-8601 timestamp}
+PRs analyzed: {total_count}
+PRs with review comments: {commented_count}
+
+## Themes
+
+- **PR categories**: {percentage breakdown — e.g., "36% CVE remediation, 20% bug fixes, 15% features, ..."}
+- **Key reviewers**: {who reviews most and what standards they enforce}
+- **Active codebase areas**: {which directories/components appear most in PRs}
+- **Release pattern**: {branch naming, cherry-pick patterns, number of active release branches}
+
+## PR Details
+
+### PR #{number}: {title}
+
+- **State**: {merged|open|closed}
+- **Author**: {author_login}
+- **Date**: {created_at}
+
+**Description:**
+
+{PR body — first 500 characters, or "No description provided." if empty}
+
+**Review Comments ({count}):**
+
+- `{file_path}` (L{line}): {comment body — first 200 characters}
+
+---
+```
+
+For PRs with no review comments, omit the "Review Comments" sub-section entirely.
+
+Truncate PR descriptions to 500 characters and review comments to 200 characters. Append "..." when truncating.
+
+After writing all PR entries, go back and fill in the `## Themes` section by analyzing the PR data you just wrote. Categorize PRs by type (CVE/dependency fixes, bug fixes, features, refactors, translations, CI/build). Note if PR titles or base branches reference release branches (e.g., `[release-4.18]`, `release-4.22`) — record the branching pattern, as it informs ARCHITECTURE.md (release strategy) and CONTRIBUTING.md (cherry-pick workflow).
+
+## Step 5: Gather Repo Context
 
 Before generating any documentation, read the repo thoroughly:
 
@@ -127,10 +244,11 @@ Before generating any documentation, read the repo thoroughly:
 - Check CI config for build/test/deploy patterns (`.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `OWNERS`)
 - Read source files to understand key patterns (imports, component structure, state management)
 - Check linting/formatting config (`.eslintrc*`, `.prettierrc*`, `.editorconfig`)
+- Read the PR research file at `agents/repo-contextification/data/cache/{owner}-{repo}-pr-research.md` if it exists. Use PR titles and descriptions to understand active development areas. Use review comments to identify coding conventions and patterns the team enforces during review. This context improves CONTRIBUTING.md (PR process, review patterns), AGENTS.md (code patterns, review guidelines), and ARCHITECTURE.md (active components, data flow).
 
 Gather ALL context before writing. The more you read, the better the docs.
 
-## Step 5: Generate All Documentation
+## Step 6: Generate All Documentation
 
 Generate ALL missing and incomplete files in one pass. Do not ask for approval on each file — write them all, then present the results for review.
 
@@ -146,7 +264,7 @@ For each missing file, write it directly to the repo. For incomplete files (e.g.
 6. **CLAUDE.md** — Claude Code project context file. Points to AGENTS.md, ARCHITECTURE.md, and CONTRIBUTING.md for full context. Includes a quick reference section with stack, path aliases, key rules, linting, and testing commands. Keep it concise — it's loaded into every Claude conversation automatically.
 7. **.cursor/rules/{repo-name}.mdc** — Cursor project rules. Create `.cursor/rules/` directory if needed. Use the `.mdc` format with YAML frontmatter (`description`, `globs`, `alwaysApply: true`). Content mirrors CLAUDE.md: conventions summary, context file pointers, key patterns. Use relative paths from `.cursor/rules/` to reference docs (e.g., `../../AGENTS.md`).
 
-Follow the style guide in Step 6 for all prose.
+Follow the style guide in Step 7 for all prose.
 
 ### IDE Context File Principles
 
@@ -166,7 +284,7 @@ When generating `.coderabbit.yaml`:
 - Exclude generated files, lock files, vendored code, and locale files from review
 - Enable auto-review on non-draft PRs
 
-## Step 6: Write Documentation Prose
+## Step 7: Write Documentation Prose
 
 When drafting any documentation file, follow these rules strictly.
 
@@ -203,7 +321,7 @@ When drafting any documentation file, follow these rules strictly.
 - [ ] File paths are relative to repo root
 - [ ] No placeholder text remains (e.g., "TODO", "TBD", "fill in later")
 
-## Step 7: Validate Output
+## Step 8: Validate Output
 
 After all files have been created or updated, run validation:
 
@@ -229,7 +347,7 @@ In addition to the automated validation, perform these checks yourself:
 
 2. **Verify file references in directory trees** — when a directory tree lists specific filenames (e.g., `selectors.ts`, `utils.ts`), run `ls` or `find` to confirm each file actually exists with that name. Do not infer filenames from concept descriptions — check the filesystem.
 
-## Step 8: Display Summary
+## Step 9: Display Summary
 
 Present a final summary:
 
@@ -247,7 +365,7 @@ Present a final summary:
 5. All file paths in generated docs must be relative to the repo root.
 6. Never include secrets, internal URLs, or PII in generated documentation.
 7. If a GitHub MCP call fails: display the error, STOP, ask user how to proceed.
-8. Draft prose follows the style guide in Step 6 — no exceptions.
+8. Draft prose follows the style guide in Step 7 — no exceptions.
 9. Minimize duplication across files. Each file has a distinct audience and purpose — don't repeat the same content in multiple places. Apply the same link-don't-copy pattern throughout:
    - **CONTRIBUTING.md → README.md**: link to README for setup/prerequisites/install steps.
    - **AGENTS.md → CONTRIBUTING.md**: link to CONTRIBUTING.md for coding standards, linting, and PR process. AGENTS.md should focus on what's uniquely useful for AI agents: structural map, pattern recognition aids (how things connect), and review checklists.

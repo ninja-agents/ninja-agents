@@ -67,6 +67,21 @@ describe("extractHeadings", () => {
   it("strips leading hashes and whitespace", () => {
     expect(extractHeadings("###   Spaced Heading")).toEqual(["spaced heading"]);
   });
+
+  it("skips # lines inside fenced code blocks", () => {
+    const content =
+      "# Real Heading\n\n```bash\n# This is a comment\n## Also a comment\n```\n\n## Another Heading";
+    expect(extractHeadings(content)).toEqual([
+      "real heading",
+      "another heading",
+    ]);
+  });
+
+  it("handles multiple code fences", () => {
+    const content =
+      "# Title\n\n```\n# not a heading\n```\n\nText\n\n```js\n# also not\n```\n\n## Real";
+    expect(extractHeadings(content)).toEqual(["title", "real"]);
+  });
 });
 
 describe("tokenize", () => {
@@ -94,6 +109,15 @@ describe("headingMatchesStem", () => {
 
   it("does not match unrelated tokens", () => {
     expect(headingMatchesStem(["architecture"], "contribut")).toBe(false);
+  });
+
+  it("does not match short tokens via reverse prefix", () => {
+    expect(headingMatchesStem(["a"], "about")).toBe(false);
+    expect(headingMatchesStem(["on"], "overview")).toBe(false);
+  });
+
+  it("still matches 3+ char tokens via reverse prefix", () => {
+    expect(headingMatchesStem(["test"], "testing")).toBe(true);
   });
 });
 
@@ -167,6 +191,24 @@ describe("extractSections", () => {
   it("returns empty array for content with no headings", () => {
     expect(extractSections("Just text")).toEqual([]);
   });
+
+  it("skips # lines inside fenced code blocks", () => {
+    const content =
+      "## Setup\n\nIntro\n\n```bash\n# install deps\nnpm install\n```\n\n## Next";
+    const sections = extractSections(content);
+    expect(sections).toHaveLength(2);
+    expect(sections[0].heading).toBe("setup");
+    expect(sections[0].body).toContain("# install deps");
+    expect(sections[1].heading).toBe("next");
+  });
+
+  it("includes code fence content in section body", () => {
+    const content = "## Example\n\n```\n# comment\ncode here\n```\n\nAfter fence.";
+    const sections = extractSections(content);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].body).toContain("# comment");
+    expect(sections[0].body).toContain("After fence.");
+  });
 });
 
 describe("findThinSections", () => {
@@ -199,6 +241,17 @@ describe("findThinSections", () => {
   it("ignores missing sections (handled elsewhere)", () => {
     const content = "## Setup\n\nSome content here.";
     expect(findThinSections(content, expected)).toEqual([]);
+  });
+
+  it("does not create phantom sections from bash comments in code fences", () => {
+    const expectedWithAbout: ExpectedSection[] = [
+      { label: "overview", stems: ["overview", "descript", "about"] },
+    ];
+    const content =
+      "# My Project\n\n" +
+      "x".repeat(60) +
+      "\n\n```bash\n# Start a local server on the background.\n# About to run\n```";
+    expect(findThinSections(content, expectedWithAbout)).toEqual([]);
   });
 });
 

@@ -431,11 +431,13 @@ Display: `[9/10] Writing self-improvement suggestions...`
 
 Reflect on this contextification run and identify improvements to the agent itself — the spec, scripts, or workflow.
 
+**File lifecycle:** This file is curated across runs, not overwritten. Mark implemented suggestions with strikethrough + **DONE**. Clear completed items once they ship (git history preserves them). On each run, add new suggestions and keep any still-pending items from prior runs.
+
 Consider:
 
 - **Spec improvements** — were any steps unclear or missing guidance? Did the rules fail to cover edge cases you hit during this run? Were there repo patterns the spec doesn't account for?
-- **Script improvements** — should any of the manual checks from Steps 9-10 be automated in `validate-output.ts` or `audit-repo.ts`? Are there validation gaps the scripts should catch?
-- **Workflow improvements** — was the step ordering optimal? Was any work redundant? Should new steps be added or existing ones merged?
+- **Script improvements** — should any of the manual checks from Steps 8-9 be automated in `validate-output.ts` or `audit-repo.ts`? Are there validation gaps the scripts should catch? Were any checks too strict or too lenient for this repo's stack?
+- **Workflow improvements** — was the step ordering optimal? Was any work redundant? Should new steps be added or existing ones merged? Did any template sections not fit the target repo?
 
 Write suggestions to:
 

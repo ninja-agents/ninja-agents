@@ -15,11 +15,17 @@ import {
   headingToSlug,
 } from "./lib.js";
 
-export function checkLineLimits(repoPath: string): string[] {
+export function checkLineLimits(
+  repoPath: string,
+  generatedFiles?: Set<string>,
+): string[] {
   const warnings: string[] = [];
 
   const claudeMdPath = join(repoPath, "CLAUDE.md");
-  if (existsSync(claudeMdPath)) {
+  if (
+    existsSync(claudeMdPath) &&
+    (!generatedFiles || generatedFiles.has("CLAUDE.md"))
+  ) {
     const lineCount = readFileSync(claudeMdPath, "utf-8").split("\n").length;
     if (lineCount > LINE_LIMITS["CLAUDE.md"]) {
       warnings.push(
@@ -34,6 +40,8 @@ export function checkLineLimits(repoPath: string): string[] {
     for (const file of readdirSync(cursorRulesDir).filter((f) =>
       f.endsWith(".mdc"),
     )) {
+      const relativePath = `.cursor/rules/${file}`;
+      if (generatedFiles && !generatedFiles.has(relativePath)) continue;
       const filePath = join(cursorRulesDir, file);
       const lineCount = readFileSync(filePath, "utf-8").split("\n").length;
       if (lineCount > mdcLimit) {

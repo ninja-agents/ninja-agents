@@ -163,6 +163,39 @@ describe("checkLineLimits", () => {
     writeFileSync(join(tempDir, ".cursor", "rules", "notes.txt"), lines);
     expect(checkLineLimits(tempDir)).toEqual([]);
   });
+
+  it("skips .mdc files not in generatedFiles set", () => {
+    mkdirSync(join(tempDir, ".cursor", "rules"), { recursive: true });
+    const lines = Array(LINE_LIMITS[".cursor/rules/*.mdc"] + 5)
+      .fill("line")
+      .join("\n");
+    writeFileSync(join(tempDir, ".cursor", "rules", "existing.mdc"), lines);
+    writeFileSync(join(tempDir, ".cursor", "rules", "new.mdc"), lines);
+    const generated = new Set([".cursor/rules/new.mdc"]);
+    const warnings = checkLineLimits(tempDir, generated);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("new.mdc");
+    expect(warnings[0]).not.toContain("existing.mdc");
+  });
+
+  it("skips CLAUDE.md when not in generatedFiles set", () => {
+    const lines = Array(LINE_LIMITS["CLAUDE.md"] + 10)
+      .fill("line")
+      .join("\n");
+    writeFileSync(join(tempDir, "CLAUDE.md"), lines);
+    const generated = new Set([".cursor/rules/project.mdc"]);
+    expect(checkLineLimits(tempDir, generated)).toEqual([]);
+  });
+
+  it("checks all files when generatedFiles is undefined", () => {
+    mkdirSync(join(tempDir, ".cursor", "rules"), { recursive: true });
+    const lines = Array(LINE_LIMITS[".cursor/rules/*.mdc"] + 5)
+      .fill("line")
+      .join("\n");
+    writeFileSync(join(tempDir, ".cursor", "rules", "project.mdc"), lines);
+    const warnings = checkLineLimits(tempDir);
+    expect(warnings).toHaveLength(1);
+  });
 });
 
 describe("checkContributingDedup", () => {

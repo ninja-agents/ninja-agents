@@ -203,10 +203,18 @@ export function parseArgs(argv: string[]): Record<string, string | boolean> {
 }
 
 export function extractHeadings(content: string): string[] {
-  return content
-    .split("\n")
-    .filter((l) => l.startsWith("#"))
-    .map((l) => l.replace(/^#+\s*/, "").toLowerCase());
+  const headings: string[] = [];
+  let inFence = false;
+  for (const line of content.split("\n")) {
+    if (line.startsWith("```")) {
+      inFence = !inFence;
+      continue;
+    }
+    if (!inFence && line.startsWith("#")) {
+      headings.push(line.replace(/^#+\s*/, "").toLowerCase());
+    }
+  }
+  return headings;
 }
 
 export function tokenize(text: string): string[] {
@@ -221,7 +229,9 @@ export function headingMatchesStem(
   stem: string,
 ): boolean {
   return headingTokens.some(
-    (token) => token.startsWith(stem) || stem.startsWith(token),
+    (token) =>
+      token.startsWith(stem) ||
+      (token.length >= 3 && stem.startsWith(token)),
   );
 }
 
@@ -261,8 +271,18 @@ export function extractSections(content: string): Section[] {
   let currentHeading = "";
   let currentLevel = 0;
   let bodyLines: string[] = [];
+  let inFence = false;
 
   for (const line of lines) {
+    if (line.startsWith("```")) {
+      inFence = !inFence;
+      bodyLines.push(line);
+      continue;
+    }
+    if (inFence) {
+      bodyLines.push(line);
+      continue;
+    }
     const lvl = headingLevel(line);
     if (lvl > 0) {
       if (currentHeading) {
@@ -323,11 +343,18 @@ export function findHeadingOnlyGaps(
   content: string,
   missing: ExpectedSection[],
 ): string[] {
-  const bodyText = content
-    .split("\n")
-    .filter((l) => !l.startsWith("#"))
-    .join("\n")
-    .toLowerCase();
+  const bodyLines: string[] = [];
+  let inFence = false;
+  for (const line of content.split("\n")) {
+    if (line.startsWith("```")) {
+      inFence = !inFence;
+      bodyLines.push(line);
+      continue;
+    }
+    if (!inFence && line.startsWith("#")) continue;
+    bodyLines.push(line);
+  }
+  const bodyText = bodyLines.join("\n").toLowerCase();
 
   return missing
     .filter((section) =>

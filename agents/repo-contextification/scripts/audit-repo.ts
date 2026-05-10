@@ -6,6 +6,8 @@ import {
   type AuditReport,
   REQUIRED_FILES,
   FILE_DESCRIPTIONS,
+  BOILERPLATE_PATTERNS,
+  CI_INDICATORS,
   parseArgs,
   extractHeadings,
   findMissingSections,
@@ -23,6 +25,7 @@ export function auditFile(repoPath: string, filePath: string): FileCheck {
       sections: [],
       missingSections: expected.map((s) => s.label),
       thinSections: [],
+      boilerplate: false,
       score: 0,
     };
   }
@@ -31,10 +34,12 @@ export function auditFile(repoPath: string, filePath: string): FileCheck {
   const headings = extractHeadings(content);
   const missing = findMissingSections(headings, expected);
   const thin = findThinSections(content, expected);
+  const boilerplate = BOILERPLATE_PATTERNS.some((p) => p.test(content));
   const total = expected.length || 1;
   const fullCredit = total - missing.length - thin.length;
   const halfCredit = thin.length * 0.5;
-  const score = Math.round(((fullCredit + halfCredit) / total) * 100);
+  const rawScore = Math.round(((fullCredit + halfCredit) / total) * 100);
+  const score = boilerplate ? Math.min(rawScore, 50) : rawScore;
 
   return {
     path: filePath,
@@ -42,6 +47,7 @@ export function auditFile(repoPath: string, filePath: string): FileCheck {
     sections: headings,
     missingSections: missing,
     thinSections: thin,
+    boilerplate,
     score,
   };
 }
@@ -53,6 +59,7 @@ export function generateReport(report: AuditReport): string {
     `**Repo:** ${report.repoPath}`,
     `**Date:** ${report.timestamp}`,
     `**AI-Readiness Score:** ${report.aiReadinessScore}/100`,
+    `**CI/CD:** ${report.ciSystems.length > 0 ? report.ciSystems.join(", ") : "None detected"}`,
     "",
     "## File Status",
     "",
@@ -65,18 +72,23 @@ export function generateReport(report: AuditReport): string {
     const score = f.exists ? `${f.score}%` : "N/A";
     const missing = f.missingSections.join(", ");
     const thin = f.thinSections.map((s) => `${s} (thin)`).join(", ");
-    const issues = [missing, thin].filter(Boolean).join(", ") || "—";
+    const boilerplate = f.boilerplate ? "boilerplate detected" : "";
+    const issues =
+      [missing, thin, boilerplate].filter(Boolean).join(", ") || "—";
     lines.push(`| ${f.path} | ${status} | ${score} | ${issues} |`);
   }
 
   lines.push("", "## Recommendations", "");
 
   const missingFiles = report.files.filter((f) => !f.exists);
+  const boilerplateFiles = report.files.filter(
+    (f) => f.exists && f.boilerplate,
+  );
   const incompleteFiles = report.files.filter(
-    (f) => f.exists && f.missingSections.length > 0,
+    (f) => f.exists && !f.boilerplate && f.missingSections.length > 0,
   );
   const thinFiles = report.files.filter(
-    (f) => f.exists && f.thinSections.length > 0,
+    (f) => f.exists && !f.boilerplate && f.thinSections.length > 0,
   );
 
   if (missingFiles.length > 0) {
@@ -84,6 +96,16 @@ export function generateReport(report: AuditReport): string {
     for (const f of missingFiles) {
       lines.push(
         `- **${f.path}** — ${FILE_DESCRIPTIONS[f.path] ?? "Documentation file"}`,
+      );
+    }
+    lines.push("");
+  }
+
+  if (boilerplateFiles.length > 0) {
+    lines.push("### Boilerplate Files (needs rewrite)");
+    for (const f of boilerplateFiles) {
+      lines.push(
+        `- **${f.path}** — contains template/boilerplate content that doesn't match the current codebase`,
       );
     }
     lines.push("");
@@ -155,6 +177,10 @@ export function generateDryRunPlan(report: AuditReport): string {
       lines.push(
         `- **CREATE** \`${f.path}\` — ${FILE_DESCRIPTIONS[f.path] ?? "Documentation file"}`,
       );
+    } else if (f.boilerplate) {
+      lines.push(
+        `- **REWRITE** \`${f.path}\` — boilerplate/template content detected`,
+      );
     } else if (f.missingSections.length > 0 || f.thinSections.length > 0) {
       const actions: string[] = [];
       if (f.missingSections.length > 0)
@@ -208,11 +234,16 @@ function main() {
     sections: [],
     missingSections: hasCursorRules ? [] : ["cursor rules"],
     thinSections: [],
+    boilerplate: false,
     score: hasCursorRules ? 100 : 0,
   });
 
   const totalScore = files.reduce((sum, f) => sum + f.score, 0);
   const aiReadinessScore = Math.round(totalScore / files.length);
+
+  const ciSystems = CI_INDICATORS.filter(({ path }) =>
+    existsSync(join(repoPath, path)),
+  ).map(({ label }) => label);
 
   const docsDir = join(repoPath, "docs");
   const hasDocs = existsSync(docsDir) && readdirSync(docsDir).length > 0;
@@ -221,6 +252,7 @@ function main() {
   const report: AuditReport = {
     repoPath,
     files,
+    ciSystems,
     aiReadinessScore: Math.min(100, aiReadinessScore + bonusPoints),
     timestamp: new Date().toISOString(),
   };

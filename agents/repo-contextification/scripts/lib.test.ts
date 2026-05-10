@@ -15,6 +15,10 @@ import {
   parseGitRemoteUrl,
   isCacheFresh,
   prCacheFilePath,
+  BOILERPLATE_PATTERNS,
+  LINE_LIMITS,
+  CI_INDICATORS,
+  SETUP_COMMAND_PATTERNS,
   type ExpectedSection,
 } from "./lib.js";
 
@@ -314,6 +318,96 @@ describe("isCacheFresh", () => {
     const filePath = join(tempDir, "empty.md");
     writeFileSync(filePath, "");
     expect(isCacheFresh(filePath, 60_000)).toBe(true);
+  });
+});
+
+describe("BOILERPLATE_PATTERNS", () => {
+  it("matches 'minimal template' text", () => {
+    expect(
+      BOILERPLATE_PATTERNS.some((p) => p.test("This is a minimal template")),
+    ).toBe(true);
+  });
+
+  it("matches ExamplePage references", () => {
+    expect(
+      BOILERPLATE_PATTERNS.some((p) => p.test("See ExamplePage for usage")),
+    ).toBe(true);
+  });
+
+  it("matches 'this is a starter' text", () => {
+    expect(
+      BOILERPLATE_PATTERNS.some((p) => p.test("This is a starter project")),
+    ).toBe(true);
+  });
+
+  it("matches 'scaffolded from' text", () => {
+    expect(
+      BOILERPLATE_PATTERNS.some((p) => p.test("scaffolded from the template")),
+    ).toBe(true);
+  });
+
+  it("does not match normal project content", () => {
+    expect(
+      BOILERPLATE_PATTERNS.some((p) =>
+        p.test("A networking console plugin for OpenShift"),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("LINE_LIMITS", () => {
+  it("defines limit for CLAUDE.md", () => {
+    expect(LINE_LIMITS["CLAUDE.md"]).toBe(40);
+  });
+
+  it("defines limit for cursor rules", () => {
+    expect(LINE_LIMITS[".cursor/rules/*.mdc"]).toBe(30);
+  });
+});
+
+describe("CI_INDICATORS", () => {
+  it("includes GitHub Actions", () => {
+    expect(CI_INDICATORS.some((i) => i.label === "GitHub Actions")).toBe(true);
+  });
+
+  it("includes Prow / CI Operator", () => {
+    expect(CI_INDICATORS.some((i) => i.path === ".ci-operator.yaml")).toBe(
+      true,
+    );
+  });
+
+  it("includes GitLab CI", () => {
+    expect(CI_INDICATORS.some((i) => i.path === ".gitlab-ci.yml")).toBe(true);
+  });
+
+  it("includes Prow OWNERS", () => {
+    expect(CI_INDICATORS.some((i) => i.path === "OWNERS")).toBe(true);
+  });
+});
+
+describe("SETUP_COMMAND_PATTERNS", () => {
+  it("matches npm install", () => {
+    expect(SETUP_COMMAND_PATTERNS.some((p) => p.test("Run npm install"))).toBe(
+      true,
+    );
+  });
+
+  it("matches npm ci", () => {
+    expect(SETUP_COMMAND_PATTERNS.some((p) => p.test("npm ci"))).toBe(true);
+  });
+
+  it("matches yarn install", () => {
+    expect(SETUP_COMMAND_PATTERNS.some((p) => p.test("yarn install"))).toBe(
+      true,
+    );
+  });
+
+  it("matches npm start", () => {
+    expect(SETUP_COMMAND_PATTERNS.some((p) => p.test("npm start"))).toBe(true);
+  });
+
+  it("does not match unrelated commands", () => {
+    expect(SETUP_COMMAND_PATTERNS.some((p) => p.test("npm test"))).toBe(false);
   });
 });
 

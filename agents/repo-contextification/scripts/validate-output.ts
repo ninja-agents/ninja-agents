@@ -1,13 +1,61 @@
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import {
   REQUIRED_FILES,
   PLACEHOLDER_PATTERNS,
+  LINE_LIMITS,
+  SETUP_COMMAND_PATTERNS,
   parseArgs,
   extractHeadings,
   headingToSlug,
 } from "./lib.js";
+
+export function checkLineLimits(repoPath: string): string[] {
+  const warnings: string[] = [];
+
+  const claudeMdPath = join(repoPath, "CLAUDE.md");
+  if (existsSync(claudeMdPath)) {
+    const lineCount = readFileSync(claudeMdPath, "utf-8").split("\n").length;
+    if (lineCount > LINE_LIMITS["CLAUDE.md"]) {
+      warnings.push(
+        `CLAUDE.md is ${lineCount} lines (limit: ${LINE_LIMITS["CLAUDE.md"]}) — keep it concise`,
+      );
+    }
+  }
+
+  const cursorRulesDir = join(repoPath, ".cursor", "rules");
+  if (existsSync(cursorRulesDir)) {
+    const mdcLimit = LINE_LIMITS[".cursor/rules/*.mdc"];
+    for (const file of readdirSync(cursorRulesDir).filter((f) =>
+      f.endsWith(".mdc"),
+    )) {
+      const filePath = join(cursorRulesDir, file);
+      const lineCount = readFileSync(filePath, "utf-8").split("\n").length;
+      if (lineCount > mdcLimit) {
+        warnings.push(
+          `.cursor/rules/${file} is ${lineCount} lines (limit: ${mdcLimit}) — keep it concise`,
+        );
+      }
+    }
+  }
+
+  return warnings;
+}
+
+export function checkContributingDedup(repoPath: string): string[] {
+  const contributingPath = join(repoPath, "CONTRIBUTING.md");
+  if (!existsSync(contributingPath)) return [];
+
+  const content = readFileSync(contributingPath, "utf-8");
+  const matched = SETUP_COMMAND_PATTERNS.filter((p) => p.test(content));
+  if (matched.length === 0) return [];
+
+  const commands = matched.map((p) => p.source.replace(/\\b/g, ""));
+  return [
+    `CONTRIBUTING.md contains setup commands (${commands.join(", ")}) — link to README.md instead of duplicating`,
+  ];
+}
 
 export function validateMarkdownLinks(
   content: string,
@@ -114,6 +162,9 @@ function main() {
   if (!existsSync(coderabbitPath)) {
     warnings.push(".coderabbit.yaml not found — CodeRabbit not configured");
   }
+
+  warnings.push(...checkLineLimits(repoPath));
+  warnings.push(...checkContributingDedup(repoPath));
 
   if (errors.length > 0) {
     console.error(`\n${errors.length} error(s) found:`);

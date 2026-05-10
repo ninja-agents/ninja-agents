@@ -25,7 +25,7 @@ Launches the `repo-contextification` agent which:
 4. Reads the codebase deeply to understand patterns and conventions
 5. Generates all missing docs and AI tooling config in one pass
 6. Validates all generated files for completeness and link integrity
-7. Runs two review rounds to improve content quality and accuracy, then suggests agent improvements
+7. Reviews content quality, cross-file accuracy, and suggests agent improvements
 
 ## Expected Output
 

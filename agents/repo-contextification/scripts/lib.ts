@@ -6,12 +6,14 @@ export interface FileCheck {
   sections: string[];
   missingSections: string[];
   thinSections: string[];
+  boilerplate: boolean;
   score: number;
 }
 
 export interface AuditReport {
   repoPath: string;
   files: FileCheck[];
+  ciSystems: string[];
   aiReadinessScore: number;
   timestamp: string;
 }
@@ -88,6 +90,38 @@ export const PLACEHOLDER_PATTERNS = [
   /\bHACK\b/i,
   /\bWIP\b/i,
   /\bfill in later\b/i,
+];
+
+export const BOILERPLATE_PATTERNS = [
+  /\bminimal template\b/i,
+  /\bExamplePage\b/,
+  /\bconsole-template\b/i,
+  /\bscaffolded? (from|by|using)\b/i,
+  /\bthis is a (starter|boilerplate|template)\b/i,
+];
+
+export const LINE_LIMITS: Record<string, number> = {
+  "CLAUDE.md": 40,
+  ".cursor/rules/*.mdc": 30,
+};
+
+export const CI_INDICATORS: { path: string; label: string }[] = [
+  { path: ".github/workflows", label: "GitHub Actions" },
+  { path: ".gitlab-ci.yml", label: "GitLab CI" },
+  { path: ".ci-operator.yaml", label: "Prow / CI Operator" },
+  { path: "Jenkinsfile", label: "Jenkins" },
+  { path: "OWNERS", label: "Prow OWNERS" },
+];
+
+export const SETUP_COMMAND_PATTERNS = [
+  /\bnpm install\b/,
+  /\bnpm ci\b/,
+  /\byarn install\b/,
+  /\bpnpm install\b/,
+  /\bnpm start\b/,
+  /\bnpm run dev\b/,
+  /\byarn dev\b/,
+  /\bpnpm dev\b/,
 ];
 
 export const FILE_DESCRIPTIONS: Record<string, string> = {

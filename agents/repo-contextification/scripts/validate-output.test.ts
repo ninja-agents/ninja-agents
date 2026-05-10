@@ -3,7 +3,12 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { validateMarkdownLinks } from "./validate-output.js";
+import {
+  validateMarkdownLinks,
+  checkLineLimits,
+  checkContributingDedup,
+} from "./validate-output.js";
+import { LINE_LIMITS } from "./lib.js";
 
 let tempDir: string;
 
@@ -115,5 +120,103 @@ describe("validateMarkdownLinks", () => {
     const content = "[Guide](docs/guide.md)";
     const errors = validateMarkdownLinks(content, tempDir, "README.md");
     expect(errors).toEqual([]);
+  });
+});
+
+describe("checkLineLimits", () => {
+  it("returns no warnings when files are within limits", () => {
+    const lines = Array(LINE_LIMITS["CLAUDE.md"]).fill("line").join("\n");
+    writeFileSync(join(tempDir, "CLAUDE.md"), lines);
+    expect(checkLineLimits(tempDir)).toEqual([]);
+  });
+
+  it("warns when CLAUDE.md exceeds line limit", () => {
+    const lines = Array(LINE_LIMITS["CLAUDE.md"] + 10)
+      .fill("line")
+      .join("\n");
+    writeFileSync(join(tempDir, "CLAUDE.md"), lines);
+    const warnings = checkLineLimits(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("CLAUDE.md");
+    expect(warnings[0]).toContain(`limit: ${LINE_LIMITS["CLAUDE.md"]}`);
+  });
+
+  it("warns when .mdc files exceed line limit", () => {
+    mkdirSync(join(tempDir, ".cursor", "rules"), { recursive: true });
+    const lines = Array(LINE_LIMITS[".cursor/rules/*.mdc"] + 5)
+      .fill("line")
+      .join("\n");
+    writeFileSync(join(tempDir, ".cursor", "rules", "project.mdc"), lines);
+    const warnings = checkLineLimits(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("project.mdc");
+  });
+
+  it("returns no warnings when files do not exist", () => {
+    expect(checkLineLimits(tempDir)).toEqual([]);
+  });
+
+  it("ignores non-mdc files in cursor rules directory", () => {
+    mkdirSync(join(tempDir, ".cursor", "rules"), { recursive: true });
+    const lines = Array(100).fill("line").join("\n");
+    writeFileSync(join(tempDir, ".cursor", "rules", "notes.txt"), lines);
+    expect(checkLineLimits(tempDir)).toEqual([]);
+  });
+});
+
+describe("checkContributingDedup", () => {
+  it("returns no warnings when CONTRIBUTING.md does not exist", () => {
+    expect(checkContributingDedup(tempDir)).toEqual([]);
+  });
+
+  it("returns no warnings when CONTRIBUTING.md has no setup commands", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\nSee [README](README.md) for setup.\n\n## Testing\n\nRun `npm test`.",
+    );
+    expect(checkContributingDedup(tempDir)).toEqual([]);
+  });
+
+  it("warns when CONTRIBUTING.md contains npm install", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Setup\n\nRun `npm install` to get started.",
+    );
+    const warnings = checkContributingDedup(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("CONTRIBUTING.md");
+    expect(warnings[0]).toContain("npm install");
+    expect(warnings[0]).toContain("link to README.md");
+  });
+
+  it("warns when CONTRIBUTING.md contains npm ci", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Dev Setup\n\n```bash\nnpm ci\n```",
+    );
+    const warnings = checkContributingDedup(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("npm ci");
+  });
+
+  it("warns when CONTRIBUTING.md contains yarn install", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\nFirst, run yarn install.",
+    );
+    const warnings = checkContributingDedup(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("yarn install");
+  });
+
+  it("lists multiple matching commands in one warning", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\nRun `npm install` then `npm start`.",
+    );
+    const warnings = checkContributingDedup(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("npm install");
+    expect(warnings[0]).toContain("npm start");
   });
 });

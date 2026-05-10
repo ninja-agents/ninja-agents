@@ -21,6 +21,7 @@ describe("auditFile", () => {
     const result = auditFile(tempDir, "README.md");
     expect(result.exists).toBe(false);
     expect(result.score).toBe(0);
+    expect(result.boilerplate).toBe(false);
     expect(result.missingSections).toContain("overview");
     expect(result.missingSections).toContain("quick start");
   });
@@ -117,6 +118,62 @@ describe("auditFile", () => {
     expect(result.missingSections).toEqual([]);
   });
 
+  it("detects boilerplate content and caps score at 50", () => {
+    const content = [
+      "# My Project",
+      "",
+      "This is a minimal template for console plugins.",
+      "",
+      "## Overview",
+      "",
+      "A".repeat(60),
+      "",
+      "## Quick Start",
+      "",
+      "B".repeat(60),
+      "",
+      "## Prerequisites",
+      "",
+      "C".repeat(60),
+      "",
+      "## Contributing",
+      "",
+      "D".repeat(60),
+    ].join("\n");
+    writeFileSync(join(tempDir, "README.md"), content);
+
+    const result = auditFile(tempDir, "README.md");
+    expect(result.boilerplate).toBe(true);
+    expect(result.score).toBeLessThanOrEqual(50);
+  });
+
+  it("does not flag non-boilerplate content", () => {
+    const content = [
+      "# My Project",
+      "",
+      "## Overview",
+      "",
+      "A real project description here. " + "A".repeat(60),
+      "",
+      "## Quick Start",
+      "",
+      "B".repeat(60),
+      "",
+      "## Prerequisites",
+      "",
+      "C".repeat(60),
+      "",
+      "## Contributing",
+      "",
+      "D".repeat(60),
+    ].join("\n");
+    writeFileSync(join(tempDir, "README.md"), content);
+
+    const result = auditFile(tempDir, "README.md");
+    expect(result.boilerplate).toBe(false);
+    expect(result.score).toBe(100);
+  });
+
   it("populates the sections array with found headings", () => {
     writeFileSync(
       join(tempDir, "CONTRIBUTING.md"),
@@ -136,6 +193,7 @@ describe("generateReport", () => {
       repoPath: "/test/repo",
       timestamp: "2026-01-01T00:00:00.000Z",
       aiReadinessScore: 50,
+      ciSystems: [],
       files: [
         {
           path: "README.md",
@@ -143,6 +201,7 @@ describe("generateReport", () => {
           sections: ["overview"],
           missingSections: ["quick start"],
           thinSections: [],
+          boilerplate: false,
           score: 50,
         },
         {
@@ -151,6 +210,7 @@ describe("generateReport", () => {
           sections: [],
           missingSections: ["dev setup", "coding standards"],
           thinSections: [],
+          boilerplate: false,
           score: 0,
         },
       ],
@@ -196,6 +256,7 @@ describe("generateReport", () => {
           sections: ["overview"],
           missingSections: [],
           thinSections: ["overview"],
+          boilerplate: false,
           score: 50,
         },
       ],
@@ -213,6 +274,18 @@ describe("generateReport", () => {
     expect(output).toContain("AUDIT_SUMMARY -->");
   });
 
+  it("includes CI/CD systems in the report header", () => {
+    const output = generateReport(
+      makeReport({ ciSystems: ["GitHub Actions", "Prow OWNERS"] }),
+    );
+    expect(output).toContain("**CI/CD:** GitHub Actions, Prow OWNERS");
+  });
+
+  it("shows 'None detected' when no CI systems found", () => {
+    const output = generateReport(makeReport({ ciSystems: [] }));
+    expect(output).toContain("**CI/CD:** None detected");
+  });
+
   it("shows all-complete message when no gaps exist", () => {
     const report = makeReport({
       files: [
@@ -222,6 +295,7 @@ describe("generateReport", () => {
           sections: ["overview"],
           missingSections: [],
           thinSections: [],
+          boilerplate: false,
           score: 100,
         },
       ],
@@ -239,6 +313,7 @@ describe("generateDryRunPlan", () => {
       repoPath: "/test/repo",
       timestamp: "2026-01-01T00:00:00.000Z",
       aiReadinessScore: 50,
+      ciSystems: [],
       files: [],
       ...overrides,
     };
@@ -253,6 +328,7 @@ describe("generateDryRunPlan", () => {
           sections: [],
           missingSections: ["overview"],
           thinSections: [],
+          boilerplate: false,
           score: 0,
         },
       ],
@@ -270,6 +346,7 @@ describe("generateDryRunPlan", () => {
           sections: ["overview"],
           missingSections: ["quick start"],
           thinSections: [],
+          boilerplate: false,
           score: 50,
         },
       ],
@@ -288,12 +365,32 @@ describe("generateDryRunPlan", () => {
           sections: ["context"],
           missingSections: [],
           thinSections: [],
+          boilerplate: false,
           score: 100,
         },
       ],
     });
     const output = generateDryRunPlan(report);
     expect(output).toContain("**SKIP** `CLAUDE.md`");
+  });
+
+  it("marks boilerplate files as REWRITE", () => {
+    const report = makeReport({
+      files: [
+        {
+          path: "README.md",
+          exists: true,
+          sections: ["overview"],
+          missingSections: [],
+          thinSections: [],
+          boilerplate: true,
+          score: 50,
+        },
+      ],
+    });
+    const output = generateDryRunPlan(report);
+    expect(output).toContain("**REWRITE** `README.md`");
+    expect(output).toContain("boilerplate");
   });
 
   it("includes expand action for thin sections", () => {
@@ -305,6 +402,7 @@ describe("generateDryRunPlan", () => {
           sections: ["overview"],
           missingSections: [],
           thinSections: ["overview"],
+          boilerplate: false,
           score: 50,
         },
       ],

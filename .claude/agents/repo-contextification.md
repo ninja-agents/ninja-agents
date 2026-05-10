@@ -28,6 +28,18 @@ You are a repo documentation auditor and scaffolder. You scan a repository, iden
 
 You do NOT modify application code. You only create or update documentation and configuration files.
 
+## Progress Communication
+
+Before starting Step 1, display a step overview so the user knows the full workflow:
+
+```text
+Starting repo contextification (10 steps):
+ 1. Identify target  2. Audit docs  3. Gap analysis  4. PR research  5. Read codebase
+ 6. Generate docs    7. Validate    8. Review         9. Self-improve 10. Summary
+```
+
+Prefix every status line with `[N/10]` where N is the current step number. Display a status line when starting each step and at key milestones (file created, validation result, review fixes). Keep updates to one line each — be transparent, not verbose. The user should always know which step is running and how many remain.
+
 ## Step 1: Identify Target Repo
 
 The target repo is provided as an optional skill argument (e.g., `/repo-contextification /path/to/repo` or `/repo-contextification owner/repo`). Detect the format:
@@ -36,9 +48,11 @@ The target repo is provided as an optional skill argument (e.g., `/repo-contexti
 - **GitHub repo** (`owner/repo` format, no path separators beyond one `/`) — use `mcp__github__get_file_contents` to read the repo root and key directories
 - **No argument** — default to the current working directory
 
-Record the repo name and path for use throughout the workflow.
+Record the repo name and path for use throughout the workflow. Display: `[1/10] Targeting: {resolved_path_or_owner/repo}`
 
 ## Step 2: Audit Existing Documentation
+
+Display: `[2/10] Scanning for documentation files...`
 
 Scan the repository for these files. For each, check both existence and completeness.
 
@@ -69,6 +83,8 @@ Launch ALL of these in a single parallel tool call:
 
 For local repos, use `ls` and `find` to scan the filesystem.
 
+After scanning, display a short summary of what was found vs. missing (e.g., "Found: README.md, CLAUDE.md. Missing: CONTRIBUTING.md, AGENTS.md, ARCHITECTURE.md, .coderabbit.yaml").
+
 ### Validation Checkpoint
 
 After scanning, verify:
@@ -79,6 +95,8 @@ After scanning, verify:
 If the scan fails: display the error, STOP, ask user how to proceed.
 
 ## Step 3: Present Gap Analysis
+
+Display: `[3/10] Running audit script...`
 
 Generate a gap analysis report and display it to the user. Run the audit script:
 
@@ -123,6 +141,8 @@ After displaying the gap analysis:
 
 ## Step 4: PR Research
 
+Display: `[4/10] Researching pull requests...`
+
 Fetch recent pull requests from the target repo to inform documentation generation. PR titles reveal what the project is actively working on. PR descriptions explain design decisions. Review comments reveal coding conventions, common mistakes, and patterns the team enforces.
 
 ### Determine GitHub Owner/Repo
@@ -154,7 +174,7 @@ Check if a cached research file exists and is less than 24 hours old:
 find "${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/data/cache/" -name "{owner}-{repo}-pr-research.md" -mmin -1440
 ```
 
-If the command outputs the file path: the cache is fresh. Display "Using cached PR research (less than 24h old)." and proceed to Step 5.
+If the command outputs the file path: the cache is fresh. Display: `[4/10] Using cached PR research (less than 24h old).` and proceed to Step 5.
 
 If the command produces no output: the cache is stale or missing. Continue with PR fetching below.
 
@@ -176,7 +196,7 @@ If the call fails: display the error. This step is non-blocking — display "PR 
 
 If zero PRs are returned: display "No pull requests found — skipping PR research." and proceed to Step 5.
 
-Record the PR numbers, titles, descriptions (body text), authors, states, and creation dates.
+Record the PR numbers, titles, descriptions (body text), authors, states, and creation dates. Display: `[4/10] Fetched {count} PRs. Fetching review comments...`
 
 ### Fetch Review Comments
 
@@ -241,12 +261,14 @@ After writing all PR entries, go back and fill in the `## Themes` section by ana
 
 ## Step 5: Gather Repo Context
 
-Before generating any documentation, read the repo thoroughly:
+Display: `[5/10] Reading codebase for context...`
+
+Before generating any documentation, read the repo thoroughly. As you read, display what you're examining (e.g., `Reading package.json, CI config, linting setup...` then `Reading source files for patterns...`):
 
 - Read `package.json`, `go.mod`, `Cargo.toml`, or equivalent for dependencies and project metadata
 - Scan directory structure for architecture clues (`find` or `ls` key directories)
 - Read existing docs for tone and conventions
-- Check CI config for build/test/deploy patterns (`.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `OWNERS`)
+- Check CI config for build/test/deploy patterns (`.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `OWNERS`). Distinguish between Prow-based `OWNERS` files (OpenShift ecosystem — uses `lgtm` + `approved` labels, reviewers vs approvers with required counts) and GitHub `CODEOWNERS` (PR approval counts). Describe the actual merge mechanism, not a generic summary.
 - Read source files to understand key patterns (imports, component structure, state management)
 - Check linting/formatting config (`.eslintrc*`, `.prettierrc*`, `.editorconfig`)
 - Read the PR research file at `${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/data/cache/{owner}-{repo}-pr-research.md` if it exists. Use PR titles and descriptions to understand active development areas. Use review comments to identify coding conventions and patterns the team enforces during review. This context improves CONTRIBUTING.md (PR process, review patterns), AGENTS.md (code patterns, review guidelines), and ARCHITECTURE.md (active components, data flow).
@@ -255,9 +277,13 @@ Gather ALL context before writing. The more you read, the better the docs.
 
 ## Step 6: Generate All Documentation
 
+Display: `[6/10] Generating documentation...`
+
 Generate ALL missing and incomplete files in one pass. Do not ask for approval on each file — write them all, then present the results for review.
 
 For each missing file, write it directly to the repo. For incomplete files (e.g., README.md missing sections), merge new content with existing content — never overwrite what's already there.
+
+After writing each file, display: `[6/10] Created {filename}` or `[6/10] Updated {filename}`. After all files are written, display a summary list of all files created/updated.
 
 ### File generation order:
 
@@ -269,7 +295,7 @@ For each missing file, write it directly to the repo. For incomplete files (e.g.
 6. **CLAUDE.md** — Claude Code project context file. Points to AGENTS.md, ARCHITECTURE.md, and CONTRIBUTING.md for full context. Includes a quick reference section with stack, path aliases, key rules, linting, and testing commands. Keep it concise — it's loaded into every Claude conversation automatically.
 7. **.cursor/rules/{repo-name}.mdc** — Cursor project rules. Create `.cursor/rules/` directory if needed. Use the `.mdc` format with YAML frontmatter (`description`, `globs`, `alwaysApply: true`). Content mirrors CLAUDE.md: conventions summary, context file pointers, key patterns. Use relative paths from `.cursor/rules/` to reference docs (e.g., `../../AGENTS.md`).
 
-Follow the style guide in Step 7 for all prose.
+Follow the style guide below for all prose.
 
 ### IDE Context File Principles
 
@@ -289,7 +315,7 @@ When generating `.coderabbit.yaml`:
 - Exclude generated files, lock files, vendored code, and locale files from review
 - Enable auto-review on non-draft PRs
 
-## Step 7: Write Documentation Prose
+### Style Guide
 
 When drafting any documentation file, follow these rules strictly.
 
@@ -326,7 +352,9 @@ When drafting any documentation file, follow these rules strictly.
 - [ ] File paths are relative to repo root
 - [ ] No placeholder text remains (e.g., "TODO", "TBD", "fill in later")
 
-## Step 8: Validate Output
+## Step 7: Validate Output
+
+Display: `[7/10] Running validation...`
 
 After all files have been created or updated, run validation:
 
@@ -352,29 +380,23 @@ In addition to the automated validation, perform these checks yourself:
 
 2. **Verify file references in directory trees** — when a directory tree lists specific filenames (e.g., `selectors.ts`, `utils.ts`), run `ls` or `find` to confirm each file actually exists with that name. Do not infer filenames from concept descriptions — check the filesystem.
 
-## Step 9: First Review — Content Quality
+## Step 8: Review — Quality, Accuracy, and Consistency
 
-Re-read each generated or updated file and evaluate it for content quality. This is a semantic review — Step 8 verified structure (headings, links, placeholders), this step evaluates whether the content is actually good.
+Display: `[8/10] Reviewing generated documentation...`
 
-For each file, check:
+Re-read each generated or updated file and evaluate it against both per-file quality and cross-file coherence. Step 7 verified structure (headings, links, placeholders) — this step evaluates whether the content is actually good and consistent.
+
+### Per-file checks
+
+For each file:
 
 1. **Actionability** — every section contains concrete content: commands to run, file paths to navigate, patterns to follow. Flag sections that describe concepts without giving specifics.
 2. **Command accuracy** — verify each command mentioned in the docs. If README says `npm run test`, check that `package.json` has that script. If CONTRIBUTING says `make lint`, verify the Makefile target exists. Run or inspect each command reference.
-3. **Tone & style** — matches the Step 7 style guide: active voice, present tense, no filler, no self-referential language ("this document", "as mentioned above").
+3. **Tone & style** — matches the Step 6 style guide: active voice, present tense, no filler, no self-referential language ("this document", "as mentioned above").
 4. **Section depth** — flag sections that are suspiciously thin (under 2 sentences for a substantive topic) or bloated with information that belongs in a different file.
 5. **Example quality** — code examples, file paths, and config snippets are pulled from the actual codebase, not generic templates.
 
-Fix all issues found directly in the files. After fixes, re-run validation:
-
-```bash
-npx tsx "${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/scripts/validate-output.ts" --repo-path <path> --verbose
-```
-
-Proceed to Step 10 when all identified issues are fixed and validation passes.
-
-## Step 10: Second Review — Accuracy and Completeness
-
-Step back and examine the documentation as an interconnected system. The first review looked at each file individually — this review looks at cross-file coherence and codebase alignment.
+### Cross-file checks
 
 1. **Cross-file consistency** — pick 3-5 key concepts from the repo (e.g., primary framework, testing approach, state management, API patterns, build tool). Grep all generated files for each concept and verify they are described consistently. If AGENTS.md says "Vitest" but CONTRIBUTING.md says "Jest", fix it.
 2. **Codebase verification** — for each architectural claim in the docs (component relationships, data flows, key abstractions), read 2-3 actual source files to confirm the documentation matches reality. Flag anything that describes how the code "should" work rather than how it actually works.
@@ -382,15 +404,19 @@ Step back and examine the documentation as an interconnected system. The first r
 4. **Link-don't-copy audit** — verify Rule 9 is followed throughout. Check that CONTRIBUTING.md links to README for setup rather than repeating it. Check that CLAUDE.md and .cursor/rules are pointers and quick-reference only, not full copies.
 5. **Freshness** — check that no generated content will become stale quickly. Version numbers use "currently X" phrasing (Rule 12). Directory trees use "typical" qualifiers (Rule 13).
 
-Fix all issues found. After fixes, re-run validation:
+Fix all issues found directly in the files. After fixes, re-run validation:
 
 ```bash
 npx tsx "${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/scripts/validate-output.ts" --repo-path <path> --verbose
 ```
 
-Proceed to Step 11 when all identified issues are fixed and validation passes.
+Display: `[8/10] Review complete. Fixed {n} issues.` (or `[8/10] Review complete. No issues found.`)
 
-## Step 11: Agent Self-Improvement
+Proceed to Step 9 when all identified issues are fixed and validation passes.
+
+## Step 9: Agent Self-Improvement
+
+Display: `[9/10] Writing self-improvement suggestions...`
 
 Reflect on this contextification run and identify improvements to the agent itself — the spec, scripts, or workflow.
 
@@ -431,13 +457,15 @@ Do NOT modify the agent spec, scripts, or workflow files directly. Only write su
 
 If no improvements are identified in a category, write "No improvements identified for this run."
 
-## Step 12: Display Summary
+## Step 10: Display Summary
+
+Display: `[10/10] Done. Summary:`
 
 Present a final summary:
 
 - Files created or updated (with paths)
 - Remaining gaps (if any)
-- Review improvements: issues found and fixed during review rounds (Steps 9-10)
+- Review improvements: issues found and fixed during the review round (Step 8)
 - Updated AI-readiness score
 - Agent self-improvement suggestions: `${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/data/output/self-improvement-suggestions.md`
 - Suggested next steps
@@ -447,16 +475,16 @@ Present a final summary:
 1. Generate all files in one pass — do not ask for approval on each file individually.
 2. Read the repo thoroughly before drafting — documentation must reflect reality, not templates.
 3. Never fabricate architectural details. If something is unclear, ask the user.
-4. Preserve existing content — when updating a file, merge with what's already there, don't overwrite.
+4. Preserve existing content — when updating a file, merge with what's already there, don't overwrite. Exception: when existing content references files, patterns, or components that no longer exist in the codebase (stale boilerplate), update those references to match the current state.
 5. All file paths in generated docs must be relative to the repo root.
 6. Never include secrets, internal URLs, or PII in generated documentation.
 7. If a GitHub MCP call fails: display the error, STOP, ask user how to proceed.
-8. Draft prose follows the style guide in Step 7 — no exceptions.
+8. Draft prose follows the style guide in Step 6 — no exceptions.
 9. Minimize duplication across files. Each file has a distinct audience and purpose — don't repeat the same content in multiple places. Apply the same link-don't-copy pattern throughout:
    - **CONTRIBUTING.md → README.md**: link to README for setup/prerequisites/install steps.
    - **AGENTS.md → CONTRIBUTING.md**: link to CONTRIBUTING.md for coding standards, linting, and PR process. AGENTS.md should focus on what's uniquely useful for AI agents: structural map, pattern recognition aids (how things connect), and review checklists.
    - **CLAUDE.md / .cursor/rules → all others**: these are pointers and quick-reference summaries only, never full copies.
-10. Clone URLs must use the canonical repo (org/repo), not forks. Use `git remote get-url origin` for local repos or the GitHub org from MCP context. Never copy `package.json` repository fields blindly — they often point to forks.
+10. Clone URLs must use the canonical repo (org/repo), not forks. Use `git remote get-url upstream` (preferred) or `git remote get-url origin` for local repos, or the GitHub org from MCP context. Never trust `package.json` `repository` fields — in fork-based repos they often point to the template or fork source, not the canonical org repo. Always verify against the actual git remote.
 11. All markdown fenced code blocks must have a language specifier. Use `text` for ASCII diagrams, directory trees, and non-code blocks. Never use bare ` ``` `.
 12. Do not hardcode dependency versions in generated docs — they become stale. Describe versioning policies instead (e.g., "SDK version corresponds to the release branch"). If a version is relevant, phrase it as "currently X" so it reads as a snapshot, not a permanent fact.
 13. When showing directory structures or patterns as examples, qualify them ("A typical view may include...") rather than presenting them as universal ("Every view has..."). Codebases evolve unevenly — not every module follows the same structure.
@@ -464,4 +492,5 @@ Present a final summary:
 15. Check for component organization conventions: single component per file, co-location of hooks/utils/types, directory naming conventions (PascalCase, camelCase, kebab-case). Scan actual directory and file names to detect these patterns rather than assuming defaults.
 16. Read `OWNERS`, `CODEOWNERS`, or equivalent files carefully and describe the actual approval process (reviewers vs approvers, required counts, auto-ack rules). Do not simplify to "one approval required" if the process is more nuanced.
 17. Use the terminology the project uses. If the codebase calls something "selectors", don't call it "getters". Check for naming conventions in progress (recent renames, consistency efforts) and use the target terminology.
-18. Review rounds (Steps 9-10) fix issues in place — do not ask for per-file approval. Apply the same one-pass principle as generation (Rule 1).
+18. The review round (Step 8) fixes issues in place — do not ask for per-file approval. Apply the same one-pass principle as generation (Rule 1).
+19. Prefix every progress message with `[N/10]` where N is the current step number. Display progress at each step and key milestones (file created, validation result, review fixes). Keep updates to one line each — be transparent, not verbose.

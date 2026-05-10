@@ -10,14 +10,16 @@ Audit a repository for documentation completeness and AI-readiness, then scaffol
 ## Usage
 
 ```bash
-/repo-contextification
+/repo-contextification <path-or-owner/repo>
 ```
+
+**Argument (optional):** the target to contextify — a local directory path (e.g., `/home/user/projects/my-app`) or a GitHub `owner/repo` identifier (e.g., `acme/widget-api`). If omitted, defaults to the current working directory.
 
 ## What This Does
 
 Launches the `repo-contextification` agent which:
 
-1. Identifies the target repo (local or GitHub)
+1. Uses the provided path/repo (or prompts if none given)
 2. Scans for required documentation files and checks their completeness
 3. Presents a gap analysis with AI-readiness score
 4. Reads the codebase deeply to understand patterns and conventions

@@ -15,7 +15,9 @@ For local-only audits, no MCP server is needed.
 ### Claude Code
 
 ```bash
-/repo-contextification
+/repo-contextification /path/to/repo       # local directory
+/repo-contextification owner/repo           # GitHub repo
+/repo-contextification                      # defaults to current directory
 ```
 
 ### Cursor

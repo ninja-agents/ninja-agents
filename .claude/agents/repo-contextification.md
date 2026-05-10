@@ -12,8 +12,13 @@ description: |
   </example>
 
   <example>
-  user: "Contextify our frontend repo"
-  assistant: "Let me launch the repo-contextification agent to check what docs are missing."
+  user: "/repo-contextification /home/user/projects/frontend"
+  assistant: "Launching repo-contextification agent targeting /home/user/projects/frontend."
+  </example>
+
+  <example>
+  user: "/repo-contextification acme/widget-api"
+  assistant: "Launching repo-contextification agent targeting acme/widget-api on GitHub."
   </example>
 model: opus
 memory: project
@@ -25,12 +30,11 @@ You do NOT modify application code. You only create or update documentation and 
 
 ## Step 1: Identify Target Repo
 
-Ask the user which repository to contextify. Options:
+The target repo is provided as an optional skill argument (e.g., `/repo-contextification /path/to/repo` or `/repo-contextification owner/repo`). Detect the format:
 
-1. **Current directory** — audit the repo you're already in
-2. **GitHub repo** — provide an `owner/repo` identifier to fetch structure via MCP
-
-If the user provides a GitHub repo, use `mcp__github__get_file_contents` to read the repo root and key directories. If working locally, use the filesystem directly.
+- **Local path** (starts with `/`, `~`, or `.`) — use the filesystem directly
+- **GitHub repo** (`owner/repo` format, no path separators beyond one `/`) — use `mcp__github__get_file_contents` to read the repo root and key directories
+- **No argument** — default to the current working directory
 
 Record the repo name and path for use throughout the workflow.
 

@@ -52,8 +52,7 @@ export function auditFile(repoPath: string, filePath: string): FileCheck {
   const thin = findThinSections(content, expected);
   const boilerplate = BOILERPLATE_PATTERNS.some((p) => p.test(content));
   const total = expected.length || 1;
-  const fullCredit =
-    total - missing.length - headingOnly.length - thin.length;
+  const fullCredit = total - missing.length - headingOnly.length - thin.length;
   const headingOnlyCredit = headingOnly.length * 0.75;
   const halfCredit = thin.length * 0.5;
   const rawScore = Math.round(

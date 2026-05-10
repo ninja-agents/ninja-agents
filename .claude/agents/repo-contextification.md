@@ -370,16 +370,16 @@ Display: `[7/11] Checking for cross-file duplication...`
 
 Before validating, check that generated files follow Rule 9 (link-don't-copy). Compare each file pair below and replace duplicated content with a link to the authoritative source.
 
-| Content category | Authoritative source | Must link, not copy |
-|---|---|---|
-| Setup / install / prerequisites | README.md | CONTRIBUTING.md |
-| Commit message format | README.md (or COMMIT_MESSAGE_GUIDE.md if present) | CONTRIBUTING.md |
-| Directory tree / source structure | AGENTS.md | ARCHITECTURE.md |
-| Dependency flow | AGENTS.md | ARCHITECTURE.md |
-| Coding conventions (full detail) | AGENTS.md | CONTRIBUTING.md (brief summary + link is OK) |
-| Lint / test / build commands | README.md | CONTRIBUTING.md (subset OK, no full repeat) |
-| CRD / domain reference | .cursor/rules/project-context.mdc (if present) | ARCHITECTURE.md (summary table OK, no detail copy) |
-| All detailed content | AGENTS.md, ARCHITECTURE.md, CONTRIBUTING.md | CLAUDE.md, .cursor/rules/*.mdc (pointers only) |
+| Content category                  | Authoritative source                              | Must link, not copy                                |
+| --------------------------------- | ------------------------------------------------- | -------------------------------------------------- |
+| Setup / install / prerequisites   | README.md                                         | CONTRIBUTING.md                                    |
+| Commit message format             | README.md (or COMMIT_MESSAGE_GUIDE.md if present) | CONTRIBUTING.md                                    |
+| Directory tree / source structure | AGENTS.md                                         | ARCHITECTURE.md                                    |
+| Dependency flow                   | AGENTS.md                                         | ARCHITECTURE.md                                    |
+| Coding conventions (full detail)  | AGENTS.md                                         | CONTRIBUTING.md (brief summary + link is OK)       |
+| Lint / test / build commands      | README.md                                         | CONTRIBUTING.md (subset OK, no full repeat)        |
+| CRD / domain reference            | .cursor/rules/project-context.mdc (if present)    | ARCHITECTURE.md (summary table OK, no detail copy) |
+| All detailed content              | AGENTS.md, ARCHITECTURE.md, CONTRIBUTING.md       | CLAUDE.md, .cursor/rules/\*.mdc (pointers only)    |
 
 ### How to check
 

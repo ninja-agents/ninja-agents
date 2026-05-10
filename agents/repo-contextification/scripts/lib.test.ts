@@ -205,7 +205,8 @@ describe("extractSections", () => {
   });
 
   it("includes code fence content in section body", () => {
-    const content = "## Example\n\n```\n# comment\ncode here\n```\n\nAfter fence.";
+    const content =
+      "## Example\n\n```\n# comment\ncode here\n```\n\nAfter fence.";
     const sections = extractSections(content);
     expect(sections).toHaveLength(1);
     expect(sections[0].body).toContain("# comment");
@@ -658,9 +659,9 @@ describe("COMMIT_FORMAT_PATTERNS", () => {
   });
 
   it("matches Resolves: None", () => {
-    expect(
-      COMMIT_FORMAT_PATTERNS.some((p) => p.test("Resolves: None")),
-    ).toBe(true);
+    expect(COMMIT_FORMAT_PATTERNS.some((p) => p.test("Resolves: None"))).toBe(
+      true,
+    );
   });
 
   it("matches npm run validate-commits", () => {
@@ -707,8 +708,7 @@ describe("DIRECTORY_TREE_PATTERN", () => {
   });
 
   it("does not match non-src trees", () => {
-    const tree =
-      "docs/\n├── guide.md\n├── api.md\n├── faq.md\n└── readme.md\n";
+    const tree = "docs/\n├── guide.md\n├── api.md\n├── faq.md\n└── readme.md\n";
     expect(DIRECTORY_TREE_PATTERN.test(tree)).toBe(false);
   });
 });

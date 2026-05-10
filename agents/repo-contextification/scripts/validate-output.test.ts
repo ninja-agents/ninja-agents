@@ -457,10 +457,7 @@ describe("checkArchitectureDedup", () => {
       join(tempDir, "ARCHITECTURE.md"),
       `# Architecture\n\n${tree}\n`,
     );
-    writeFileSync(
-      join(tempDir, "AGENTS.md"),
-      "# Agents\n\nNo tree here.\n",
-    );
+    writeFileSync(join(tempDir, "AGENTS.md"), "# Agents\n\nNo tree here.\n");
     expect(checkArchitectureDedup(tempDir)).toEqual([]);
   });
 

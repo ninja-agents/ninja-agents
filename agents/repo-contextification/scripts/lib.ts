@@ -240,8 +240,7 @@ export function headingMatchesStem(
 ): boolean {
   return headingTokens.some(
     (token) =>
-      token.startsWith(stem) ||
-      (token.length >= 3 && stem.startsWith(token)),
+      token.startsWith(stem) || (token.length >= 3 && stem.startsWith(token)),
   );
 }
 
@@ -368,7 +367,9 @@ export function findHeadingOnlyGaps(
 
   return missing
     .filter((section) =>
-      section.stems.some((stem) => new RegExp(`\\b${stem}\\w*\\b`).test(bodyText)),
+      section.stems.some((stem) =>
+        new RegExp(`\\b${stem}\\w*\\b`).test(bodyText),
+      ),
     )
     .map((section) => section.label);
 }

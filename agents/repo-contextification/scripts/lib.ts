@@ -173,6 +173,16 @@ export const SETUP_COMMAND_PATTERNS = [
   /\bcmake\b/,
 ];
 
+export const COMMIT_FORMAT_PATTERNS = [
+  /\bResolves:\s*MTV-/,
+  /\bResolves:\s*None\b/,
+  /\bnpm run validate-commits\b/,
+  /\bgit commit -s\b/,
+  /\bSigned-off-by:/,
+];
+
+export const DIRECTORY_TREE_PATTERN = /src\/\n(?:[\s│├└─|]*\S.*\n){3,}/;
+
 export const FILE_DESCRIPTIONS: Record<string, string> = {
   "README.md": "Repo-level foundational context for developers",
   "CONTRIBUTING.md": "Contribution conventions for humans and agents",

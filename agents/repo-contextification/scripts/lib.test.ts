@@ -21,6 +21,8 @@ import {
   CI_INDICATORS,
   CI_HEADING_STEMS,
   SETUP_COMMAND_PATTERNS,
+  COMMIT_FORMAT_PATTERNS,
+  DIRECTORY_TREE_PATTERN,
   type ExpectedSection,
 } from "./lib.js";
 
@@ -645,6 +647,69 @@ describe("SETUP_COMMAND_PATTERNS", () => {
     expect(SETUP_COMMAND_PATTERNS.some((p) => p.test("cargo test"))).toBe(
       false,
     );
+  });
+});
+
+describe("COMMIT_FORMAT_PATTERNS", () => {
+  it("matches Resolves: MTV-123", () => {
+    expect(
+      COMMIT_FORMAT_PATTERNS.some((p) => p.test("Resolves: MTV-123")),
+    ).toBe(true);
+  });
+
+  it("matches Resolves: None", () => {
+    expect(
+      COMMIT_FORMAT_PATTERNS.some((p) => p.test("Resolves: None")),
+    ).toBe(true);
+  });
+
+  it("matches npm run validate-commits", () => {
+    expect(
+      COMMIT_FORMAT_PATTERNS.some((p) =>
+        p.test("Run npm run validate-commits locally"),
+      ),
+    ).toBe(true);
+  });
+
+  it("matches git commit -s", () => {
+    expect(
+      COMMIT_FORMAT_PATTERNS.some((p) => p.test("Use git commit -s")),
+    ).toBe(true);
+  });
+
+  it("matches Signed-off-by:", () => {
+    expect(
+      COMMIT_FORMAT_PATTERNS.some((p) =>
+        p.test("Signed-off-by: User <u@example.com>"),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not match normal commit discussion text", () => {
+    expect(
+      COMMIT_FORMAT_PATTERNS.some((p) =>
+        p.test("Follow the commit message conventions described in the README"),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("DIRECTORY_TREE_PATTERN", () => {
+  it("matches a src/ directory tree with tree-drawing characters", () => {
+    const tree =
+      "src/\n├── components/\n├── utils/\n├── providers/\n└── plans/\n";
+    expect(DIRECTORY_TREE_PATTERN.test(tree)).toBe(true);
+  });
+
+  it("does not match a tree with fewer than 3 entries", () => {
+    const tree = "src/\n├── components/\n└── utils/\n";
+    expect(DIRECTORY_TREE_PATTERN.test(tree)).toBe(false);
+  });
+
+  it("does not match non-src trees", () => {
+    const tree =
+      "docs/\n├── guide.md\n├── api.md\n├── faq.md\n└── readme.md\n";
+    expect(DIRECTORY_TREE_PATTERN.test(tree)).toBe(false);
   });
 });
 

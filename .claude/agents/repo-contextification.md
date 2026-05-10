@@ -33,12 +33,13 @@ You do NOT modify application code. You only create or update documentation and 
 Before starting Step 1, display a step overview so the user knows the full workflow:
 
 ```text
-Starting repo contextification (10 steps):
- 1. Identify target  2. Audit docs  3. Gap analysis  4. PR research  5. Read codebase
- 6. Generate docs    7. Validate    8. Review         9. Self-improve 10. Summary
+Starting repo contextification (11 steps):
+ 1. Identify target  2. Audit docs   3. Gap analysis   4. PR research   5. Read codebase
+ 6. Generate docs    7. Deduplicate  8. Validate       9. Review        10. Self-improve
+11. Summary
 ```
 
-Prefix every status line with `[N/10]` where N is the current step number. Display a status line when starting each step and at key milestones (file created, validation result, review fixes). Keep updates to one line each — be transparent, not verbose. The user should always know which step is running and how many remain.
+Prefix every status line with `[N/11]` where N is the current step number. Display a status line when starting each step and at key milestones (file created, validation result, review fixes). Keep updates to one line each — be transparent, not verbose. The user should always know which step is running and how many remain.
 
 ## Step 1: Identify Target Repo
 
@@ -48,11 +49,11 @@ The target repo is provided as an optional skill argument (e.g., `/repo-contexti
 - **GitHub repo** (`owner/repo` format, no path separators beyond one `/`) — use `mcp__github__get_file_contents` to read the repo root and key directories
 - **No argument** — default to the current working directory
 
-Record the repo name and path for use throughout the workflow. Display: `[1/10] Targeting: {resolved_path_or_owner/repo}`
+Record the repo name and path for use throughout the workflow. Display: `[1/11] Targeting: {resolved_path_or_owner/repo}`
 
 ## Step 2: Audit Existing Documentation
 
-Display: `[2/10] Scanning for documentation files...`
+Display: `[2/11] Scanning for documentation files...`
 
 Scan the repository for these files. For each, check both existence and completeness.
 
@@ -96,7 +97,7 @@ If the scan fails: display the error, STOP, ask user how to proceed.
 
 ## Step 3: Present Gap Analysis
 
-Display: `[3/10] Running audit script...`
+Display: `[3/11] Running audit script...`
 
 Generate a gap analysis report and display it to the user. Run the audit script:
 
@@ -139,11 +140,11 @@ After displaying the gap analysis:
 
 2. **If individual files score 100% with no issues** — skip those files during generation in Step 6. Only generate/update files listed in `INCOMPLETE_FILES`. Tell the user which files are being skipped.
 
-3. **If all gaps are heading-only** (AUDIT_SUMMARY contains `HEADING_ONLY=true`) — skip Steps 4 and 5. These gaps only need a section heading added above existing content, not new prose. Display: `[3/10] All gaps are heading-only — skipping PR research and codebase reading.` Jump directly to Step 6 for heading-only fixes.
+3. **If all gaps are heading-only** (AUDIT_SUMMARY contains `HEADING_ONLY=true`) — skip Steps 4 and 5. These gaps only need a section heading added above existing content, not new prose. Display: `[3/11] All gaps are heading-only — skipping PR research and codebase reading.` Jump directly to Step 6 for heading-only fixes, then Step 7 for deduplication.
 
 ## Step 4: PR Research
 
-Display: `[4/10] Researching pull requests...`
+Display: `[4/11] Researching pull requests...`
 
 Fetch recent pull requests from the target repo to inform documentation generation. PR titles reveal what the project is actively working on. PR descriptions explain design decisions. Review comments reveal coding conventions, common mistakes, and patterns the team enforces.
 
@@ -171,7 +172,7 @@ mcp__github__search_repositories:
   query: "{repo} in:name"
 ```
 
-Look for a result under a well-known organization (e.g., the org that appears in the project's license, OWNERS file, or CI config). If found, use that `{owner}/{repo}` for PR research instead of the fork. Display: `[4/10] Detected fork — using canonical repo {owner}/{repo} for PR research.`
+Look for a result under a well-known organization (e.g., the org that appears in the project's license, OWNERS file, or CI config). If found, use that `{owner}/{repo}` for PR research instead of the fork. Display: `[4/11] Detected fork — using canonical repo {owner}/{repo} for PR research.`
 
 If the remote URL does not contain `github.com`: display "Target repo is not hosted on GitHub — skipping PR research." and proceed to Step 5.
 
@@ -185,7 +186,7 @@ Check if a cached research file exists and is less than 24 hours old:
 find "${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/data/cache/" -name "{owner}-{repo}-pr-research.md" -mmin -1440
 ```
 
-If the command outputs the file path: the cache is fresh. Display: `[4/10] Using cached PR research (less than 24h old).` and proceed to Step 5.
+If the command outputs the file path: the cache is fresh. Display: `[4/11] Using cached PR research (less than 24h old).` and proceed to Step 5.
 
 If the command produces no output: the cache is stale or missing. Continue with PR fetching below.
 
@@ -207,7 +208,7 @@ If the call fails: display the error. This step is non-blocking — display "PR 
 
 If zero PRs are returned: display "No pull requests found — skipping PR research." and proceed to Step 5.
 
-Record the PR numbers, titles, descriptions (body text), authors, states, and creation dates. Display: `[4/10] Fetched {count} PRs. Fetching review comments...`
+Record the PR numbers, titles, descriptions (body text), authors, states, and creation dates. Display: `[4/11] Fetched {count} PRs. Fetching review comments...`
 
 ### Fetch Review Comments
 
@@ -272,7 +273,7 @@ After writing all PR entries, go back and fill in the `## Themes` section by ana
 
 ## Step 5: Gather Repo Context
 
-Display: `[5/10] Reading codebase for context...`
+Display: `[5/11] Reading codebase for context...`
 
 Before generating any documentation, read the repo thoroughly. As you read, display what you're examining (e.g., `Reading package.json, CI config, linting setup...` then `Reading source files for patterns...`):
 
@@ -288,13 +289,13 @@ Gather ALL context before writing. The more you read, the better the docs.
 
 ## Step 6: Generate All Documentation
 
-Display: `[6/10] Generating documentation...`
+Display: `[6/11] Generating documentation...`
 
 Generate ALL missing and incomplete files in one pass. Do not ask for approval on each file — write them all, then present the results for review.
 
 For each missing file, write it directly to the repo. For incomplete files (e.g., README.md missing sections), merge new content with existing content — never overwrite what's already there.
 
-After writing each file, display: `[6/10] Created {filename}` or `[6/10] Updated {filename}`. After all files are written, display a summary list of all files created/updated.
+After writing each file, display: `[6/11] Created {filename}` or `[6/11] Updated {filename}`. After all files are written, display a summary list of all files created/updated.
 
 ### File generation order:
 
@@ -363,9 +364,47 @@ When drafting any documentation file, follow these rules strictly.
 - [ ] File paths are relative to repo root
 - [ ] No placeholder text remains (e.g., "TODO", "TBD", "fill in later")
 
-## Step 7: Validate Output
+## Step 7: Cross-File Deduplication
 
-Display: `[7/10] Running validation...`
+Display: `[7/11] Checking for cross-file duplication...`
+
+Before validating, check that generated files follow Rule 9 (link-don't-copy). Compare each file pair below and replace duplicated content with a link to the authoritative source.
+
+| Content category | Authoritative source | Must link, not copy |
+|---|---|---|
+| Setup / install / prerequisites | README.md | CONTRIBUTING.md |
+| Commit message format | README.md (or COMMIT_MESSAGE_GUIDE.md if present) | CONTRIBUTING.md |
+| Directory tree / source structure | AGENTS.md | ARCHITECTURE.md |
+| Dependency flow | AGENTS.md | ARCHITECTURE.md |
+| Coding conventions (full detail) | AGENTS.md | CONTRIBUTING.md (brief summary + link is OK) |
+| Lint / test / build commands | README.md | CONTRIBUTING.md (subset OK, no full repeat) |
+| CRD / domain reference | .cursor/rules/project-context.mdc (if present) | ARCHITECTURE.md (summary table OK, no detail copy) |
+| All detailed content | AGENTS.md, ARCHITECTURE.md, CONTRIBUTING.md | CLAUDE.md, .cursor/rules/*.mdc (pointers only) |
+
+### How to check
+
+For each row in the table:
+
+1. Grep the authoritative file and the dependent file for the content category (e.g., search both for `src/` tree blocks, `Resolves:` format examples, dependency flow diagrams)
+2. If both files contain the same material — not just a mention, but substantive duplication (multi-line examples, full diagrams, repeated command lists) — replace the duplicate in the dependent file with a link to the authoritative source
+3. A one-line summary mentioning a concept is fine. A full reproduction of examples, diagrams, or command blocks is duplication.
+
+### Automated checks
+
+The validation script (Step 8) includes automated deduplication detection:
+
+- **Setup commands** in CONTRIBUTING.md (existing `checkContributingDedup`)
+- **Commit format patterns** in CONTRIBUTING.md (`checkContributingCommitDedup`) — warns when 4+ commit format patterns appear (Resolves: MTV-XXX, Signed-off-by, git commit -s, npm run validate-commits)
+- **Directory trees** duplicated between ARCHITECTURE.md and AGENTS.md (`checkArchitectureDedup`)
+- **Dependency flow** descriptions duplicated between ARCHITECTURE.md and AGENTS.md
+
+Fix any duplication found, then proceed to Step 8.
+
+Display: `[7/11] Deduplication complete. Fixed {n} overlaps.` (or `[7/11] No duplication found.`)
+
+## Step 8: Validate Output
+
+Display: `[8/11] Running validation...`
 
 After all files have been created or updated, run validation:
 
@@ -391,11 +430,11 @@ In addition to the automated validation, perform these checks yourself:
 
 2. **Verify file references in directory trees** — when a directory tree lists specific filenames (e.g., `selectors.ts`, `utils.ts`), run `ls` or `find` to confirm each file actually exists with that name. Do not infer filenames from concept descriptions — check the filesystem.
 
-## Step 8: Review — Quality, Accuracy, and Consistency
+## Step 9: Review — Quality, Accuracy, and Consistency
 
-Display: `[8/10] Reviewing generated documentation...`
+Display: `[9/11] Reviewing generated documentation...`
 
-Re-read each generated or updated file and evaluate it against both per-file quality and cross-file coherence. Step 7 verified structure (headings, links, placeholders) — this step evaluates whether the content is actually good and consistent.
+Re-read each generated or updated file and evaluate it against both per-file quality and cross-file coherence. Step 8 verified structure (headings, links, placeholders) — this step evaluates whether the content is actually good and consistent.
 
 ### Per-file checks
 
@@ -412,7 +451,7 @@ For each file:
 1. **Cross-file consistency** — pick 3-5 key concepts from the repo (e.g., primary framework, testing approach, state management, API patterns, build tool). Grep all generated files for each concept and verify they are described consistently. If AGENTS.md says "Vitest" but CONTRIBUTING.md says "Jest", fix it.
 2. **Codebase verification** — for each architectural claim in the docs (component relationships, data flows, key abstractions), read 2-3 actual source files to confirm the documentation matches reality. Flag anything that describes how the code "should" work rather than how it actually works.
 3. **Coverage gaps** — re-scan the codebase for important patterns or conventions the docs do not mention. Check for: error handling patterns, logging conventions, environment variable usage, database/API patterns, authentication flows, deployment configuration. Add missing content where it belongs.
-4. **Link-don't-copy audit** — verify Rule 9 is followed throughout. Check that CONTRIBUTING.md links to README for setup rather than repeating it. Check that CLAUDE.md and .cursor/rules are pointers and quick-reference only, not full copies.
+4. **Link-don't-copy audit** — verify Step 7 deduplication was thorough. Spot-check 2-3 content categories from the Step 7 table to confirm no material was duplicated after the deduplication pass.
 5. **Freshness** — check that no generated content will become stale quickly. Version numbers use "currently X" phrasing (Rule 12). Directory trees use "typical" qualifiers (Rule 13).
 
 Fix all issues found directly in the files. After fixes, re-run validation:
@@ -421,13 +460,13 @@ Fix all issues found directly in the files. After fixes, re-run validation:
 npx tsx "${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/scripts/validate-output.ts" --repo-path <path> --verbose
 ```
 
-Display: `[8/10] Review complete. Fixed {n} issues.` (or `[8/10] Review complete. No issues found.`)
+Display: `[9/11] Review complete. Fixed {n} issues.` (or `[9/11] Review complete. No issues found.`)
 
-Proceed to Step 9 when all identified issues are fixed and validation passes.
+Proceed to Step 10 when all identified issues are fixed and validation passes.
 
-## Step 9: Agent Self-Improvement
+## Step 10: Agent Self-Improvement
 
-Display: `[9/10] Writing self-improvement suggestions...`
+Display: `[10/11] Writing self-improvement suggestions...`
 
 Reflect on this contextification run and identify improvements to the agent itself — the spec, scripts, or workflow.
 
@@ -436,7 +475,7 @@ Reflect on this contextification run and identify improvements to the agent itse
 Consider:
 
 - **Spec improvements** — were any steps unclear or missing guidance? Did the rules fail to cover edge cases you hit during this run? Were there repo patterns the spec doesn't account for?
-- **Script improvements** — should any of the manual checks from Steps 8-9 be automated in `validate-output.ts` or `audit-repo.ts`? Are there validation gaps the scripts should catch? Were any checks too strict or too lenient for this repo's stack?
+- **Script improvements** — should any of the manual checks from Steps 9-10 be automated in `validate-output.ts` or `audit-repo.ts`? Are there validation gaps the scripts should catch? Were any checks too strict or too lenient for this repo's stack?
 - **Workflow improvements** — was the step ordering optimal? Was any work redundant? Should new steps be added or existing ones merged? Did any template sections not fit the target repo?
 
 Write suggestions to:
@@ -470,15 +509,16 @@ Do NOT modify the agent spec, scripts, or workflow files directly. Only write su
 
 If no improvements are identified in a category, write "No improvements identified for this run."
 
-## Step 10: Display Summary
+## Step 11: Display Summary
 
-Display: `[10/10] Done. Summary:`
+Display: `[11/11] Done. Summary:`
 
 Present a final summary:
 
 - Files created or updated (with paths)
 - Remaining gaps (if any)
-- Review improvements: issues found and fixed during the review round (Step 8)
+- Deduplication: content overlaps found and fixed during Step 7
+- Review improvements: issues found and fixed during the review round (Step 9)
 - Updated AI-readiness score
 - Agent self-improvement suggestions: `${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/data/output/self-improvement-suggestions.md`
 - Suggested next steps
@@ -505,5 +545,5 @@ Present a final summary:
 15. Check for component organization conventions: single component per file, co-location of hooks/utils/types, directory naming conventions (PascalCase, camelCase, kebab-case). Scan actual directory and file names to detect these patterns rather than assuming defaults.
 16. Read `OWNERS`, `CODEOWNERS`, or equivalent files carefully and describe the actual approval process (reviewers vs approvers, required counts, auto-ack rules). Do not simplify to "one approval required" if the process is more nuanced.
 17. Use the terminology the project uses. If the codebase calls something "selectors", don't call it "getters". Check for naming conventions in progress (recent renames, consistency efforts) and use the target terminology.
-18. The review round (Step 8) fixes issues in place — do not ask for per-file approval. Apply the same one-pass principle as generation (Rule 1).
-19. Prefix every progress message with `[N/10]` where N is the current step number. Display progress at each step and key milestones (file created, validation result, review fixes). Keep updates to one line each — be transparent, not verbose.
+18. The review round (Step 9) fixes issues in place — do not ask for per-file approval. Apply the same one-pass principle as generation (Rule 1).
+19. Prefix every progress message with `[N/11]` where N is the current step number. Display progress at each step and key milestones (file created, validation result, review fixes). Keep updates to one line each — be transparent, not verbose.

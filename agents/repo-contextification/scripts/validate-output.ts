@@ -6,6 +6,8 @@ import {
   PLACEHOLDER_PATTERNS,
   LINE_LIMITS,
   SETUP_COMMAND_PATTERNS,
+  COMMIT_FORMAT_PATTERNS,
+  DIRECTORY_TREE_PATTERN,
   CI_HEADING_STEMS,
   parseArgs,
   extractHeadings,
@@ -159,6 +161,50 @@ export function checkClaudeMdContextLinks(repoPath: string): string[] {
   ];
 }
 
+export function checkContributingCommitDedup(repoPath: string): string[] {
+  const contributingPath = join(repoPath, "CONTRIBUTING.md");
+  if (!existsSync(contributingPath)) return [];
+
+  const content = readFileSync(contributingPath, "utf-8");
+  let hits = 0;
+  for (const pattern of COMMIT_FORMAT_PATTERNS) {
+    if (pattern.test(content)) hits++;
+  }
+  if (hits < 4) return [];
+
+  return [
+    `CONTRIBUTING.md duplicates commit message format (${hits} patterns matched) — link to README.md#development instead`,
+  ];
+}
+
+export function checkArchitectureDedup(repoPath: string): string[] {
+  const archPath = join(repoPath, "ARCHITECTURE.md");
+  const agentsPath = join(repoPath, "AGENTS.md");
+  if (!existsSync(archPath) || !existsSync(agentsPath)) return [];
+
+  const archContent = readFileSync(archPath, "utf-8");
+  const agentsContent = readFileSync(agentsPath, "utf-8");
+  const warnings: string[] = [];
+
+  if (
+    DIRECTORY_TREE_PATTERN.test(archContent) &&
+    DIRECTORY_TREE_PATTERN.test(agentsContent)
+  ) {
+    warnings.push(
+      "ARCHITECTURE.md duplicates source directory tree from AGENTS.md — link to AGENTS.md instead",
+    );
+  }
+
+  const depFlowPattern = /can import from/i;
+  if (depFlowPattern.test(archContent) && depFlowPattern.test(agentsContent)) {
+    warnings.push(
+      "ARCHITECTURE.md duplicates dependency flow from AGENTS.md — link to AGENTS.md instead",
+    );
+  }
+
+  return warnings;
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help === true) {
@@ -218,6 +264,8 @@ function main() {
 
   warnings.push(...checkLineLimits(repoPath));
   warnings.push(...checkContributingDedup(repoPath));
+  warnings.push(...checkContributingCommitDedup(repoPath));
+  warnings.push(...checkArchitectureDedup(repoPath));
   warnings.push(...checkClaudeMdContextLinks(repoPath));
 
   if (errors.length > 0) {

@@ -7,6 +7,8 @@ import {
   validateMarkdownLinks,
   checkLineLimits,
   checkContributingDedup,
+  checkContributingCommitDedup,
+  checkArchitectureDedup,
   checkClaudeMdContextLinks,
 } from "./validate-output.js";
 import { LINE_LIMITS } from "./lib.js";
@@ -372,5 +374,106 @@ describe("checkClaudeMdContextLinks", () => {
     expect(warnings[0]).toContain("AGENTS.md");
     expect(warnings[0]).toContain("ARCHITECTURE.md");
     expect(warnings[0]).toContain("CONTRIBUTING.md");
+  });
+});
+
+describe("checkContributingCommitDedup", () => {
+  it("returns no warnings when CONTRIBUTING.md does not exist", () => {
+    expect(checkContributingCommitDedup(tempDir)).toEqual([]);
+  });
+
+  it("returns no warnings when CONTRIBUTING.md has a brief commit mention with link", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Commit Format\n\nAll commits require DCO sign-off. See [README](README.md#development) for details.\n",
+    );
+    expect(checkContributingCommitDedup(tempDir)).toEqual([]);
+  });
+
+  it("warns when CONTRIBUTING.md contains full commit format examples", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Commit Format\n\nUse `git commit -s` for sign-off.\n\n```\nResolves: MTV-123\nSigned-off-by: User <u@example.com>\n```\n\nFor no ticket: `Resolves: None`.\n\nValidate with `npm run validate-commits`.\n",
+    );
+    const warnings = checkContributingCommitDedup(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("CONTRIBUTING.md");
+    expect(warnings[0]).toContain("commit message format");
+  });
+
+  it("does not warn when only 1-2 patterns match", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Commits\n\nUse `git commit -s` for DCO sign-off. See README for format details.\n",
+    );
+    expect(checkContributingCommitDedup(tempDir)).toEqual([]);
+  });
+
+  it("does not warn for a concise summary line with links", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Commit Format\n\nAll commits require DCO sign-off (`git commit -s`) and a Resolves line (`Resolves: MTV-XXXX` or `Resolves: None`). See [README](README.md#development) for details.\n",
+    );
+    expect(checkContributingCommitDedup(tempDir)).toEqual([]);
+  });
+});
+
+describe("checkArchitectureDedup", () => {
+  it("returns no warnings when ARCHITECTURE.md does not exist", () => {
+    expect(checkArchitectureDedup(tempDir)).toEqual([]);
+  });
+
+  it("returns no warnings when ARCHITECTURE.md has no directory tree", () => {
+    writeFileSync(
+      join(tempDir, "ARCHITECTURE.md"),
+      "# Architecture\n\nOverview of the system.\n",
+    );
+    writeFileSync(
+      join(tempDir, "AGENTS.md"),
+      "# Agents\n\n```\nsrc/\n├── a/\n├── b/\n├── c/\n└── d/\n```\n",
+    );
+    expect(checkArchitectureDedup(tempDir)).toEqual([]);
+  });
+
+  it("warns when both files contain src/ directory trees", () => {
+    const tree =
+      "```\nsrc/\n├── components/\n├── utils/\n├── providers/\n└── plans/\n```";
+    writeFileSync(
+      join(tempDir, "ARCHITECTURE.md"),
+      `# Architecture\n\n## Source Structure\n\n${tree}\n`,
+    );
+    writeFileSync(
+      join(tempDir, "AGENTS.md"),
+      `# Agents\n\n## Directory Structure\n\n${tree}\n`,
+    );
+    const warnings = checkArchitectureDedup(tempDir);
+    expect(warnings.some((w) => w.includes("directory tree"))).toBe(true);
+  });
+
+  it("returns no warnings when only ARCHITECTURE.md has a tree", () => {
+    const tree =
+      "```\nsrc/\n├── components/\n├── utils/\n├── providers/\n└── plans/\n```";
+    writeFileSync(
+      join(tempDir, "ARCHITECTURE.md"),
+      `# Architecture\n\n${tree}\n`,
+    );
+    writeFileSync(
+      join(tempDir, "AGENTS.md"),
+      "# Agents\n\nNo tree here.\n",
+    );
+    expect(checkArchitectureDedup(tempDir)).toEqual([]);
+  });
+
+  it("warns when both files contain dependency flow descriptions", () => {
+    writeFileSync(
+      join(tempDir, "ARCHITECTURE.md"),
+      "# Architecture\n\nFeature modules can import from shared. Shared code can import from external.\n",
+    );
+    writeFileSync(
+      join(tempDir, "AGENTS.md"),
+      "# Agents\n\nDependency flow: feature → shared. Shared code can import from external libs.\n",
+    );
+    const warnings = checkArchitectureDedup(tempDir);
+    expect(warnings.some((w) => w.includes("dependency flow"))).toBe(true);
   });
 });

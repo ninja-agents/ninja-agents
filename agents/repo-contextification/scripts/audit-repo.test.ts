@@ -3,8 +3,13 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { auditFile, generateReport, generateDryRunPlan } from "./audit-repo.js";
-import type { AuditReport } from "./lib.js";
+import {
+  auditFile,
+  computeAiReadinessScore,
+  generateReport,
+  generateDryRunPlan,
+} from "./audit-repo.js";
+import type { AuditReport, FileCheck } from "./lib.js";
 
 let tempDir: string;
 
@@ -235,6 +240,51 @@ describe("auditFile", () => {
     const result = auditFile(tempDir, "README.md");
     expect(result.headingOnlyGaps).toContain("overview");
     expect(result.score).toBe(94); // 3 full + 0.75 heading-only = 3.75/4 = 93.75, rounds to 94
+  });
+});
+
+describe("computeAiReadinessScore", () => {
+  function makeFile(score: number): FileCheck {
+    return {
+      path: "test.md",
+      exists: true,
+      sections: [],
+      missingSections: [],
+      headingOnlyGaps: [],
+      thinSections: [],
+      boilerplate: false,
+      score,
+    };
+  }
+
+  it("averages file scores", () => {
+    const files = [makeFile(100), makeFile(80)];
+    expect(computeAiReadinessScore(files, false)).toBe(90);
+  });
+
+  it("adds 10-point bonus when all files are complete and docs exist", () => {
+    const files = [makeFile(100), makeFile(100)];
+    expect(computeAiReadinessScore(files, true)).toBe(100);
+    expect(computeAiReadinessScore(files, false)).toBe(100);
+  });
+
+  it("does not award bonus when any file is incomplete", () => {
+    const files = [
+      makeFile(100),
+      makeFile(100),
+      makeFile(100),
+      makeFile(100),
+      makeFile(100),
+      makeFile(100),
+      makeFile(83),
+    ];
+    // Average: (600+83)/7 = 97.6 → 98. Without fix, bonus would push to 100.
+    expect(computeAiReadinessScore(files, true)).toBe(98);
+  });
+
+  it("caps at 100 even with bonus", () => {
+    const files = [makeFile(100)];
+    expect(computeAiReadinessScore(files, true)).toBe(100);
   });
 });
 

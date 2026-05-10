@@ -15,6 +15,17 @@ import {
   findHeadingOnlyGaps,
 } from "./lib.js";
 
+export function computeAiReadinessScore(
+  files: FileCheck[],
+  hasDocs: boolean,
+): number {
+  const totalScore = files.reduce((sum, f) => sum + f.score, 0);
+  const average = Math.round(totalScore / files.length);
+  const allComplete = files.every((f) => f.score === 100);
+  const bonus = hasDocs && allComplete ? 10 : 0;
+  return Math.min(100, average + bonus);
+}
+
 export function auditFile(repoPath: string, filePath: string): FileCheck {
   const fullPath = join(repoPath, filePath);
   const expected = REQUIRED_FILES[filePath] ?? [];
@@ -285,22 +296,18 @@ function main() {
     score: hasCursorRules ? 100 : 0,
   });
 
-  const totalScore = files.reduce((sum, f) => sum + f.score, 0);
-  const aiReadinessScore = Math.round(totalScore / files.length);
-
   const ciSystems = CI_INDICATORS.filter(({ path }) =>
     existsSync(join(repoPath, path)),
   ).map(({ label }) => label);
 
   const docsDir = join(repoPath, "docs");
   const hasDocs = existsSync(docsDir) && readdirSync(docsDir).length > 0;
-  const bonusPoints = hasDocs ? 10 : 0;
 
   const report: AuditReport = {
     repoPath,
     files,
     ciSystems,
-    aiReadinessScore: Math.min(100, aiReadinessScore + bonusPoints),
+    aiReadinessScore: computeAiReadinessScore(files, hasDocs),
     timestamp: new Date().toISOString(),
   };
 

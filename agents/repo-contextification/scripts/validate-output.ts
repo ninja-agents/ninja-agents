@@ -6,8 +6,12 @@ import {
   PLACEHOLDER_PATTERNS,
   LINE_LIMITS,
   SETUP_COMMAND_PATTERNS,
+  CI_HEADING_STEMS,
   parseArgs,
   extractHeadings,
+  extractSections,
+  tokenize,
+  headingMatchesStem,
   headingToSlug,
 } from "./lib.js";
 
@@ -43,15 +47,29 @@ export function checkLineLimits(repoPath: string): string[] {
   return warnings;
 }
 
+function isCiSection(heading: string): boolean {
+  const tokens = tokenize(heading);
+  return CI_HEADING_STEMS.some((stem) => headingMatchesStem(tokens, stem));
+}
+
 export function checkContributingDedup(repoPath: string): string[] {
   const contributingPath = join(repoPath, "CONTRIBUTING.md");
   if (!existsSync(contributingPath)) return [];
 
   const content = readFileSync(contributingPath, "utf-8");
-  const matched = SETUP_COMMAND_PATTERNS.filter((p) => p.test(content));
-  if (matched.length === 0) return [];
+  const sections = extractSections(content);
+  const nonCiText = sections
+    .filter((s) => !isCiSection(s.heading))
+    .map((s) => s.body)
+    .join("\n");
 
-  const commands = matched.map((p) => p.source.replace(/\\b/g, ""));
+  const commands: string[] = [];
+  for (const pattern of SETUP_COMMAND_PATTERNS) {
+    const match = pattern.exec(nonCiText);
+    if (match) commands.push(match[0]);
+  }
+  if (commands.length === 0) return [];
+
   return [
     `CONTRIBUTING.md contains setup commands (${commands.join(", ")}) — link to README.md instead of duplicating`,
   ];
@@ -104,6 +122,33 @@ export function validateMarkdownLinks(
     }
   }
   return errors;
+}
+
+const CLAUDE_MD_EXPECTED_LINKS = [
+  "AGENTS.md",
+  "ARCHITECTURE.md",
+  "CONTRIBUTING.md",
+];
+
+export function checkClaudeMdContextLinks(repoPath: string): string[] {
+  const claudeMdPath = join(repoPath, "CLAUDE.md");
+  if (!existsSync(claudeMdPath)) return [];
+
+  const content = readFileSync(claudeMdPath, "utf-8");
+  const sections = extractSections(content);
+  const contextSection = sections.find((s) =>
+    tokenize(s.heading).some((t) => t.startsWith("context")),
+  );
+  if (!contextSection) return [];
+
+  const missing = CLAUDE_MD_EXPECTED_LINKS.filter(
+    (file) => !contextSection.body.includes(file),
+  );
+  if (missing.length === 0) return [];
+
+  return [
+    `CLAUDE.md Context section is missing links to: ${missing.join(", ")}`,
+  ];
 }
 
 function main() {
@@ -165,6 +210,7 @@ function main() {
 
   warnings.push(...checkLineLimits(repoPath));
   warnings.push(...checkContributingDedup(repoPath));
+  warnings.push(...checkClaudeMdContextLinks(repoPath));
 
   if (errors.length > 0) {
     console.error(`\n${errors.length} error(s) found:`);

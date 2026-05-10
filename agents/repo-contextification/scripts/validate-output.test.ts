@@ -7,6 +7,7 @@ import {
   validateMarkdownLinks,
   checkLineLimits,
   checkContributingDedup,
+  checkClaudeMdContextLinks,
 } from "./validate-output.js";
 import { LINE_LIMITS } from "./lib.js";
 
@@ -218,5 +219,125 @@ describe("checkContributingDedup", () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain("npm install");
     expect(warnings[0]).toContain("npm start");
+  });
+
+  it("warns when CONTRIBUTING.md contains go mod download", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Setup\n\n```bash\ngo mod download\n```",
+    );
+    const warnings = checkContributingDedup(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("go mod download");
+  });
+
+  it("warns when CONTRIBUTING.md contains pip install", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\nRun `pip install -r requirements.txt`.",
+    );
+    const warnings = checkContributingDedup(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("pip install");
+  });
+
+  it("warns when CONTRIBUTING.md contains make install", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\nRun `make install` to build.",
+    );
+    const warnings = checkContributingDedup(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("make install");
+  });
+
+  it("warns when CONTRIBUTING.md contains cargo build", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\nRun `cargo build` to compile.",
+    );
+    const warnings = checkContributingDedup(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("cargo build");
+  });
+
+  it("skips setup commands under CI/Pipeline headings", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Testing\n\nRun `npm test`.\n\n## CI Pipeline\n\nThe CI job runs `npm ci` and `npm install`.\n",
+    );
+    expect(checkContributingDedup(tempDir)).toEqual([]);
+  });
+
+  it("skips setup commands under Prow headings", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## What Prow Does\n\nThe `test-prow-e2e.sh` script installs dependencies with `npm ci`.\n",
+    );
+    expect(checkContributingDedup(tempDir)).toEqual([]);
+  });
+
+  it("still warns for setup commands outside CI sections", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Setup\n\nRun `npm install` to get started.\n\n## CI Pipeline\n\nCI also runs `npm ci`.\n",
+    );
+    const warnings = checkContributingDedup(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("npm install");
+    expect(warnings[0]).not.toContain("npm ci");
+  });
+
+  it("skips commands under Continuous Integration heading", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Continuous Integration\n\nThe workflow runs `go mod download` and `go build`.\n",
+    );
+    expect(checkContributingDedup(tempDir)).toEqual([]);
+  });
+});
+
+describe("checkClaudeMdContextLinks", () => {
+  it("returns no warnings when CLAUDE.md does not exist", () => {
+    expect(checkClaudeMdContextLinks(tempDir)).toEqual([]);
+  });
+
+  it("returns no warnings when all context links are present", () => {
+    writeFileSync(
+      join(tempDir, "CLAUDE.md"),
+      "# Project\n\n## Context\n\n- [Agents](AGENTS.md)\n- [Architecture](ARCHITECTURE.md)\n- [Contributing](CONTRIBUTING.md)\n",
+    );
+    expect(checkClaudeMdContextLinks(tempDir)).toEqual([]);
+  });
+
+  it("warns when context links are missing", () => {
+    writeFileSync(
+      join(tempDir, "CLAUDE.md"),
+      "# Project\n\n## Context\n\n- [Agents](AGENTS.md)\n",
+    );
+    const warnings = checkClaudeMdContextLinks(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("ARCHITECTURE.md");
+    expect(warnings[0]).toContain("CONTRIBUTING.md");
+  });
+
+  it("returns no warnings when CLAUDE.md has no Context section", () => {
+    writeFileSync(
+      join(tempDir, "CLAUDE.md"),
+      "# Project\n\n## Quick Reference\n\nSome rules here.\n",
+    );
+    expect(checkClaudeMdContextLinks(tempDir)).toEqual([]);
+  });
+
+  it("warns when Context section exists but has no links", () => {
+    writeFileSync(
+      join(tempDir, "CLAUDE.md"),
+      "# Project\n\n## Context\n\nSee the documentation for details.\n",
+    );
+    const warnings = checkClaudeMdContextLinks(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("AGENTS.md");
+    expect(warnings[0]).toContain("ARCHITECTURE.md");
+    expect(warnings[0]).toContain("CONTRIBUTING.md");
   });
 });

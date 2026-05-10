@@ -12,6 +12,7 @@ import {
   extractHeadings,
   findMissingSections,
   findThinSections,
+  findHeadingOnlyGaps,
 } from "./lib.js";
 
 export function auditFile(repoPath: string, filePath: string): FileCheck {
@@ -24,6 +25,7 @@ export function auditFile(repoPath: string, filePath: string): FileCheck {
       exists: false,
       sections: [],
       missingSections: expected.map((s) => s.label),
+      headingOnlyGaps: [],
       thinSections: [],
       boilerplate: false,
       score: 0,
@@ -32,13 +34,20 @@ export function auditFile(repoPath: string, filePath: string): FileCheck {
 
   const content = readFileSync(fullPath, "utf-8");
   const headings = extractHeadings(content);
-  const missing = findMissingSections(headings, expected);
+  const allMissing = findMissingSections(headings, expected);
+  const missingExpected = expected.filter((s) => allMissing.includes(s.label));
+  const headingOnly = findHeadingOnlyGaps(content, missingExpected);
+  const missing = allMissing.filter((label) => !headingOnly.includes(label));
   const thin = findThinSections(content, expected);
   const boilerplate = BOILERPLATE_PATTERNS.some((p) => p.test(content));
   const total = expected.length || 1;
-  const fullCredit = total - missing.length - thin.length;
+  const fullCredit =
+    total - missing.length - headingOnly.length - thin.length;
+  const headingOnlyCredit = headingOnly.length * 0.75;
   const halfCredit = thin.length * 0.5;
-  const rawScore = Math.round(((fullCredit + halfCredit) / total) * 100);
+  const rawScore = Math.round(
+    ((fullCredit + headingOnlyCredit + halfCredit) / total) * 100,
+  );
   const score = boilerplate ? Math.min(rawScore, 50) : rawScore;
 
   return {
@@ -46,6 +55,7 @@ export function auditFile(repoPath: string, filePath: string): FileCheck {
     exists: true,
     sections: headings,
     missingSections: missing,
+    headingOnlyGaps: headingOnly,
     thinSections: thin,
     boilerplate,
     score,
@@ -71,10 +81,14 @@ export function generateReport(report: AuditReport): string {
     const status = f.exists ? "Present" : "**MISSING**";
     const score = f.exists ? `${f.score}%` : "N/A";
     const missing = f.missingSections.join(", ");
+    const headingOnly = f.headingOnlyGaps
+      .map((s) => `${s} (heading only)`)
+      .join(", ");
     const thin = f.thinSections.map((s) => `${s} (thin)`).join(", ");
     const boilerplate = f.boilerplate ? "boilerplate detected" : "";
     const issues =
-      [missing, thin, boilerplate].filter(Boolean).join(", ") || "—";
+      [missing, headingOnly, thin, boilerplate].filter(Boolean).join(", ") ||
+      "—";
     lines.push(`| ${f.path} | ${status} | ${score} | ${issues} |`);
   }
 
@@ -119,6 +133,19 @@ export function generateReport(report: AuditReport): string {
     lines.push("");
   }
 
+  const headingOnlyFiles = report.files.filter(
+    (f) => f.exists && !f.boilerplate && f.headingOnlyGaps.length > 0,
+  );
+  if (headingOnlyFiles.length > 0) {
+    lines.push("### Heading-Only Gaps (add section heading)");
+    for (const f of headingOnlyFiles) {
+      lines.push(
+        `- **${f.path}** — content exists but needs heading: ${f.headingOnlyGaps.join(", ")}`,
+      );
+    }
+    lines.push("");
+  }
+
   if (thinFiles.length > 0) {
     lines.push("### Thin Sections (add more content)");
     for (const f of thinFiles) {
@@ -132,6 +159,7 @@ export function generateReport(report: AuditReport): string {
   if (
     missingFiles.length === 0 &&
     incompleteFiles.length === 0 &&
+    headingOnlyFiles.length === 0 &&
     thinFiles.length === 0
   ) {
     lines.push("All documentation files are present and complete.");
@@ -142,15 +170,26 @@ export function generateReport(report: AuditReport): string {
       (f) =>
         f.exists &&
         f.missingSections.length === 0 &&
+        f.headingOnlyGaps.length === 0 &&
         f.thinSections.length === 0,
     )
     .map((f) => f.path);
   const incomplete = report.files
     .filter(
       (f) =>
-        !f.exists || f.missingSections.length > 0 || f.thinSections.length > 0,
+        !f.exists ||
+        f.missingSections.length > 0 ||
+        f.headingOnlyGaps.length > 0 ||
+        f.thinSections.length > 0,
     )
     .map((f) => f.path);
+
+  const allGapsHeadingOnly =
+    incomplete.length > 0 &&
+    missingFiles.length === 0 &&
+    incompleteFiles.length === 0 &&
+    thinFiles.length === 0 &&
+    boilerplateFiles.length === 0;
 
   lines.push(
     "",
@@ -158,6 +197,7 @@ export function generateReport(report: AuditReport): string {
     `SCORE=${report.aiReadinessScore}`,
     `COMPLETE_FILES=${complete.join(",")}`,
     `INCOMPLETE_FILES=${incomplete.join(",")}`,
+    `HEADING_ONLY=${allGapsHeadingOnly}`,
     `AUDIT_SUMMARY -->`,
   );
 
@@ -181,10 +221,16 @@ export function generateDryRunPlan(report: AuditReport): string {
       lines.push(
         `- **REWRITE** \`${f.path}\` — boilerplate/template content detected`,
       );
-    } else if (f.missingSections.length > 0 || f.thinSections.length > 0) {
+    } else if (
+      f.missingSections.length > 0 ||
+      f.headingOnlyGaps.length > 0 ||
+      f.thinSections.length > 0
+    ) {
       const actions: string[] = [];
       if (f.missingSections.length > 0)
         actions.push(`add sections: ${f.missingSections.join(", ")}`);
+      if (f.headingOnlyGaps.length > 0)
+        actions.push(`add headings: ${f.headingOnlyGaps.join(", ")}`);
       if (f.thinSections.length > 0)
         actions.push(`expand sections: ${f.thinSections.join(", ")}`);
       lines.push(`- **UPDATE** \`${f.path}\` — ${actions.join("; ")}`);
@@ -233,6 +279,7 @@ function main() {
     exists: hasCursorRules,
     sections: [],
     missingSections: hasCursorRules ? [] : ["cursor rules"],
+    headingOnlyGaps: [],
     thinSections: [],
     boilerplate: false,
     score: hasCursorRules ? 100 : 0,

@@ -139,6 +139,8 @@ After displaying the gap analysis:
 
 2. **If individual files score 100% with no issues** — skip those files during generation in Step 6. Only generate/update files listed in `INCOMPLETE_FILES`. Tell the user which files are being skipped.
 
+3. **If all gaps are heading-only** (AUDIT_SUMMARY contains `HEADING_ONLY=true`) — skip Steps 4 and 5. These gaps only need a section heading added above existing content, not new prose. Display: `[3/10] All gaps are heading-only — skipping PR research and codebase reading.` Jump directly to Step 6 for heading-only fixes.
+
 ## Step 4: PR Research
 
 Display: `[4/10] Researching pull requests...`
@@ -161,6 +163,15 @@ Parse the remote URL to extract `{owner}` and `{repo}`:
 - SSH: `git@github.com:{owner}/{repo}[.git]`
 
 Strip any trailing `.git` suffix.
+
+**Fork detection:** If no `upstream` remote exists and `origin` looks like a personal fork (the owner is a user account, not an organization — e.g., `username/repo` rather than `openshift/repo`), search GitHub for the canonical repo:
+
+```
+mcp__github__search_repositories:
+  query: "{repo} in:name"
+```
+
+Look for a result under a well-known organization (e.g., the org that appears in the project's license, OWNERS file, or CI config). If found, use that `{owner}/{repo}` for PR research instead of the fork. Display: `[4/10] Detected fork — using canonical repo {owner}/{repo} for PR research.`
 
 If the remote URL does not contain `github.com`: display "Target repo is not hosted on GitHub — skipping PR research." and proceed to Step 5.
 

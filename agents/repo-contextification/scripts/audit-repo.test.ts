@@ -185,6 +185,57 @@ describe("auditFile", () => {
     expect(result.sections).toContain("dev setup");
     expect(result.sections).toContain("testing");
   });
+
+  it("detects heading-only gaps when content exists without heading", () => {
+    const content = [
+      "# My Project",
+      "",
+      "A detailed description of the project with overview content. " +
+        "A".repeat(60),
+      "",
+      "## Quick Start",
+      "",
+      "B".repeat(60),
+      "",
+      "## Prerequisites",
+      "",
+      "C".repeat(60),
+      "",
+      "## Contributing",
+      "",
+      "D".repeat(60),
+    ].join("\n");
+    writeFileSync(join(tempDir, "README.md"), content);
+
+    const result = auditFile(tempDir, "README.md");
+    expect(result.headingOnlyGaps).toContain("overview");
+    expect(result.missingSections).not.toContain("overview");
+  });
+
+  it("gives heading-only gaps 75% credit in score", () => {
+    const content = [
+      "# My Project",
+      "",
+      "A detailed description about this project. " + "A".repeat(60),
+      "",
+      "## Quick Start",
+      "",
+      "B".repeat(60),
+      "",
+      "## Prerequisites",
+      "",
+      "C".repeat(60),
+      "",
+      "## Contributing",
+      "",
+      "D".repeat(60),
+    ].join("\n");
+    writeFileSync(join(tempDir, "README.md"), content);
+
+    const result = auditFile(tempDir, "README.md");
+    expect(result.headingOnlyGaps).toContain("overview");
+    expect(result.score).toBe(94); // 3 full + 0.75 heading-only = 3.75/4 = 93.75, rounds to 94
+  });
 });
 
 describe("generateReport", () => {
@@ -200,6 +251,7 @@ describe("generateReport", () => {
           exists: true,
           sections: ["overview"],
           missingSections: ["quick start"],
+          headingOnlyGaps: [],
           thinSections: [],
           boilerplate: false,
           score: 50,
@@ -209,6 +261,7 @@ describe("generateReport", () => {
           exists: false,
           sections: [],
           missingSections: ["dev setup", "coding standards"],
+          headingOnlyGaps: [],
           thinSections: [],
           boilerplate: false,
           score: 0,
@@ -255,6 +308,7 @@ describe("generateReport", () => {
           exists: true,
           sections: ["overview"],
           missingSections: [],
+          headingOnlyGaps: [],
           thinSections: ["overview"],
           boilerplate: false,
           score: 50,
@@ -264,6 +318,50 @@ describe("generateReport", () => {
     const output = generateReport(report);
     expect(output).toContain("### Thin Sections");
     expect(output).toContain("overview");
+  });
+
+  it("includes heading-only gaps in the recommendations", () => {
+    const report = makeReport({
+      files: [
+        {
+          path: "README.md",
+          exists: true,
+          sections: ["quick start"],
+          missingSections: [],
+          headingOnlyGaps: ["overview"],
+          thinSections: [],
+          boilerplate: false,
+          score: 94,
+        },
+      ],
+    });
+    const output = generateReport(report);
+    expect(output).toContain("### Heading-Only Gaps");
+    expect(output).toContain("overview");
+  });
+
+  it("sets HEADING_ONLY=true when all gaps are heading-only", () => {
+    const report = makeReport({
+      files: [
+        {
+          path: "README.md",
+          exists: true,
+          sections: ["quick start"],
+          missingSections: [],
+          headingOnlyGaps: ["overview"],
+          thinSections: [],
+          boilerplate: false,
+          score: 94,
+        },
+      ],
+    });
+    const output = generateReport(report);
+    expect(output).toContain("HEADING_ONLY=true");
+  });
+
+  it("sets HEADING_ONLY=false when other gap types exist", () => {
+    const output = generateReport(makeReport());
+    expect(output).toContain("HEADING_ONLY=false");
   });
 
   it("includes AUDIT_SUMMARY comment with machine-readable data", () => {
@@ -294,6 +392,7 @@ describe("generateReport", () => {
           exists: true,
           sections: ["overview"],
           missingSections: [],
+          headingOnlyGaps: [],
           thinSections: [],
           boilerplate: false,
           score: 100,
@@ -327,6 +426,7 @@ describe("generateDryRunPlan", () => {
           exists: false,
           sections: [],
           missingSections: ["overview"],
+          headingOnlyGaps: [],
           thinSections: [],
           boilerplate: false,
           score: 0,
@@ -345,6 +445,7 @@ describe("generateDryRunPlan", () => {
           exists: true,
           sections: ["overview"],
           missingSections: ["quick start"],
+          headingOnlyGaps: [],
           thinSections: [],
           boilerplate: false,
           score: 50,
@@ -364,6 +465,7 @@ describe("generateDryRunPlan", () => {
           exists: true,
           sections: ["context"],
           missingSections: [],
+          headingOnlyGaps: [],
           thinSections: [],
           boilerplate: false,
           score: 100,
@@ -382,6 +484,7 @@ describe("generateDryRunPlan", () => {
           exists: true,
           sections: ["overview"],
           missingSections: [],
+          headingOnlyGaps: [],
           thinSections: [],
           boilerplate: true,
           score: 50,
@@ -401,6 +504,7 @@ describe("generateDryRunPlan", () => {
           exists: true,
           sections: ["overview"],
           missingSections: [],
+          headingOnlyGaps: [],
           thinSections: ["overview"],
           boilerplate: false,
           score: 50,
@@ -409,6 +513,26 @@ describe("generateDryRunPlan", () => {
     });
     const output = generateDryRunPlan(report);
     expect(output).toContain("expand sections: overview");
+  });
+
+  it("includes add headings action for heading-only gaps", () => {
+    const report = makeReport({
+      files: [
+        {
+          path: "README.md",
+          exists: true,
+          sections: ["quick start"],
+          missingSections: [],
+          headingOnlyGaps: ["overview"],
+          thinSections: [],
+          boilerplate: false,
+          score: 94,
+        },
+      ],
+    });
+    const output = generateDryRunPlan(report);
+    expect(output).toContain("**UPDATE** `README.md`");
+    expect(output).toContain("add headings: overview");
   });
 
   it("includes dry-run footer", () => {

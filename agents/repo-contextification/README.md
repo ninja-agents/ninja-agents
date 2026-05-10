@@ -43,7 +43,7 @@ npm run context:test
 ## How It Works
 
 1. **Identify target** — specify a local path or GitHub `owner/repo`
-2. **Audit existing docs** — scan for README.md, CONTRIBUTING.md, AGENTS.md, ARCHITECTURE.md, .coderabbit.yaml, CLAUDE.md, .cursor/rules/*.mdc
+2. **Audit existing docs** — scan for README.md, CONTRIBUTING.md, AGENTS.md, ARCHITECTURE.md, .coderabbit.yaml, CLAUDE.md, .cursor/rules/\*.mdc
 3. **Gap analysis** — present a report with completeness scores and AI-readiness rating
 4. **PR research** — fetch recent PRs for context on active development, conventions, and review patterns (cached 24h)
 5. **Generate docs** — write all missing/incomplete files in one pass (skips complete files)

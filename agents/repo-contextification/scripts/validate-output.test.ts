@@ -17,7 +17,11 @@ afterEach(() => {
 
 describe("validateMarkdownLinks", () => {
   it("returns no errors for content with no links", () => {
-    const errors = validateMarkdownLinks("Just plain text.", tempDir, "README.md");
+    const errors = validateMarkdownLinks(
+      "Just plain text.",
+      tempDir,
+      "README.md",
+    );
     expect(errors).toEqual([]);
   });
 
@@ -58,14 +62,20 @@ describe("validateMarkdownLinks", () => {
   });
 
   it("validates cross-file anchor links", () => {
-    writeFileSync(join(tempDir, "CONTRIBUTING.md"), "# Contributing\n\n## Dev Setup\n\nContent.");
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Dev Setup\n\nContent.",
+    );
     const content = "[Setup](CONTRIBUTING.md#dev-setup)";
     const errors = validateMarkdownLinks(content, tempDir, "README.md");
     expect(errors).toEqual([]);
   });
 
   it("detects broken cross-file anchor links", () => {
-    writeFileSync(join(tempDir, "CONTRIBUTING.md"), "# Contributing\n\n## Dev Setup");
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Dev Setup",
+    );
     const content = "[Testing](CONTRIBUTING.md#testing)";
     const errors = validateMarkdownLinks(content, tempDir, "README.md");
     expect(errors).toHaveLength(1);

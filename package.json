@@ -1,6 +1,5 @@
 {
   "name": "ninja-agents",
-  "private": true,
   "type": "module",
   "scripts": {
     "lint": "eslint .",

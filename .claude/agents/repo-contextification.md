@@ -83,7 +83,7 @@ If the scan fails: display the error, STOP, ask user how to proceed.
 Generate a gap analysis report and display it to the user. Run the audit script:
 
 ```bash
-npx tsx agents/repo-contextification/scripts/audit-repo.ts --repo-path <path> --output agents/repo-contextification/data/output/audit-report.md
+npx tsx "${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/scripts/audit-repo.ts" --repo-path <path> --output "${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/data/output/audit-report.md"
 ```
 
 If running against a GitHub repo (not local), pass `--github owner/repo` instead of `--repo-path`.
@@ -108,7 +108,7 @@ The report includes a hidden `<!-- AUDIT_SUMMARY ... -->` block with machine-rea
 To preview without writing files, add `--dry-run`:
 
 ```bash
-npx tsx agents/repo-contextification/scripts/audit-repo.ts --repo-path <path> --dry-run
+npx tsx "${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/scripts/audit-repo.ts" --repo-path <path> --dry-run
 ```
 
 In dry-run mode, a "Dry-Run Plan" section shows every file that WOULD be created, updated, or skipped. Present the plan and ask the user if they want to proceed.
@@ -136,6 +136,7 @@ git -C {repo_path} remote get-url upstream 2>/dev/null || git -C {repo_path} rem
 ```
 
 Parse the remote URL to extract `{owner}` and `{repo}`:
+
 - HTTPS: `https://github.com/{owner}/{repo}[.git]`
 - SSH: `git@github.com:{owner}/{repo}[.git]`
 
@@ -150,7 +151,7 @@ If neither `upstream` nor `origin` remotes exist: display "No GitHub remote foun
 Check if a cached research file exists and is less than 24 hours old:
 
 ```bash
-find agents/repo-contextification/data/cache/ -name "{owner}-{repo}-pr-research.md" -mmin -1440
+find "${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/data/cache/" -name "{owner}-{repo}-pr-research.md" -mmin -1440
 ```
 
 If the command outputs the file path: the cache is fresh. Display "Using cached PR research (less than 24h old)." and proceed to Step 5.
@@ -197,7 +198,7 @@ If individual review comment calls fail: skip that PR's comments silently. Do no
 
 ### Write Research File
 
-Write the research file to `agents/repo-contextification/data/cache/{owner}-{repo}-pr-research.md` with this format:
+Write the research file to `${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/data/cache/{owner}-{repo}-pr-research.md` with this format:
 
 ```markdown
 # PR Research: {owner}/{repo}
@@ -248,7 +249,7 @@ Before generating any documentation, read the repo thoroughly:
 - Check CI config for build/test/deploy patterns (`.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `OWNERS`)
 - Read source files to understand key patterns (imports, component structure, state management)
 - Check linting/formatting config (`.eslintrc*`, `.prettierrc*`, `.editorconfig`)
-- Read the PR research file at `agents/repo-contextification/data/cache/{owner}-{repo}-pr-research.md` if it exists. Use PR titles and descriptions to understand active development areas. Use review comments to identify coding conventions and patterns the team enforces during review. This context improves CONTRIBUTING.md (PR process, review patterns), AGENTS.md (code patterns, review guidelines), and ARCHITECTURE.md (active components, data flow).
+- Read the PR research file at `${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/data/cache/{owner}-{repo}-pr-research.md` if it exists. Use PR titles and descriptions to understand active development areas. Use review comments to identify coding conventions and patterns the team enforces during review. This context improves CONTRIBUTING.md (PR process, review patterns), AGENTS.md (code patterns, review guidelines), and ARCHITECTURE.md (active components, data flow).
 
 Gather ALL context before writing. The more you read, the better the docs.
 
@@ -330,7 +331,7 @@ When drafting any documentation file, follow these rules strictly.
 After all files have been created or updated, run validation:
 
 ```bash
-npx tsx agents/repo-contextification/scripts/validate-output.ts --repo-path <path> --verbose
+npx tsx "${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/scripts/validate-output.ts" --repo-path <path> --verbose
 ```
 
 - Exit 0: Validation passed. Proceed.
@@ -366,7 +367,7 @@ For each file, check:
 Fix all issues found directly in the files. After fixes, re-run validation:
 
 ```bash
-npx tsx agents/repo-contextification/scripts/validate-output.ts --repo-path <path> --verbose
+npx tsx "${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/scripts/validate-output.ts" --repo-path <path> --verbose
 ```
 
 Proceed to Step 10 when all identified issues are fixed and validation passes.
@@ -384,7 +385,7 @@ Step back and examine the documentation as an interconnected system. The first r
 Fix all issues found. After fixes, re-run validation:
 
 ```bash
-npx tsx agents/repo-contextification/scripts/validate-output.ts --repo-path <path> --verbose
+npx tsx "${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/scripts/validate-output.ts" --repo-path <path> --verbose
 ```
 
 Proceed to Step 11 when all identified issues are fixed and validation passes.
@@ -402,7 +403,7 @@ Consider:
 Write suggestions to:
 
 ```bash
-agents/repo-contextification/data/output/self-improvement-suggestions.md
+${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/data/output/self-improvement-suggestions.md
 ```
 
 Use this format:
@@ -438,7 +439,7 @@ Present a final summary:
 - Remaining gaps (if any)
 - Review improvements: issues found and fixed during review rounds (Steps 9-10)
 - Updated AI-readiness score
-- Agent self-improvement suggestions: `agents/repo-contextification/data/output/self-improvement-suggestions.md`
+- Agent self-improvement suggestions: `${CLAUDE_PLUGIN_ROOT:-.}/agents/repo-contextification/data/output/self-improvement-suggestions.md`
 - Suggested next steps
 
 ## Rules

@@ -1,0 +1,23 @@
+{
+  "name": "ninja-agents",
+  "description": "AI agent that audits repos for documentation completeness and scaffolds missing files",
+  "author": {
+    "name": "ninja-agents",
+    "url": "https://github.com/ninja-agents"
+  },
+  "repository": "https://github.com/ninja-agents/ninja-agents",
+  "license": "MIT",
+  "keywords": ["documentation", "audit", "ai-readiness", "scaffolding"],
+  "skills": "./.claude/skills/repo-contextification/",
+  "agents": "./.claude/agents/",
+  "mcpServers": "./plugin-mcp.json",
+  "hooks": "./hooks/hooks.json",
+  "userConfig": {
+    "github_pat": {
+      "type": "string",
+      "title": "GitHub Personal Access Token",
+      "description": "Required for PR research and remote repo audits. Create at github.com/settings/tokens",
+      "sensitive": true
+    }
+  }
+}

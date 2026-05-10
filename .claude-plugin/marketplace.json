@@ -1,0 +1,15 @@
+{
+  "name": "ninja-agents",
+  "description": "AI agents for engineering team workflows",
+  "owner": {
+    "name": "ninja-agents",
+    "url": "https://github.com/ninja-agents"
+  },
+  "plugins": [
+    {
+      "name": "ninja-agents",
+      "source": ".",
+      "description": "Audit repo docs and AI-readiness, scaffold missing files"
+    }
+  ]
+}

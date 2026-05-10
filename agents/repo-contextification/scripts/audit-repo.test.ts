@@ -55,7 +55,10 @@ describe("auditFile", () => {
   });
 
   it("detects missing sections", () => {
-    writeFileSync(join(tempDir, "README.md"), "# Project\n\n## Overview\n\n" + "x".repeat(60));
+    writeFileSync(
+      join(tempDir, "README.md"),
+      "# Project\n\n## Overview\n\n" + "x".repeat(60),
+    );
 
     const result = auditFile(tempDir, "README.md");
     expect(result.exists).toBe(true);
@@ -65,7 +68,9 @@ describe("auditFile", () => {
   });
 
   it("detects thin sections", () => {
-    const content = "# Project\n\n## Overview\n\nToo short.\n\n## Quick Start\n\n" + "x".repeat(60);
+    const content =
+      "# Project\n\n## Overview\n\nToo short.\n\n## Quick Start\n\n" +
+      "x".repeat(60);
     writeFileSync(join(tempDir, "README.md"), content);
 
     const result = auditFile(tempDir, "README.md");
@@ -101,7 +106,10 @@ describe("auditFile", () => {
   });
 
   it("returns empty sections for files with no expected sections", () => {
-    writeFileSync(join(tempDir, ".coderabbit.yaml"), "reviews:\n  enabled: true");
+    writeFileSync(
+      join(tempDir, ".coderabbit.yaml"),
+      "reviews:\n  enabled: true",
+    );
 
     const result = auditFile(tempDir, ".coderabbit.yaml");
     expect(result.exists).toBe(true);
@@ -110,7 +118,10 @@ describe("auditFile", () => {
   });
 
   it("populates the sections array with found headings", () => {
-    writeFileSync(join(tempDir, "CONTRIBUTING.md"), "# Contributing\n\n## Dev Setup\n\n## Testing");
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Dev Setup\n\n## Testing",
+    );
 
     const result = auditFile(tempDir, "CONTRIBUTING.md");
     expect(result.sections).toContain("contributing");
@@ -216,7 +227,9 @@ describe("generateReport", () => {
       ],
     });
     const output = generateReport(report);
-    expect(output).toContain("All documentation files are present and complete.");
+    expect(output).toContain(
+      "All documentation files are present and complete.",
+    );
   });
 });
 

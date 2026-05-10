@@ -20,6 +20,7 @@ Ask:
 
 - **What does this agent do?** — one-sentence description of the agent's purpose
 - **What are the main steps?** — the high-level workflow (e.g., "fetch data, process it, generate output")
+- **What should this agent NOT do?** — common anti-patterns to prevent. Suggest defaults based on the workflow: for script-based agents, suggest "Do NOT format the output yourself — the script handles formatting." For doc-only agents, suggest "Do NOT modify application code."
 
 ### 1.2 Data Sources & Scripts
 
@@ -35,6 +36,18 @@ Ask:
   - Python — generates `requirements.txt` and starter script
   - Shell — generates starter `.sh` script
   - None — prompt-only agent, no supporting scripts
+
+**Conditional questions** (only ask when MCP servers are selected):
+
+- **What data fields does the agent need from each source?** Suggest common defaults per platform. The user can accept defaults or customize:
+  - GitHub: `number, title, repo, state, created_at, merged_at, html_url`
+  - GitLab: `iid, title, project_path, state, created_at, merged_at, web_url`
+  - Jira: `key, summary, status, resolution, issuetype, priority, assignee`
+- **Could any data source return 100+ results per query?** Options: Yes / No / Unsure. Default: No for most agents, Yes if Jira is selected and the description mentions "all tickets" or "all issues".
+
+**Conditional question** (only when 2+ data sources selected):
+
+- **Are there dependencies between data sources?** — e.g., "Does fetching from source B depend on results from source A?" Default: No (all sources fetched in parallel as a single batch).
 
 ### 1.3 Config & Data
 
@@ -64,6 +77,7 @@ Ask:
 - **Should Claude auto-invoke this?** Or manual-only via `/command`?
   - Auto-invoke (default) — Claude detects when to use it from conversation
   - Manual-only (`disable-model-invocation: true`) — only runs when user types the command. Recommended for agents with side effects (deploys, sends messages, modifies external systems).
+- **Does the skill accept an argument?** — e.g., a path, a date, a repo name. If yes: what is the argument and is it required or optional? Default: no. Example: repo-contextification takes an optional `<path-or-owner/repo>` argument.
 - **Does the output need validation?** If yes, what kind? (e.g., link checking, schema validation, format verification). Default: yes for agents that produce structured output.
 
 ## Phase 2: Generate Files
@@ -129,28 +143,197 @@ memory: { memory or omit if none }
 
 {Role statement — one sentence defining what the agent does and doesn't do.}
 
+You do NOT {anti-pattern from Phase 1.1 — e.g., "format the report yourself. The TypeScript script handles all filtering, nesting, and formatting deterministically."}.
+````
+
+**If the agent has 5+ steps**, add a Progress Communication section immediately after the role statement:
+
+````markdown
+## Progress Communication
+
+Before starting Step 1, display a step overview so the user knows the full workflow:
+
+\```text
+Starting {name} ({N} steps):
+ 1. {Step1}  2. {Step2}  3. {Step3}  ...
+\```
+
+Prefix every status line with `[N/{total}]` where N is the current step number. Display a status line when starting each step and at key milestones. Keep updates to one line each — be transparent, not verbose.
+````
+
+Then generate the workflow steps:
+
+````markdown
 ## Step 1: {Setup/Read Config}
 
 {Read config from `agents/{name}/data/config.json` (if applicable).
 Calculate parameters (dates, filters, etc.).
 Validate prerequisites (required files exist, MCP servers respond).}
+````
 
-## Step 2: {Fetch/Gather Data}
+**If a skill argument was defined**, add conditional handling at the start of Step 1:
 
-{Main data-gathering workflow. Be prescriptive with numbered sub-steps.
-Batch independent tool calls in parallel: "Launch ALL of these in a single parallel tool call:"
-Include explicit error handling: "If X fails: display the error, STOP, ask user how to proceed."}
+````markdown
+If `${argument-name}` was provided, use it. Otherwise {default behavior or ask user}.
+````
+
+### Data Fetching Steps — MCP Tool Call Templates
+
+Generate the data-fetching step(s) using the batch structure and MCP tool call templates below.
+
+**If no data dependencies exist** (or single data source), generate one batch:
+
+````markdown
+## Step 2: Fetch Data
+
+Launch ALL of these in a single parallel tool call:
+````
+
+**If data dependencies exist**, generate multiple batches with validation between them:
+
+````markdown
+## Step 2: Fetch Data (Batch 1)
+
+Launch ALL of these in a single parallel tool call:
+
+{...tool calls for independent sources...}
+
+**After Batch 1 returns, STOP and validate:**
+
+- {Data-source-specific checks — see below}
+
+Only proceed to Batch 2 after validation passes.
+
+## Step 3: Fetch Data (Batch 2)
+
+Launch ALL of these in a single parallel tool call:
+
+{...tool calls for dependent sources...}
+````
+
+**Include these platform-specific MCP tool call blocks** based on selected servers:
+
+For **GitHub MCP**:
+
+````markdown
+**GitHub {PRs/commits/etc.}** — one query per {entity}:
+
+\```
+mcp__github__search_pull_requests:
+  query: "author:{username} is:merged merged:{seven_days_ago}..{today}"
+\```
+````
+
+For **GitLab MCP**:
+
+````markdown
+**GitLab {MRs/commits/etc.}** — one query per {entity}:
+
+\```
+mcp__gitlab__list_merge_requests:
+  author_username: {username}
+  scope: "all"              # REQUIRED — without this, results may be empty
+  state: "merged"
+  updated_after: {seven_days_ago}  # ISO-8601: YYYY-MM-DDT00:00:00Z
+  per_page: 100
+\```
+````
+
+For **Jira/Atlassian MCP**:
+
+````markdown
+**Jira tickets** — one query per {entity}:
+
+\```
+mcp__atlassian__searchJiraIssuesUsingJql:
+  cloudId: "{jira.cloud_id}"
+  jql: '{JQL query based on agent purpose}'
+  maxResults: 100
+  fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "issuetype", "priority", "updated", "created"]
+  responseContentFormat: "markdown"
+\```
+````
+
+Adapt the tool names, parameters, and query patterns to the agent's actual purpose. These are starting templates — the exact query strings depend on what the agent fetches.
+
+### Pagination Subsection
+
+**If the user indicated 100+ results are possible**, add a pagination subsection within the data-fetching step:
+
+````markdown
+### Pagination
+
+If any query returns exactly 100 results, paginate using `nextPageToken`:
+
+\```
+mcp__atlassian__searchJiraIssuesUsingJql:
+  cloudId: "{jira.cloud_id}"
+  jql: '{same JQL}'
+  maxResults: 100
+  nextPageToken: "{token from previous response}"
+\```
+
+Repeat until fewer than 100 results are returned. Combine all pages before proceeding.
+````
+
+**If pagination is not needed**, add a comment: `<!-- Pagination: Not needed — each query returns <100 results. If data volume grows, see sprint-retro.md Step 2 for the pagination pattern. -->`
 
 ### Validation Checkpoint
 
+Generate data-source-specific checks based on selected MCP servers:
+
+````markdown
+### Validation Checkpoint
+
 After data collection, verify:
+````
 
-- {Expected data is present (e.g., "At least one PR was returned")}
-- {Data quality checks (e.g., "No duplicate entries")}
+Include the relevant checks from this list:
 
+- **GitHub**: `- Count total PRs returned. If < 5: display warning, ask user whether to retry or proceed.`
+- **GitLab**: `- Verify GitLab queries returned results (not empty — missing \`scope: "all"\` can cause this).`
+- **Jira**: `- Check all Jira queries succeeded (no errors). If ALL queries returned 0 tickets combined: display warning, STOP and ask user.`
+- **General**: `- If any MCP call returned an error: display the error, STOP, ask user how to proceed.`
+
+````markdown
 If validation fails, display what's missing and STOP.
+````
 
-## Step 3: {Process/Generate Output}
+### Save to CSV Step (if MCP data sources + scripts)
+
+**If the agent uses MCP data sources and has TypeScript/Python scripts**, generate a "Save to CSV" step between data fetching and processing. Use the data fields from Phase 1.2:
+
+````markdown
+## Step N: Save to CSV
+
+Save results to `agents/{name}/data/cache/` using these exact schemas.
+
+### {source}-{data-type}.csv
+
+Header: `{comma-separated field names from Phase 1.2}`
+
+| Field | Source | Notes |
+| ----- | ------ | ----- |
+| `{field1}` | {JSON path or API field} | {type, quoting rule, or "empty if none"} |
+| `{field2}` | {JSON path or API field} | {notes} |
+
+<!-- TODO: Define dedup rules. Example from weekly-team-update:
+"If the same PR appears in both merged and open searches, keep the merged version."
+If your agent fetches overlapping data sets, specify which version wins. -->
+
+**CSV quoting:** wrap any field containing a comma in double quotes. Escape internal double quotes by doubling them.
+
+### last-updated.txt
+
+Write current ISO-8601 timestamp.
+````
+
+Generate one CSV schema subsection per data source. Use the field names the user confirmed in Phase 1.2.
+
+### Processing Step
+
+````markdown
+## Step N: {Process/Generate Output}
 
 {Call the processing script with explicit arguments.
 Document exact command, arguments, and exit codes.}
@@ -229,6 +412,8 @@ mkdir -p .claude/skills/{skill-name}
 ---
 name: {skill-name}
 description: {One-line description}
+{argument-hint: [{argument-description}]  # if skill accepts an argument}
+{arguments: [{argument-name}]             # if skill accepts an argument}
 user-invocable: true
 {disable-model-invocation: true  # if manual-only}
 ---
@@ -238,7 +423,7 @@ user-invocable: true
 ## Usage
 
 \```bash
-/{skill-name}
+/{skill-name} {<argument-description>  # if skill accepts an argument}
 \```
 
 ## What This Does
@@ -458,6 +643,30 @@ main();
 
 Adapt both scripts to the agent's actual workflow — replace placeholders with real logic where the agent's purpose makes it obvious (e.g., a CSV-processing agent should have CSV loading scaffolded). Keep the scripts under 100 lines each at scaffolding time.
 
+**Starter test file** (TypeScript agents only) — generate `agents/{name}/scripts/{main-script}.test.ts`:
+
+```typescript
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+describe("{main-script}", () => {
+  describe("config loading", () => {
+    it("loads a valid config file", () => {
+      const configPath = resolve(import.meta.dirname, "../data/config.json");
+      const raw = readFileSync(configPath, "utf-8");
+      const config = JSON.parse(raw) as Record<string, unknown>;
+      expect(config).toBeDefined();
+      // TODO: Add assertions for required config fields
+    });
+  });
+
+  // TODO: Add tests for data parsing, CSV handling, output generation
+});
+```
+
+Keep the test file under 50 lines at scaffolding time. Use patterns from `agents/sprint-retro/scripts/generate-sprint-retro.test.ts` for helper functions and test structure. The test should be immediately runnable with `npm run {name}:test`.
+
 ### 2.7 Update Index Files
 
 Append a row to each of these tables:
@@ -647,9 +856,30 @@ The repo uses ESLint (flat config) + Prettier at the root. All generated TypeScr
 - Validate BEFORE displaying results — never show unvalidated output
 - Exit 0 = pass, exit 1 = errors found
 
+### Data Schema & Deduplication
+
+- Define exact CSV headers with a field-mapping table (see `weekly-team-update.md` Step 4)
+- Specify quoting rules: wrap comma-containing fields in double quotes, escape internal quotes by doubling
+- Document dedup rules explicitly: which version wins when duplicates appear across queries (e.g., "keep merged over open")
+- Include source-field mapping for each CSV column (JSON path → CSV field)
+- One CSV file per data source — don't mix GitHub and Jira data in the same file
+
+### Pagination
+
+- If any query could return 100+ results, document pagination with `nextPageToken` (see `sprint-retro.md` Step 2)
+- State the expected data volume per query so future maintainers know when pagination becomes relevant
+- Always combine all pages before proceeding to the next step
+
+### Batch Parallelism
+
+- Group independent tool calls into explicit batches: "Launch ALL of these in a single parallel tool call:"
+- Add a validation checkpoint between dependent batches — never proceed to Batch 2 without validating Batch 1
+- Number batches (Batch 1, Batch 2) and state the dependency: "Only proceed to Batch 2 after Batch 1 validation passes."
+- Within a batch, one query per entity per data source (e.g., one `search_pull_requests` call per engineer)
+
 ### Testing
 
 - Include `vitest` (TS) or `pytest` (Python) in devDependencies
 - Tests live in `agents/{name}/scripts/` as `*.test.ts` or `test_*.py`
 - At minimum, test config loading and data parsing
-- Scaffolding doesn't need tests immediately — the checklist reminds the user
+- Generate a starter test file at scaffolding time (see Phase 2.6) — runnable immediately with `npm run {name}:test`

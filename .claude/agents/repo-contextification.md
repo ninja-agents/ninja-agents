@@ -322,7 +322,7 @@ CLAUDE.md and .cursor/rules/\*.mdc are **pointers and summaries**, not duplicate
 
 When generating `.coderabbit.yaml`:
 
-- Default to concise review tone
+- Default to `chill` review profile (valid values: `chill`, `assertive`)
 - Add path-specific instructions for key directories (models, components, config)
 - Exclude generated files, lock files, vendored code, and locale files from review
 - Enable auto-review on non-draft PRs

@@ -43,9 +43,9 @@ const BASE_CONFIG: SprintConfig = {
     low_item_warning: 5,
   },
   statuses: {
-    blocked: ["BLOCKED"],
     not_started: ["New", "To Do"],
     in_progress: ["In Progress", "ASSIGNED", "MODIFIED"],
+    testing: ["ON_QA", "Testing"],
     done: ["Done", "Closed", "Verified"],
   },
   engineers: [
@@ -517,6 +517,19 @@ describe("computeCarryover", () => {
     expect(result[0].risk).toBe("medium");
   });
 
+  it("classifies medium risk for testing items", () => {
+    const issues = [
+      makeIssue({
+        status: "ON_QA",
+        priority: "Normal",
+        story_points: 3,
+        resolution: "",
+      }),
+    ];
+    const result = computeCarryover(issues, BASE_CONFIG);
+    expect(result[0].risk).toBe("medium");
+  });
+
   it("classifies low risk for not-started normal items", () => {
     const issues = [
       makeIssue({
@@ -564,13 +577,6 @@ describe("computeCarryover", () => {
 describe("computeBlockers", () => {
   const today = new Date("2026-05-07T12:00:00Z");
 
-  it("detects blocked items", () => {
-    const issues = [makeIssue({ status: "BLOCKED", resolution: "" })];
-    const result = computeBlockers(issues, BASE_CONFIG, today);
-    expect(result).toHaveLength(1);
-    expect(result[0].kind).toBe("blocked");
-  });
-
   it("detects stalled in-progress items", () => {
     const issues = [
       makeIssue({
@@ -598,7 +604,20 @@ describe("computeBlockers", () => {
     expect(computeBlockers(issues, BASE_CONFIG, today)).toHaveLength(0);
   });
 
-  it("skips completed items even if blocked status", () => {
+  it("detects stalled testing items", () => {
+    const issues = [
+      makeIssue({
+        status: "ON_QA",
+        updated: "2026-04-30T00:00:00Z",
+        resolution: "",
+      }),
+    ];
+    const result = computeBlockers(issues, BASE_CONFIG, today);
+    expect(result).toHaveLength(1);
+    expect(result[0].kind).toBe("stalled");
+  });
+
+  it("skips completed items", () => {
     const issues = [makeIssue({ status: "Done", resolution: "Done" })];
     expect(computeBlockers(issues, BASE_CONFIG, today)).toHaveLength(0);
   });

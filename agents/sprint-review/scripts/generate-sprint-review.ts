@@ -64,9 +64,9 @@ export interface SprintConfig {
     low_item_warning: number;
   };
   statuses: {
-    blocked: string[];
     not_started: string[];
     in_progress: string[];
+    testing: string[];
     done: string[];
   };
   engineers: {
@@ -143,7 +143,7 @@ interface BlockerItem {
   days_stalled: number;
   assignee: string;
   priority: string;
-  kind: "blocked" | "stalled";
+  kind: "stalled";
 }
 
 // ---------------------------------------------------------------------------
@@ -558,7 +558,10 @@ export function computeCarryover(
     let risk: "high" | "medium" | "low";
     if (pw >= 4 || (i.story_points !== null && i.story_points > 5)) {
       risk = "high";
-    } else if (config.statuses.in_progress.includes(i.status)) {
+    } else if (
+      config.statuses.in_progress.includes(i.status) ||
+      config.statuses.testing.includes(i.status)
+    ) {
       risk = "medium";
     } else {
       risk = "low";
@@ -594,18 +597,10 @@ export function computeBlockers(
   for (const i of issues) {
     if (isCompleted(i, config)) continue;
 
-    if (config.statuses.blocked.includes(i.status)) {
-      const updated = parseDate(i.updated);
-      items.push({
-        key: i.key,
-        summary: i.summary,
-        url: `${config.jira.base_url}/${i.key}`,
-        days_stalled: updated ? daysBetween(updated, today) : 0,
-        assignee: i.assignee_name,
-        priority: i.priority,
-        kind: "blocked",
-      });
-    } else if (config.statuses.in_progress.includes(i.status)) {
+    if (
+      config.statuses.in_progress.includes(i.status) ||
+      config.statuses.testing.includes(i.status)
+    ) {
       const updated = parseDate(i.updated);
       if (
         updated &&
@@ -919,36 +914,22 @@ function formatReport(
   }
   ln();
 
-  // Blocker Analysis
-  ln("## Blocker Analysis");
+  // Stalled Items
+  ln("## Stalled Items");
   ln();
-  const blocked = blockers.filter((b) => b.kind === "blocked");
-  const stalled = blockers.filter((b) => b.kind === "stalled");
   if (blockers.length === 0) {
-    ln("No blocked or stalled items.");
+    ln("No stalled items.");
   } else {
-    if (blocked.length > 0) {
-      ln("### Currently Blocked");
-      ln();
-      for (const b of blocked) {
-        ln(
-          `- [${b.key} - ${truncate(b.summary, 60)}](${b.url}) -- blocked for ${b.days_stalled} day${b.days_stalled !== 1 ? "s" : ""}, assigned to ${b.assignee || "Unassigned"}, ${b.priority} priority`,
-        );
-      }
-      ln();
-    }
-    if (stalled.length > 0) {
+    ln(
+      `### Stalled (no updates in ${blockers[0]?.days_stalled ?? "N/A"}+ days)`,
+    );
+    ln();
+    for (const b of blockers) {
       ln(
-        `### Stalled (no updates in ${stalled[0]?.days_stalled ?? "N/A"}+ days)`,
+        `- [${b.key} - ${truncate(b.summary, 60)}](${b.url}) -- last updated ${b.days_stalled} day${b.days_stalled !== 1 ? "s" : ""} ago, assigned to ${b.assignee || "Unassigned"}`,
       );
-      ln();
-      for (const b of stalled) {
-        ln(
-          `- [${b.key} - ${truncate(b.summary, 60)}](${b.url}) -- last updated ${b.days_stalled} day${b.days_stalled !== 1 ? "s" : ""} ago, assigned to ${b.assignee || "Unassigned"}`,
-        );
-      }
-      ln();
     }
+    ln();
   }
   ln();
 
@@ -999,8 +980,7 @@ function printRetroContext(
 ) {
   const added = scopeChanges.filter((s) => s.kind === "added").length;
   const removed = scopeChanges.filter((s) => s.kind === "removed").length;
-  const blockedCount = blockers.filter((b) => b.kind === "blocked").length;
-  const stalledCount = blockers.filter((b) => b.kind === "stalled").length;
+  const stalledCount = blockers.length;
   const slow = estimationFlags.filter((f) => f.kind === "slow").length;
   const fast = estimationFlags.filter((f) => f.kind === "fast").length;
   const carryoverSp = carryover.reduce((s, i) => s + (i.story_points ?? 0), 0);
@@ -1011,7 +991,7 @@ function printRetroContext(
     `  Completion: ${summary.completed_issues}/${summary.total_issues} issues (${pct(summary.completed_issues, summary.total_issues)}%)${hasStoryPoints ? `, ${spStr(summary.completed_sp)}/${spStr(summary.total_sp)} SP (${summary.total_sp ? pct(summary.completed_sp ?? 0, summary.total_sp) : "N/A"}%)` : ""}`,
   );
   console.log(`  Scope changes: +${added} added, -${removed} removed`);
-  console.log(`  Blockers: ${blockedCount} blocked, ${stalledCount} stalled`);
+  console.log(`  Stalled: ${stalledCount} items`);
   if (hasStoryPoints) {
     console.log(
       `  Estimation: ${summary.total_sp ? pct(summary.completed_sp ?? 0, summary.total_sp) : "N/A"}% SP accuracy, ${slow + fast} items flagged (${slow} slow, ${fast} fast)`,

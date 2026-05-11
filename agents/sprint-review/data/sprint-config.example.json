@@ -13,15 +13,15 @@
     "scope_change_buffer_days": 2,
     "estimation_accuracy": {
       "fast_completion_ratio": 0.25,
-      "slow_completion_ratio": 3.0
+      "slow_completion_ratio": 1.0
     },
     "low_item_warning": 5
   },
   "statuses": {
-    "blocked": ["BLOCKED", "Impediment", "Blocked"],
-    "not_started": ["New", "To Do", "Open", "Backlog"],
-    "in_progress": ["In Progress", "In Review", "Dev Complete"],
-    "done": ["Done", "Closed", "Resolved", "Verified"]
+    "not_started": ["New", "To Do"],
+    "in_progress": ["Assigned", "In Progress", "Code Review", "Review", "Post", "Modified", "Dev Complete"],
+    "testing": ["ON_QA", "Testing"],
+    "done": ["Release Pending", "Verified", "Closed"]
   },
   "engineers": [
     {

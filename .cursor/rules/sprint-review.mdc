@@ -5,7 +5,7 @@ alwaysApply: false
 
 # Sprint Retrospective Analysis
 
-Read `.claude/agents/sprint-retro.md` and follow the complete workflow described there.
+Read `.claude/agents/sprint-review.md` and follow the complete workflow described there.
 
 The agent spec contains all steps, MCP tool call examples, CSV schemas, validation checkpoints, style guides, and rules. It is the single source of truth for this workflow.
 

@@ -28,7 +28,7 @@ ninja-agents/
   agents/                         # Self-contained agent directories
     _template/                    # Skeleton for new agents
     weekly-team-update/           # Weekly status report agent
-    sprint-retro/                 # Sprint retrospective agent
+    sprint-review/                 # Sprint retrospective agent
     repo-contextification/        # Documentation audit agent
   .claude/
     agents/                       # Agent specs — shared source of truth for workflows
@@ -102,7 +102,7 @@ A TypeScript script reads the cached CSV files, applies business logic (filterin
 The AI agent reads the generated report and writes the prose sections that require synthesis:
 
 - **weekly-team-update**: Key Highlights (3-5 theme bullets from completed work)
-- **sprint-retro**: Key Takeaways (3-5 actionable observations from analysis data)
+- **sprint-review**: Key Takeaways (3-5 actionable observations from analysis data)
 - **repo-contextification**: full documentation files (README, CONTRIBUTING, AGENTS, ARCHITECTURE)
 
 A validation script then checks the final output for broken links, missing sections, or data quality issues.
@@ -159,5 +159,5 @@ Tests run from the repo root using Vitest:
 
 ```bash
 npm test              # all agents
-npm run retro:test    # single agent
+npm run sprint-review:test    # single agent
 ```

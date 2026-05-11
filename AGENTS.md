@@ -11,7 +11,7 @@ The repo follows a "data collector + deterministic script" pattern: the AI agent
 | Agent                                                  | Description                                                                     | Docs                                             |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------ |
 | [weekly-team-update](agents/weekly-team-update/)       | Generates a leadership-ready weekly status report from GitHub, GitLab, and Jira | [README](agents/weekly-team-update/README.md)    |
-| [sprint-retro](agents/sprint-retro/)                   | Sprint retrospective analysis from active Jira sprint                           | [README](agents/sprint-retro/README.md)          |
+| [sprint-review](agents/sprint-review/)                   | Sprint retrospective analysis from active Jira sprint                           | [README](agents/sprint-review/README.md)          |
 | [repo-contextification](agents/repo-contextification/) | Audit repo docs and AI-readiness, interactively scaffold missing files          | [README](agents/repo-contextification/README.md) |
 
 ## IDE Support
@@ -47,7 +47,7 @@ agents/{name}/
 
 ### Naming Conventions
 
-- Agent directories: lowercase with hyphens (`weekly-team-update`, `sprint-retro`)
+- Agent directories: lowercase with hyphens (`weekly-team-update`, `sprint-review`)
 - Agent specs: `.claude/agents/{agent-name}.md`
 - Skill shortcuts: `.claude/skills/{skill-name}/SKILL.md`
 - Cursor rules: `.cursor/rules/{agent-name}.mdc`

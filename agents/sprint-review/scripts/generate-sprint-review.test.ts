@@ -18,7 +18,7 @@ import {
   type SprintIssue,
   type ChangelogIssue,
   type SprintConfig,
-} from "./generate-sprint-retro.js";
+} from "./generate-sprint-review.js";
 
 // ---------------------------------------------------------------------------
 // Test helpers

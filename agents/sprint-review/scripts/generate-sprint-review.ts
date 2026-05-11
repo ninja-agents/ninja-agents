@@ -1037,7 +1037,7 @@ function parseArgs(argv: string[]): Record<string, string> {
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--help") {
       console.log(
-        "Usage: generate-sprint-retro.ts --date <YYYY-MM-DD> [--cache-dir <path>] [--config <path>] [--output <path>]",
+        "Usage: generate-sprint-review.ts --date <YYYY-MM-DD> [--cache-dir <path>] [--config <path>] [--output <path>]",
       );
       process.exit(0);
     }
@@ -1127,7 +1127,7 @@ function main() {
 
   // Write output
   const outputPath =
-    args.output ?? resolve(__dirname, `../data/output/sprint-retro-${date}.md`);
+    args.output ?? resolve(__dirname, `../data/output/sprint-review-${date}.md`);
   writeFileSync(outputPath, report);
   console.log(`${GREEN}Report written to ${outputPath}${RESET}`);
 
@@ -1149,5 +1149,5 @@ function main() {
   process.exit(0);
 }
 
-const isDirectRun = process.argv[1]?.endsWith("generate-sprint-retro.ts");
+const isDirectRun = process.argv[1]?.endsWith("generate-sprint-review.ts");
 if (isDirectRun) main();

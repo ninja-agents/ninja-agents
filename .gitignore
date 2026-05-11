@@ -3,7 +3,7 @@
 
 # Sensitive team config (real files contain PII / internal IDs — see .example.json)
 agents/weekly-team-update/data/team-config.json
-agents/sprint-retro/data/sprint-config.json
+agents/sprint-review/data/sprint-config.json
 
 # Agent cache (contents only, keep .gitkeep)
 agents/*/data/cache/*

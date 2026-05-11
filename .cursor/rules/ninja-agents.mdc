@@ -14,7 +14,7 @@ Invoke these by name (e.g., `@weekly-team-update`) or describe what you need:
 | Rule                    | Purpose                                                        |
 | ----------------------- | -------------------------------------------------------------- |
 | `@weekly-team-update`   | Weekly team report for leadership (GitHub + GitLab + Jira)     |
-| `@sprint-retro`         | Sprint retrospective analysis from active Jira sprint          |
+| `@sprint-review`         | Sprint retrospective analysis from active Jira sprint          |
 | `@repo-contextification`| Audit repo docs and scaffold missing files                     |
 
 Each rule points to its full workflow in `.claude/agents/{name}.md` — the single source of truth.

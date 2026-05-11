@@ -276,7 +276,7 @@ mcp__atlassian__searchJiraIssuesUsingJql:
 Repeat until fewer than 100 results are returned. Combine all pages before proceeding.
 ````
 
-**If pagination is not needed**, add a comment: `<!-- Pagination: Not needed — each query returns <100 results. If data volume grows, see sprint-retro.md Step 2 for the pagination pattern. -->`
+**If pagination is not needed**, add a comment: `<!-- Pagination: Not needed — each query returns <100 results. If data volume grows, see sprint-review.md Step 2 for the pagination pattern. -->`
 
 ### Validation Checkpoint
 
@@ -665,7 +665,7 @@ describe("{main-script}", () => {
 });
 ```
 
-Keep the test file under 50 lines at scaffolding time. Use patterns from `agents/sprint-retro/scripts/generate-sprint-retro.test.ts` for helper functions and test structure. The test should be immediately runnable with `npm run {name}:test`.
+Keep the test file under 50 lines at scaffolding time. Use patterns from `agents/sprint-review/scripts/generate-sprint-review.test.ts` for helper functions and test structure. The test should be immediately runnable with `npm run {name}:test`.
 
 ### 2.7 Update Index Files
 
@@ -866,7 +866,7 @@ The repo uses ESLint (flat config) + Prettier at the root. All generated TypeScr
 
 ### Pagination
 
-- If any query could return 100+ results, document pagination with `nextPageToken` (see `sprint-retro.md` Step 2)
+- If any query could return 100+ results, document pagination with `nextPageToken` (see `sprint-review.md` Step 2)
 - State the expected data volume per query so future maintainers know when pagination becomes relevant
 - Always combine all pages before proceeding to the next step
 

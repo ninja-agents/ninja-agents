@@ -13,19 +13,19 @@ Tokens must be set as environment variables before launching your IDE.
 ### Claude Code
 
 ```bash
-/sprint-retro
+/sprint-review
 ```
 
 ### Cursor
 
-In Cursor chat, mention `@sprint-retro` or ask for a "sprint retrospective" — the rule activates automatically and walks through the full workflow.
+In Cursor chat, mention `@sprint-review` or ask for a "sprint retrospective" — the rule activates automatically and walks through the full workflow.
 
 ### Manual
 
 Run the analysis script directly (requires cached CSV data):
 
 ```bash
-npm run retro:generate -- --date 2026-05-07
+npm run sprint-review:generate -- --date 2026-05-07
 ```
 
 ## How It Works
@@ -62,11 +62,11 @@ Edit `data/sprint-config.json` to customize:
 ## File Layout
 
 ```
-agents/sprint-retro/
+agents/sprint-review/
 ├── README.md
 ├── tsconfig.json
 ├── scripts/
-│   └── generate-sprint-retro.ts    # Analysis engine
+│   └── generate-sprint-review.ts    # Analysis engine
 └── data/
     ├── sprint-config.example.json  # Template (committed)
     ├── sprint-config.json          # Real config (gitignored)

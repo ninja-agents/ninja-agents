@@ -54,7 +54,7 @@ Agents that include scripts use [Vitest](https://vitest.dev/) for unit tests. Ru
 ```bash
 npm test                    # run all agent tests
 npm run weekly:test         # run only weekly-team-update tests
-npm run retro:test          # run only sprint-retro tests
+npm run sprint-review:test  # run only sprint-review tests
 npm run context:test        # run only repo-contextification tests
 ```
 
@@ -65,7 +65,7 @@ Test files live alongside the source (e.g., `scripts/lib.test.ts`). When adding 
 1. Create a branch from `main` with a descriptive name (e.g., `add-deploy-agent` or `fix-gitlab-scope`)
 2. Ensure `npm run lint` and `npm run format:check` pass at the root
 3. Run tests for any agents you modified
-4. Write a clear commit message in imperative mood that explains the "why" (e.g., "Add sprint-retro agent for sprint retrospective analysis")
+4. Write a clear commit message in imperative mood that explains the "why" (e.g., "Add sprint-review agent for sprint retrospective analysis")
 5. Open a PR against `main` with a summary of changes
 
 ## Commit Conventions
@@ -73,7 +73,7 @@ Test files live alongside the source (e.g., `scripts/lib.test.ts`). When adding 
 Commit messages use imperative mood and describe the intent, not the mechanics:
 
 ```text
-Add sprint-retro agent for sprint retrospective analysis
+Add sprint-review agent for sprint retrospective analysis
 Fix GitLab MCP queries returning empty results without scope param
 Improve create-agent skill with patterns from weekly-team-update
 ```

@@ -1,5 +1,5 @@
 ---
-name: sprint-retro
+name: sprint-review
 description: |
   Analyze the currently active Jira sprint and generate a retrospective report with completion analysis, estimation accuracy, scope changes, blockers, carryover risk, and actionable recommendations.
 
@@ -7,12 +7,12 @@ description: |
 
   <example>
   user: "Prepare the sprint retro"
-  assistant: "I'll launch the sprint-retro agent to analyze the active sprint."
+  assistant: "I'll launch the sprint-review agent to analyze the active sprint."
   </example>
 
   <example>
   user: "Generate sprint retrospective report"
-  assistant: "Let me launch the sprint-retro agent to analyze the current sprint and generate the retro report."
+  assistant: "Let me launch the sprint-review agent to analyze the current sprint and generate the retro report."
   </example>
 model: opus
 memory: project
@@ -30,7 +30,7 @@ You do NOT format the analysis sections yourself. The TypeScript script handles 
 
 ## Step 1: Read Config & Find Active Sprint
 
-Read `agents/sprint-retro/data/sprint-config.json` to get:
+Read `agents/sprint-review/data/sprint-config.json` to get:
 
 - `board_id` (11806)
 - `sprint_name_prefix` (e.g., "MIG-NET-Frontend Sprint")
@@ -46,7 +46,7 @@ Calculate:
 Clear old cache:
 
 ```bash
-rm -f agents/sprint-retro/data/cache/*.csv agents/sprint-retro/data/cache/last-updated.txt
+rm -f agents/sprint-review/data/cache/*.csv agents/sprint-review/data/cache/last-updated.txt
 ```
 
 ### Find the Active Sprint Name
@@ -115,7 +115,7 @@ After data collection, verify:
 
 ## Step 3: Save to CSV
 
-Extract fields from the JSON response and write CSV files to `agents/sprint-retro/data/cache/`.
+Extract fields from the JSON response and write CSV files to `agents/sprint-review/data/cache/`.
 
 ### sprint-issues.csv
 
@@ -165,7 +165,7 @@ Write current ISO-8601 timestamp.
 ## Step 4: Validate Cached Data
 
 ```bash
-wc -l agents/sprint-retro/data/cache/sprint-issues.csv
+wc -l agents/sprint-review/data/cache/sprint-issues.csv
 ```
 
 - Must have at least 2 lines (header + 1 data row)
@@ -174,7 +174,7 @@ wc -l agents/sprint-retro/data/cache/sprint-issues.csv
 ## Step 5: Generate Report
 
 ```bash
-npx tsx agents/sprint-retro/scripts/generate-sprint-retro.ts --date {today}
+npx tsx agents/sprint-review/scripts/generate-sprint-review.ts --date {today}
 ```
 
 Handle exit codes:
@@ -188,7 +188,7 @@ Handle exit codes:
 
 The script outputs a placeholder in the Key Takeaways section. Replace it with actionable, retro-discussion-ready observations.
 
-1. Read the report at `agents/sprint-retro/data/output/sprint-retro-{today}.md`
+1. Read the report at `agents/sprint-review/data/output/sprint-review-{today}.md`
 2. Study ALL analysis sections: Sprint Summary, Completion Analysis, Estimation Accuracy, Scope Changes, Carryover Risk, Blocker Analysis, Automation Opportunities
 3. Use the **Retro Context** printed by the script (completion rate, scope change count, blocker count, estimation accuracy %) as anchoring facts — do not recount items yourself
 4. Write 3-5 takeaway bullets
@@ -235,7 +235,7 @@ The script outputs a placeholder in the Key Takeaways section. Replace it with a
 
 ## Step 7: Display Result
 
-Read and display `agents/sprint-retro/data/output/sprint-retro-{today}.md` to the user.
+Read and display `agents/sprint-review/data/output/sprint-review-{today}.md` to the user.
 
 ## Rules
 

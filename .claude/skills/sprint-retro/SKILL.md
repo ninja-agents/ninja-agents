@@ -46,4 +46,4 @@ A markdown report saved to `agents/sprint-retro/data/output/sprint-retro-{date}.
 1. Run BEFORE closing the sprint — the agent analyzes the currently active sprint
 2. Only `resolution = "Done"` counts as completed
 3. If the story point field can't be discovered, estimation analysis is skipped gracefully
-4. Engineer data comes from the shared `agents/weekly-team-update/data/team-config.json`
+4. Engineer data is configured inline in `agents/sprint-retro/data/sprint-config.json`

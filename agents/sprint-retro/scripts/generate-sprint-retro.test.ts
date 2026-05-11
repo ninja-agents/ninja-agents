@@ -18,7 +18,6 @@ import {
   type SprintIssue,
   type ChangelogIssue,
   type SprintConfig,
-  type TeamConfig,
 } from "./generate-sprint-retro.js";
 
 // ---------------------------------------------------------------------------
@@ -26,7 +25,6 @@ import {
 // ---------------------------------------------------------------------------
 
 const BASE_CONFIG: SprintConfig = {
-  team_config_path: "",
   board_id: 11806,
   sprint_name_prefix: "Test Sprint",
   jira: {
@@ -50,22 +48,16 @@ const BASE_CONFIG: SprintConfig = {
     in_progress: ["In Progress", "ASSIGNED", "MODIFIED"],
     done: ["Done", "Closed", "Verified"],
   },
-};
-
-const BASE_TEAM: TeamConfig = {
-  team_name: "Test Team",
   engineers: [
     {
       name: "Alice",
       jira_account_id: "alice-id",
       jira_display_names: ["Alice Smith"],
-      role: "dev",
     },
     {
       name: "Bob",
       jira_account_id: "bob-id",
       jira_display_names: ["Bob Jones", "Robert Jones"],
-      role: "qe",
     },
   ],
 };
@@ -286,8 +278,8 @@ describe("computeCompletionByType", () => {
 // ---------------------------------------------------------------------------
 
 describe("computeCompletionByEngineer", () => {
-  const accountIdToName = buildAccountIdToName(BASE_TEAM);
-  const displayToName = buildDisplayToName(BASE_TEAM);
+  const accountIdToName = buildAccountIdToName(BASE_CONFIG);
+  const displayToName = buildDisplayToName(BASE_CONFIG);
 
   it("matches engineers by account ID", () => {
     const issues = [
@@ -302,7 +294,6 @@ describe("computeCompletionByEngineer", () => {
     const result = computeCompletionByEngineer(
       issues,
       BASE_CONFIG,
-      BASE_TEAM,
       accountIdToName,
       displayToName,
     );
@@ -321,7 +312,6 @@ describe("computeCompletionByEngineer", () => {
     const result = computeCompletionByEngineer(
       issues,
       BASE_CONFIG,
-      BASE_TEAM,
       accountIdToName,
       displayToName,
     );
@@ -340,7 +330,6 @@ describe("computeCompletionByEngineer", () => {
     const result = computeCompletionByEngineer(
       issues,
       BASE_CONFIG,
-      BASE_TEAM,
       accountIdToName,
       displayToName,
     );
@@ -356,7 +345,6 @@ describe("computeCompletionByEngineer", () => {
     const result = computeCompletionByEngineer(
       issues,
       BASE_CONFIG,
-      BASE_TEAM,
       accountIdToName,
       displayToName,
     );
@@ -683,13 +671,13 @@ describe("identifyAutomationOpportunities", () => {
 
 describe("name mapping builders", () => {
   it("buildAccountIdToName maps IDs to canonical names", () => {
-    const map = buildAccountIdToName(BASE_TEAM);
+    const map = buildAccountIdToName(BASE_CONFIG);
     expect(map.get("alice-id")).toBe("Alice");
     expect(map.get("bob-id")).toBe("Bob");
   });
 
   it("buildDisplayToName maps all display name variants", () => {
-    const map = buildDisplayToName(BASE_TEAM);
+    const map = buildDisplayToName(BASE_CONFIG);
     expect(map.get("alice smith")).toBe("Alice");
     expect(map.get("bob jones")).toBe("Bob");
     expect(map.get("robert jones")).toBe("Bob");

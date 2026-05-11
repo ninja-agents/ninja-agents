@@ -1,8 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __dirname = import.meta.dirname;
 
 const GREEN = "\x1b[32m";
 const YELLOW = "\x1b[33m";
@@ -47,7 +46,6 @@ export interface ChangelogIssue {
 }
 
 export interface SprintConfig {
-  team_config_path: string;
   board_id: number;
   sprint_name_prefix: string;
   jira: {
@@ -71,15 +69,10 @@ export interface SprintConfig {
     in_progress: string[];
     done: string[];
   };
-}
-
-export interface TeamConfig {
-  team_name: string;
   engineers: {
     name: string;
     jira_account_id: string;
     jira_display_names: string[];
-    role: string;
   }[];
 }
 
@@ -165,21 +158,9 @@ function loadConfig(configPath: string): SprintConfig {
   return JSON.parse(readFileSync(configPath, "utf-8")) as SprintConfig;
 }
 
-function loadTeamConfig(
-  sprintConfig: SprintConfig,
-  configDir: string,
-): TeamConfig {
-  const teamPath = resolve(configDir, sprintConfig.team_config_path);
-  if (!existsSync(teamPath)) {
-    console.error(`${RED}Team config not found: ${teamPath}${RESET}`);
-    process.exit(1);
-  }
-  return JSON.parse(readFileSync(teamPath, "utf-8")) as TeamConfig;
-}
-
-export function buildDisplayToName(team: TeamConfig): Map<string, string> {
+export function buildDisplayToName(config: SprintConfig): Map<string, string> {
   const map = new Map<string, string>();
-  for (const eng of team.engineers) {
+  for (const eng of config.engineers) {
     for (const dn of eng.jira_display_names) {
       map.set(dn.toLowerCase(), eng.name);
     }
@@ -187,9 +168,11 @@ export function buildDisplayToName(team: TeamConfig): Map<string, string> {
   return map;
 }
 
-export function buildAccountIdToName(team: TeamConfig): Map<string, string> {
+export function buildAccountIdToName(
+  config: SprintConfig,
+): Map<string, string> {
   const map = new Map<string, string>();
-  for (const eng of team.engineers) {
+  for (const eng of config.engineers) {
     map.set(eng.jira_account_id, eng.name);
   }
   return map;
@@ -377,12 +360,11 @@ export function computeCompletionByType(
 export function computeCompletionByEngineer(
   issues: SprintIssue[],
   config: SprintConfig,
-  team: TeamConfig,
   accountIdToName: Map<string, string>,
   displayToName: Map<string, string>,
 ): EngineerCompletion[] {
   const map = new Map<string, EngineerCompletion>();
-  for (const eng of team.engineers) {
+  for (const eng of config.engineers) {
     map.set(eng.name, {
       name: eng.name,
       assigned: 0,
@@ -1084,9 +1066,8 @@ function main() {
     args.config ?? resolve(__dirname, "../data/sprint-config.json");
   const cachePath = args["cache-dir"] ?? resolve(__dirname, "../data/cache");
   const config = loadConfig(configPath);
-  const team = loadTeamConfig(config, dirname(configPath));
-  const accountIdToName = buildAccountIdToName(team);
-  const displayToName = buildDisplayToName(team);
+  const accountIdToName = buildAccountIdToName(config);
+  const displayToName = buildDisplayToName(config);
 
   console.log(`${GREEN}Loading sprint data...${RESET}`);
 
@@ -1119,7 +1100,6 @@ function main() {
   const byEngineer = computeCompletionByEngineer(
     issues,
     config,
-    team,
     accountIdToName,
     displayToName,
   );

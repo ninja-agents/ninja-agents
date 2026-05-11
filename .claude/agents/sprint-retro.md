@@ -37,9 +37,7 @@ Read `agents/sprint-retro/data/sprint-config.json` to get:
 - `jira.cloud_id`, `jira.sprint_field`, `jira.story_point_field`
 - `thresholds` and `statuses`
 
-Then read the shared team config at `agents/weekly-team-update/data/team-config.json` (resolved via `team_config_path`) to get:
-
-- Engineer list with `jira_account_id`
+The `engineers` array in the same file provides the engineer list with `jira_account_id`.
 
 Calculate:
 
@@ -64,7 +62,7 @@ mcp__atlassian__searchJiraIssuesUsingJql:
   responseContentFormat: "markdown"
 ```
 
-Use the first engineer's `jira_account_id` from the team config.
+Use the first engineer's `jira_account_id` from the `engineers` array in `sprint-config.json`.
 
 From the response, extract `fields.customfield_10020` — it is an array of sprint objects. Find the one where:
 
@@ -242,7 +240,7 @@ Read and display `agents/sprint-retro/data/output/sprint-retro-{today}.md` to th
 ## Rules
 
 1. Never write report sections yourself EXCEPT Key Takeaways — the TypeScript script generates all other sections.
-2. Never hardcode team data — read engineers from the shared team config resolved via `team_config_path`.
+2. Never hardcode team data — read engineers from the `engineers` array in `sprint-config.json`.
 3. Sprint field is `customfield_10020`, story point field is `customfield_10028` — both configured in `sprint-config.json`.
 4. The sprint spans multiple Jira projects (CNV, OCPBUGS, MTA, MTV, CONSOLE) — never add a `project` filter when querying by sprint name.
 5. CSV quoting: wrap any field containing a comma in double quotes.

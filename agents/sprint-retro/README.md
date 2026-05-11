@@ -30,7 +30,7 @@ npm run retro:generate -- --date 2026-05-07
 
 ## How It Works
 
-1. Reads sprint config (`data/sprint-config.json`) and shared team config
+1. Reads sprint config (`data/sprint-config.json`)
 2. Discovers the story point custom field by querying a sample issue
 3. Fetches all issues in the active sprint via Jira JQL
 4. Fetches recently-updated issues to detect scope changes
@@ -48,8 +48,6 @@ cp data/sprint-config.example.json data/sprint-config.json
 # Edit sprint-config.json with your team's real data
 ```
 
-Also ensure `agents/weekly-team-update/data/team-config.json` exists (see that agent's README).
-
 ## Configuration
 
 Edit `data/sprint-config.json` to customize:
@@ -59,8 +57,7 @@ Edit `data/sprint-config.json` to customize:
 - **jira.story_point_fields** — ordered list of candidate custom field IDs to try for story points
 - **thresholds** — analysis parameters (days before "stalled", estimation ratios, etc.)
 - **statuses** — status groupings for your Jira workflow (blocked, not_started, in_progress, done)
-
-Engineer data is shared from `agents/weekly-team-update/data/team-config.json` — edit that file to add/remove team members.
+- **engineers** — team members with `name`, `jira_account_id`, and `jira_display_names`
 
 ## File Layout
 

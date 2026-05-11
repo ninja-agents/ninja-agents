@@ -1,6 +1,5 @@
 {
   "_comment": "Copy this file to sprint-config.json and fill in your team's real data.",
-  "team_config_path": "../../weekly-team-update/data/team-config.json",
   "board_id": 12345,
   "sprint_name_prefix": "My-Team Sprint",
   "jira": {
@@ -23,5 +22,17 @@
     "not_started": ["New", "To Do", "Open", "Backlog"],
     "in_progress": ["In Progress", "In Review", "Dev Complete"],
     "done": ["Done", "Closed", "Resolved", "Verified"]
-  }
+  },
+  "engineers": [
+    {
+      "name": "Alice Smith",
+      "jira_account_id": "abc123:example-id",
+      "jira_display_names": ["Alice Smith"]
+    },
+    {
+      "name": "Bob Jones",
+      "jira_account_id": "def456:example-id",
+      "jira_display_names": ["Bob Jones", "Robert Jones"]
+    }
+  ]
 }

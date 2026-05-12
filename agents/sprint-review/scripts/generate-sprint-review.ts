@@ -754,7 +754,7 @@ function median(values: number[]): number {
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 !== 0
     ? sorted[mid]
-    : Math.round(((sorted[mid - 1] + sorted[mid]) / 2) * 10) / 10;
+    : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
 }
 
 export function computeCycleTime(
@@ -1038,17 +1038,22 @@ export function computeRetroGuide(
     });
   }
 
-  for (const ct of cycleTime) {
-    if (ct.median_days > 7) {
-      lessCandidates.push({
-        text: `${ct.type} cycle time is slow (median ${ct.median_days} days from In Progress to Done)`,
-        weight: 6,
-      });
-      break;
-    }
+  const slowCycleTypes = cycleTime.filter((ct) => ct.median_days > 7);
+  if (slowCycleTypes.length > 0) {
+    const allSlow = slowCycleTypes.length === cycleTime.length && cycleTime.length > 1;
+    const worst = slowCycleTypes.sort(
+      (a, b) => b.median_days - a.median_days,
+    )[0];
+    lessCandidates.push({
+      text:
+        slowCycleTypes.length === 1
+          ? `${worst.type} cycle time is slow (median ${worst.median_days} days from In Progress to Done)`
+          : `Cycle time is slow across ${slowCycleTypes.length} issue types (${slowCycleTypes.map((ct) => `${ct.type}: ${ct.median_days}d`).join(", ")} median)`,
+      weight: allSlow ? 8 : 7,
+    });
   }
 
-  const MAX_LESS_WELL = 5;
+  const MAX_LESS_WELL = 6;
   lessCandidates
     .sort((a, b) => b.weight - a.weight)
     .slice(0, MAX_LESS_WELL)
@@ -1108,6 +1113,13 @@ export function computeRetroGuide(
     tryCandidates.push({
       text: "Rebalance workload during sprint planning -- cap individual assignments or pair on complex items",
       weight: 6,
+    });
+  }
+
+  if (slowCycleTypes.length > 0) {
+    tryCandidates.push({
+      text: "Investigate long cycle times -- check for external dependencies, review handoffs, or consider WIP limits",
+      weight: 7,
     });
   }
 

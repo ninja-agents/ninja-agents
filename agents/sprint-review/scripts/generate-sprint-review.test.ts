@@ -1037,7 +1037,7 @@ describe("computeRetroGuide", () => {
         { name: "Phil", assigned: 10, completed: 2, remaining: 8, sp_completed: 5, sp_remaining: 40 },
       ],
     });
-    expect(guide.wentLessWell.length).toBeLessThanOrEqual(5);
+    expect(guide.wentLessWell.length).toBeLessThanOrEqual(6);
   });
 
   // --- Try Next ---
@@ -1181,13 +1181,23 @@ describe("computeRetroGuide", () => {
     expect(guide.wentWell.some((b) => b.includes("Bug cycle time is fast"))).toBe(true);
   });
 
-  it("flags slow cycle time as went less well", () => {
+  it("flags slow cycle time as went less well for single type", () => {
     const guide = runRetro({
       cycleTime: [
         { type: "Story", count: 5, median_days: 10, avg_days: 11, min_days: 5, max_days: 18 },
       ],
     });
     expect(guide.wentLessWell.some((b) => b.includes("Story cycle time is slow"))).toBe(true);
+  });
+
+  it("reports multiple slow cycle time types in one bullet", () => {
+    const guide = runRetro({
+      cycleTime: [
+        { type: "Bug", count: 10, median_days: 16, avg_days: 20, min_days: 2, max_days: 100 },
+        { type: "Story", count: 5, median_days: 10, avg_days: 11, min_days: 5, max_days: 18 },
+      ],
+    });
+    expect(guide.wentLessWell.some((b) => b.includes("2 issue types"))).toBe(true);
   });
 });
 

@@ -113,6 +113,33 @@ After data collection, verify:
 - At least 1 issue was returned. If 0: display "Sprint '{sprint_name}' returned no issues." STOP.
 - No query errors. If any query fails: display the error, STOP.
 
+## Step 2b: Fetch Transition Timestamps (Cycle Time)
+
+For each **completed** issue (resolution = "Done" or status in done statuses), fetch its changelog to find when it first entered an in-progress status:
+
+```
+mcp__atlassian__getJiraIssue:
+  cloudId: "redhat.atlassian.net"
+  issueIdOrKey: "{issue_key}"
+  expand: "changelog"
+  fields: ["summary"]
+  responseContentFormat: "markdown"
+```
+
+Parse the `changelog.histories` array. Each history entry has:
+- `created` — timestamp of the change
+- `items[]` — array of field changes
+
+Look for entries where an item has `field` = `"status"` and `toString` matches any value in `config.statuses.in_progress` (e.g., "In Progress", "ASSIGNED", "MODIFIED").
+
+Take the **earliest** such transition's `created` timestamp as `first_in_progress_date`.
+
+If no matching transition is found, skip the issue (it may have gone directly to Done without passing through In Progress).
+
+Collect all `(key, first_in_progress_date)` pairs for use in Step 3.
+
+**Performance note:** This requires one API call per completed issue. For a typical sprint (~40-50 completed issues), this adds ~20-30 seconds. The data enables cycle time analysis in the report.
+
 ## Step 3: Save to CSV
 
 Extract fields from the JSON response and write CSV files to `agents/sprint-review/data/cache/`.
@@ -151,6 +178,12 @@ For each issue in the response `issues.nodes` array, extract one CSV row:
 - Do NOT quote fields that don't contain commas
 
 Write the CSV using the Write tool. Build the full CSV content as a string (header + one line per issue) and write it in one call.
+
+### sprint-transitions.csv
+
+Header: `key,first_in_progress_date`
+
+Write one row per completed issue that had an in-progress transition (from Step 2b). The `first_in_progress_date` is the ISO-8601 timestamp of the earliest transition into an in-progress status.
 
 ### sprint-changelog.csv
 
@@ -191,7 +224,7 @@ Handle exit codes:
 The script outputs a placeholder in the Key Takeaways section. Replace it with actionable, retro-discussion-ready observations.
 
 1. Read the report at `agents/sprint-review/data/output/sprint-review-{today}.md`
-2. Study ALL analysis sections: Retro Discussion Guide, Sprint Summary, Completion Analysis, Estimation Accuracy, Scope Changes, Carryover Risk, Blocker Analysis, Automation Opportunities
+2. Study ALL analysis sections: Retro Discussion Guide, Sprint Summary, Completion Analysis, Estimation Accuracy, Cycle Time, Scope Changes, Carryover Risk, Blocker Analysis, Automation Opportunities
 3. Use the **Retro Context** printed by the script (completion rate, scope change count, blocker count, estimation accuracy %) as anchoring facts — do not recount items yourself
 4. Write 3-5 takeaway bullets
 5. Replace everything between `## Key Takeaways` and the next `##` heading with your bullets (remove the `<!-- TAKEAWAYS_PLACEHOLDER -->` marker)

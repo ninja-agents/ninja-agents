@@ -155,6 +155,20 @@ export interface RetroGuide {
   tryNext: string[];
 }
 
+export interface TransitionRecord {
+  key: string;
+  first_in_progress_date: string;
+}
+
+export interface CycleTimeStat {
+  type: string;
+  count: number;
+  median_days: number;
+  avg_days: number;
+  min_days: number;
+  max_days: number;
+}
+
 // ---------------------------------------------------------------------------
 // Config loading
 // ---------------------------------------------------------------------------
@@ -274,6 +288,21 @@ function loadChangelogIssues(cachePath: string): ChangelogIssue[] {
       created: f[7] ?? "",
       updated: f[8] ?? "",
       sprint_names: (f[9] ?? "").split(";").filter(Boolean),
+    };
+  });
+}
+
+function loadTransitions(cachePath: string): TransitionRecord[] {
+  const filePath = resolve(cachePath, "sprint-transitions.csv");
+  if (!existsSync(filePath)) return [];
+  const lines = readFileSync(filePath, "utf-8").trim().split("\n");
+  if (lines.length < 2) return [];
+
+  return lines.slice(1).map((line) => {
+    const f = parseCsvLine(line);
+    return {
+      key: f[0] ?? "",
+      first_in_progress_date: f[1] ?? "",
     };
   });
 }
@@ -716,6 +745,64 @@ export function identifyAutomationOpportunities(
 }
 
 // ---------------------------------------------------------------------------
+// Cycle Time
+// ---------------------------------------------------------------------------
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0
+    ? sorted[mid]
+    : Math.round(((sorted[mid - 1] + sorted[mid]) / 2) * 10) / 10;
+}
+
+export function computeCycleTime(
+  issues: SprintIssue[],
+  transitions: TransitionRecord[],
+  config: SprintConfig,
+): CycleTimeStat[] {
+  if (transitions.length === 0) return [];
+
+  const transMap = new Map<string, string>();
+  for (const t of transitions) {
+    transMap.set(t.key, t.first_in_progress_date);
+  }
+
+  const byType = new Map<string, number[]>();
+
+  for (const issue of issues) {
+    if (!isCompleted(issue, config)) continue;
+    const resolved = parseDate(issue.resolutiondate) ?? parseDate(issue.updated);
+    if (!resolved) continue;
+    const inProgressDate = transMap.get(issue.key);
+    if (!inProgressDate) continue;
+    const started = parseDate(inProgressDate);
+    if (!started) continue;
+
+    const days = Math.max(1, daysBetween(started, resolved));
+    const arr = byType.get(issue.issuetype) ?? [];
+    arr.push(days);
+    byType.set(issue.issuetype, arr);
+  }
+
+  const stats: CycleTimeStat[] = [];
+  for (const [type, days] of byType) {
+    const avg = Math.round((days.reduce((s, d) => s + d, 0) / days.length) * 10) / 10;
+    stats.push({
+      type,
+      count: days.length,
+      median_days: median(days),
+      avg_days: avg,
+      min_days: Math.min(...days),
+      max_days: Math.max(...days),
+    });
+  }
+
+  return stats.sort((a, b) => b.count - a.count);
+}
+
+// ---------------------------------------------------------------------------
 // Retro Discussion Guide
 // ---------------------------------------------------------------------------
 
@@ -728,6 +815,7 @@ export function computeRetroGuide(
   scopeChanges: ScopeChange[],
   carryover: CarryoverItem[],
   blockers: BlockerItem[],
+  cycleTime: CycleTimeStat[],
   hasStoryPoints: boolean,
 ): RetroGuide {
   const wentWell: string[] = [];
@@ -825,6 +913,15 @@ export function computeRetroGuide(
     wentWell.push(
       `${fast.length} item${fast.length !== 1 ? "s" : ""} completed faster than estimated -- good execution on well-understood work`,
     );
+  }
+
+  if (cycleTime.length > 0) {
+    const largest = cycleTime[0];
+    if (largest.median_days <= 3) {
+      wentWell.push(
+        `${largest.type} cycle time is fast (median ${largest.median_days} day${largest.median_days !== 1 ? "s" : ""} from In Progress to Done)`,
+      );
+    }
   }
 
   if (blockers.length === 0) {
@@ -941,6 +1038,16 @@ export function computeRetroGuide(
     });
   }
 
+  for (const ct of cycleTime) {
+    if (ct.median_days > 7) {
+      lessCandidates.push({
+        text: `${ct.type} cycle time is slow (median ${ct.median_days} days from In Progress to Done)`,
+        weight: 6,
+      });
+      break;
+    }
+  }
+
   const MAX_LESS_WELL = 5;
   lessCandidates
     .sort((a, b) => b.weight - a.weight)
@@ -1055,6 +1162,7 @@ function formatReport(
   byEngineer: EngineerCompletion[],
   byPriority: TypeCompletion[],
   estimationFlags: EstimationFlag[],
+  cycleTime: CycleTimeStat[],
   scopeChanges: ScopeChange[],
   carryover: CarryoverItem[],
   blockers: BlockerItem[],
@@ -1210,6 +1318,26 @@ function formatReport(
     }
   }
 
+  // Cycle Time
+  ln("## Cycle Time");
+  ln();
+  if (cycleTime.length === 0) {
+    ln(
+      "Cycle time analysis unavailable -- no transition data collected.",
+    );
+  } else {
+    ln("Days from In Progress to Done, by issue type.");
+    ln();
+    ln("| Type | Count | Median | Avg | Min | Max |");
+    ln("|------|-------|--------|-----|-----|-----|");
+    for (const ct of cycleTime) {
+      ln(
+        `| ${ct.type} | ${ct.count} | ${ct.median_days} | ${ct.avg_days} | ${ct.min_days} | ${ct.max_days} |`,
+      );
+    }
+  }
+  ln();
+
   // Scope Changes
   ln("## Scope Changes");
   ln();
@@ -1331,6 +1459,7 @@ function printRetroContext(
   blockers: BlockerItem[],
   estimationFlags: EstimationFlag[],
   carryover: CarryoverItem[],
+  cycleTime: CycleTimeStat[],
   hasStoryPoints: boolean,
 ) {
   const added = scopeChanges.filter((s) => s.kind === "added").length;
@@ -1351,6 +1480,12 @@ function printRetroContext(
     console.log(
       `  Estimation: ${summary.total_sp ? pct(summary.completed_sp ?? 0, summary.total_sp) : "N/A"}% SP accuracy, ${slow + fast} items flagged (${slow} slow, ${fast} fast)`,
     );
+  }
+  if (cycleTime.length > 0) {
+    const ctSummary = cycleTime
+      .map((ct) => `${ct.type}: ${ct.median_days}d median`)
+      .join(", ");
+    console.log(`  Cycle time: ${ctSummary}`);
   }
   console.log(
     `  Carryover risk: ${carryover.length} items (${carryoverSp} SP)`,
@@ -1408,6 +1543,7 @@ function main() {
 
   const issues = loadSprintIssues(cachePath);
   const changelog = loadChangelogIssues(cachePath);
+  const transitions = loadTransitions(cachePath);
 
   const warnings: string[] = [];
   if (issues.length === 0) {
@@ -1455,6 +1591,7 @@ function main() {
     displayToName,
   );
   const automationOps = identifyAutomationOpportunities(issues);
+  const cycleTime = computeCycleTime(issues, transitions, config);
   const retroGuide = computeRetroGuide(
     summary,
     byType,
@@ -1464,6 +1601,7 @@ function main() {
     scopeChanges,
     carryover,
     blockers,
+    cycleTime,
     hasStoryPoints,
   );
 
@@ -1474,6 +1612,7 @@ function main() {
     byEngineer,
     byPriority,
     estimationFlags,
+    cycleTime,
     scopeChanges,
     carryover,
     blockers,
@@ -1496,6 +1635,7 @@ function main() {
     blockers,
     estimationFlags,
     carryover,
+    cycleTime,
     hasStoryPoints,
   );
 

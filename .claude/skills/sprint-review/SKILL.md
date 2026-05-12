@@ -37,6 +37,7 @@ A markdown report saved to `agents/sprint-review/data/output/sprint-review-{date
 - **Sprint Summary** — total issues/SP, completed vs. remaining
 - **Completion Analysis** — by issue type, engineer, and priority
 - **Estimation Accuracy** — SP accuracy, flagged anomalies
+- **Cycle Time** — median/avg/min/max days from In Progress to Done, by issue type
 - **Scope Changes** — items added/removed mid-sprint
 - **Carryover Risk** — unfinished items ranked by risk level
 - **Blocker Analysis** — blocked and stalled items

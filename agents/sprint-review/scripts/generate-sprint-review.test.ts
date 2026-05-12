@@ -14,6 +14,7 @@ import {
   computeBlockers,
   identifyAutomationOpportunities,
   computeRetroGuide,
+  computeCycleTime,
   buildAccountIdToName,
   buildDisplayToName,
   type SprintIssue,
@@ -26,6 +27,8 @@ import {
   type ScopeChange,
   type CarryoverItem,
   type BlockerItem,
+  type TransitionRecord,
+  type CycleTimeStat,
 } from "./generate-sprint-review.js";
 
 // ---------------------------------------------------------------------------
@@ -819,6 +822,7 @@ interface RetroInput {
   scopeChanges: ScopeChange[];
   carryover: CarryoverItem[];
   blockers: BlockerItem[];
+  cycleTime: CycleTimeStat[];
   hasStoryPoints: boolean;
 }
 
@@ -841,6 +845,7 @@ function makeBaseRetroInput(overrides: Partial<RetroInput> = {}): RetroInput {
     scopeChanges: overrides.scopeChanges ?? [],
     carryover: overrides.carryover ?? [],
     blockers: overrides.blockers ?? [],
+    cycleTime: overrides.cycleTime ?? [],
     hasStoryPoints: overrides.hasStoryPoints ?? true,
   };
 }
@@ -849,7 +854,8 @@ function runRetro(overrides: Partial<RetroInput> = {}) {
   const i = makeBaseRetroInput(overrides);
   return computeRetroGuide(
     i.summary, i.byType, i.byEngineer, i.byPriority,
-    i.estimationFlags, i.scopeChanges, i.carryover, i.blockers, i.hasStoryPoints,
+    i.estimationFlags, i.scopeChanges, i.carryover, i.blockers,
+    i.cycleTime, i.hasStoryPoints,
   );
 }
 
@@ -1164,5 +1170,148 @@ describe("computeRetroGuide", () => {
     });
     const first = guide.wentLessWell[0];
     expect(first.includes("issues") || first.includes("story points")).toBe(true);
+  });
+
+  it("flags fast cycle time as went well", () => {
+    const guide = runRetro({
+      cycleTime: [
+        { type: "Bug", count: 10, median_days: 2, avg_days: 2.5, min_days: 1, max_days: 5 },
+      ],
+    });
+    expect(guide.wentWell.some((b) => b.includes("Bug cycle time is fast"))).toBe(true);
+  });
+
+  it("flags slow cycle time as went less well", () => {
+    const guide = runRetro({
+      cycleTime: [
+        { type: "Story", count: 5, median_days: 10, avg_days: 11, min_days: 5, max_days: 18 },
+      ],
+    });
+    expect(guide.wentLessWell.some((b) => b.includes("Story cycle time is slow"))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeCycleTime
+// ---------------------------------------------------------------------------
+
+describe("computeCycleTime", () => {
+  it("computes median/avg/min/max for one type", () => {
+    const issues = [
+      makeIssue({ key: "T-1", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-05T10:00:00Z" }),
+      makeIssue({ key: "T-2", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-08T10:00:00Z" }),
+      makeIssue({ key: "T-3", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-10T10:00:00Z" }),
+    ];
+    const transitions: TransitionRecord[] = [
+      { key: "T-1", first_in_progress_date: "2026-05-01T10:00:00Z" },
+      { key: "T-2", first_in_progress_date: "2026-05-02T10:00:00Z" },
+      { key: "T-3", first_in_progress_date: "2026-05-03T10:00:00Z" },
+    ];
+    const stats = computeCycleTime(issues, transitions, BASE_CONFIG);
+    expect(stats).toHaveLength(1);
+    expect(stats[0].type).toBe("Bug");
+    expect(stats[0].count).toBe(3);
+    expect(stats[0].min_days).toBe(4);
+    expect(stats[0].max_days).toBe(7);
+    expect(stats[0].median_days).toBe(6);
+  });
+
+  it("groups by issue type", () => {
+    const issues = [
+      makeIssue({ key: "T-1", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-05T10:00:00Z" }),
+      makeIssue({ key: "T-2", issuetype: "Story", resolution: "Done", resolutiondate: "2026-05-08T10:00:00Z" }),
+    ];
+    const transitions: TransitionRecord[] = [
+      { key: "T-1", first_in_progress_date: "2026-05-01T10:00:00Z" },
+      { key: "T-2", first_in_progress_date: "2026-05-01T10:00:00Z" },
+    ];
+    const stats = computeCycleTime(issues, transitions, BASE_CONFIG);
+    expect(stats).toHaveLength(2);
+    const types = stats.map((s) => s.type);
+    expect(types).toContain("Bug");
+    expect(types).toContain("Story");
+  });
+
+  it("skips issues without transition records", () => {
+    const issues = [
+      makeIssue({ key: "T-1", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-05T10:00:00Z" }),
+      makeIssue({ key: "T-2", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-08T10:00:00Z" }),
+    ];
+    const transitions: TransitionRecord[] = [
+      { key: "T-1", first_in_progress_date: "2026-05-01T10:00:00Z" },
+    ];
+    const stats = computeCycleTime(issues, transitions, BASE_CONFIG);
+    expect(stats[0].count).toBe(1);
+  });
+
+  it("skips issues without resolutiondate", () => {
+    const issues = [
+      makeIssue({ key: "T-1", issuetype: "Bug", resolution: "", resolutiondate: "" }),
+    ];
+    const transitions: TransitionRecord[] = [
+      { key: "T-1", first_in_progress_date: "2026-05-01T10:00:00Z" },
+    ];
+    const stats = computeCycleTime(issues, transitions, BASE_CONFIG);
+    expect(stats).toHaveLength(0);
+  });
+
+  it("falls back to updated when resolutiondate is empty", () => {
+    const issues = [
+      makeIssue({ key: "T-1", issuetype: "Bug", status: "Verified", resolution: "", resolutiondate: "", updated: "2026-05-08T10:00:00Z" }),
+    ];
+    const transitions: TransitionRecord[] = [
+      { key: "T-1", first_in_progress_date: "2026-05-01T10:00:00Z" },
+    ];
+    const stats = computeCycleTime(issues, transitions, BASE_CONFIG);
+    expect(stats).toHaveLength(1);
+    expect(stats[0].count).toBe(1);
+    expect(stats[0].min_days).toBe(7);
+  });
+
+  it("handles single-item type", () => {
+    const issues = [
+      makeIssue({ key: "T-1", issuetype: "Task", resolution: "Done", resolutiondate: "2026-05-06T10:00:00Z" }),
+    ];
+    const transitions: TransitionRecord[] = [
+      { key: "T-1", first_in_progress_date: "2026-05-03T10:00:00Z" },
+    ];
+    const stats = computeCycleTime(issues, transitions, BASE_CONFIG);
+    expect(stats).toHaveLength(1);
+    expect(stats[0].median_days).toBe(stats[0].avg_days);
+    expect(stats[0].min_days).toBe(stats[0].max_days);
+  });
+
+  it("returns empty array when no transitions", () => {
+    const issues = [
+      makeIssue({ key: "T-1", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-05T10:00:00Z" }),
+    ];
+    const stats = computeCycleTime(issues, [], BASE_CONFIG);
+    expect(stats).toHaveLength(0);
+  });
+
+  it("enforces minimum 1 day floor", () => {
+    const issues = [
+      makeIssue({ key: "T-1", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-01T12:00:00Z" }),
+    ];
+    const transitions: TransitionRecord[] = [
+      { key: "T-1", first_in_progress_date: "2026-05-01T10:00:00Z" },
+    ];
+    const stats = computeCycleTime(issues, transitions, BASE_CONFIG);
+    expect(stats[0].min_days).toBe(1);
+  });
+
+  it("sorts by count descending", () => {
+    const issues = [
+      makeIssue({ key: "T-1", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-05T10:00:00Z" }),
+      makeIssue({ key: "T-2", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-06T10:00:00Z" }),
+      makeIssue({ key: "T-3", issuetype: "Story", resolution: "Done", resolutiondate: "2026-05-07T10:00:00Z" }),
+    ];
+    const transitions: TransitionRecord[] = [
+      { key: "T-1", first_in_progress_date: "2026-05-01T10:00:00Z" },
+      { key: "T-2", first_in_progress_date: "2026-05-01T10:00:00Z" },
+      { key: "T-3", first_in_progress_date: "2026-05-01T10:00:00Z" },
+    ];
+    const stats = computeCycleTime(issues, transitions, BASE_CONFIG);
+    expect(stats[0].type).toBe("Bug");
   });
 });

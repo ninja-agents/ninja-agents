@@ -6,6 +6,8 @@
 
 A shared playground for AI agents that help engineering teams ship status reports, run sprint retrospectives, and audit repository documentation. Each agent is a self-contained directory under `agents/` with its own scripts, config, and data. Agents run inside [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Cursor](https://cursor.com) via MCP servers that connect to GitHub, GitLab, and Jira.
 
+> **Note:** These agents are opinionated — they encode our team's specific workflows, naming conventions, and tooling choices. They work well for us but may need adaptation for your team.
+
 ## Overview
 
 The repo follows a "data collector + deterministic script" pattern: the AI agent fetches data from external services (GitHub, GitLab, Jira) via MCP tool calls and saves it as CSV, then a TypeScript script generates the structured output. The agent writes only the prose sections (e.g., Key Highlights, Key Takeaways) that require synthesis. Each agent is self-contained — no cross-agent imports, shared team config accessed via config path — and all dependencies are managed in the root `package.json`. TypeScript files execute directly via `tsx` with no build step.

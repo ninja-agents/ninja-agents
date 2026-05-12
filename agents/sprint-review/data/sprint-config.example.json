@@ -27,12 +27,14 @@
     {
       "name": "Alice Smith",
       "jira_account_id": "abc123:example-id",
-      "jira_display_names": ["Alice Smith"]
+      "jira_display_names": ["Alice Smith"],
+      "role": "dev"
     },
     {
       "name": "Bob Jones",
       "jira_account_id": "def456:example-id",
-      "jira_display_names": ["Bob Jones", "Robert Jones"]
+      "jira_display_names": ["Bob Jones", "Robert Jones"],
+      "role": "qe"
     }
   ]
 }

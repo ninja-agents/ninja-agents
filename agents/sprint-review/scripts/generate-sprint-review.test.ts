@@ -53,11 +53,13 @@ const BASE_CONFIG: SprintConfig = {
       name: "Alice",
       jira_account_id: "alice-id",
       jira_display_names: ["Alice Smith"],
+      role: "dev" as const,
     },
     {
       name: "Bob",
       jira_account_id: "bob-id",
       jira_display_names: ["Bob Jones", "Robert Jones"],
+      role: "qe" as const,
     },
   ],
 };
@@ -80,6 +82,8 @@ function makeIssue(overrides: Partial<SprintIssue> = {}): SprintIssue {
     sprint_start: "2026-04-27T00:00:00Z",
     sprint_end: "2026-05-14T00:00:00Z",
     labels: [],
+    qa_contact_id: "",
+    qa_contact_name: "",
     ...overrides,
   };
 }
@@ -277,10 +281,10 @@ describe("computeCompletionByType", () => {
 // computeCompletionByEngineer
 // ---------------------------------------------------------------------------
 
-describe("computeCompletionByEngineer", () => {
-  const accountIdToName = buildAccountIdToName(BASE_CONFIG);
-  const displayToName = buildDisplayToName(BASE_CONFIG);
+const accountIdToName = buildAccountIdToName(BASE_CONFIG);
+const displayToName = buildDisplayToName(BASE_CONFIG);
 
+describe("computeCompletionByEngineer", () => {
   it("matches engineers by account ID", () => {
     const issues = [
       makeIssue({
@@ -338,7 +342,7 @@ describe("computeCompletionByEngineer", () => {
     expect(bob.completed).toBe(1);
   });
 
-  it("creates entry for unknown engineers", () => {
+  it("excludes unknown engineers", () => {
     const issues = [
       makeIssue({ assignee_id: "unknown-id", assignee_name: "Charlie Brown" }),
     ];
@@ -348,8 +352,72 @@ describe("computeCompletionByEngineer", () => {
       accountIdToName,
       displayToName,
     );
-    const charlie = result.find((r) => r.name === "Charlie Brown")!;
-    expect(charlie.assigned).toBe(1);
+    expect(result.find((r) => r.name === "Charlie Brown")).toBeUndefined();
+  });
+
+  it("counts QA Contact issues for QE engineers", () => {
+    const issues = [
+      makeIssue({
+        assignee_id: "unknown-id",
+        assignee_name: "External Dev",
+        qa_contact_id: "bob-id",
+        qa_contact_name: "Bob Jones",
+        resolution: "Done",
+        story_points: 3,
+      }),
+    ];
+    const result = computeCompletionByEngineer(
+      issues,
+      BASE_CONFIG,
+      accountIdToName,
+      displayToName,
+    );
+    const bob = result.find((r) => r.name === "Bob")!;
+    expect(bob.assigned).toBe(1);
+    expect(bob.completed).toBe(1);
+    expect(bob.sp_completed).toBe(3);
+  });
+
+  it("does not double-count when QE is both assignee and QA contact", () => {
+    const issues = [
+      makeIssue({
+        assignee_id: "bob-id",
+        assignee_name: "Bob Jones",
+        qa_contact_id: "bob-id",
+        qa_contact_name: "Bob Jones",
+        resolution: "Done",
+        story_points: 5,
+      }),
+    ];
+    const result = computeCompletionByEngineer(
+      issues,
+      BASE_CONFIG,
+      accountIdToName,
+      displayToName,
+    );
+    const bob = result.find((r) => r.name === "Bob")!;
+    expect(bob.assigned).toBe(1);
+    expect(bob.completed).toBe(1);
+    expect(bob.sp_completed).toBe(5);
+  });
+
+  it("does not count QA Contact for dev-role engineers", () => {
+    const issues = [
+      makeIssue({
+        assignee_id: "unknown-id",
+        assignee_name: "External",
+        qa_contact_id: "alice-id",
+        qa_contact_name: "Alice Smith",
+      }),
+    ];
+    const result = computeCompletionByEngineer(
+      issues,
+      BASE_CONFIG,
+      accountIdToName,
+      displayToName,
+    );
+    const alice = result.find((r) => r.name === "Alice")!;
+    expect(alice.assigned).toBe(0);
   });
 });
 
@@ -485,23 +553,31 @@ describe("computeScopeChanges", () => {
 describe("computeCarryover", () => {
   it("excludes completed items", () => {
     const issues = [makeIssue({ resolution: "Done" })];
-    expect(computeCarryover(issues, BASE_CONFIG)).toHaveLength(0);
+    expect(computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName)).toHaveLength(0);
   });
 
   it("classifies high risk for Blocker/Critical priority", () => {
     const issues = [
       makeIssue({ priority: "Blocker", story_points: 2, resolution: "" }),
     ];
-    const result = computeCarryover(issues, BASE_CONFIG);
+    const result = computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName);
     expect(result[0].risk).toBe("high");
   });
 
-  it("classifies high risk for large story points (> 5)", () => {
+  it("classifies high risk for large story points (> 8)", () => {
+    const issues = [
+      makeIssue({ priority: "Normal", story_points: 13, resolution: "" }),
+    ];
+    const result = computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName);
+    expect(result[0].risk).toBe("high");
+  });
+
+  it("does not classify 8 SP as high risk by size alone", () => {
     const issues = [
       makeIssue({ priority: "Normal", story_points: 8, resolution: "" }),
     ];
-    const result = computeCarryover(issues, BASE_CONFIG);
-    expect(result[0].risk).toBe("high");
+    const result = computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName);
+    expect(result[0].risk).not.toBe("high");
   });
 
   it("classifies medium risk for in-progress items", () => {
@@ -513,7 +589,7 @@ describe("computeCarryover", () => {
         resolution: "",
       }),
     ];
-    const result = computeCarryover(issues, BASE_CONFIG);
+    const result = computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName);
     expect(result[0].risk).toBe("medium");
   });
 
@@ -526,7 +602,7 @@ describe("computeCarryover", () => {
         resolution: "",
       }),
     ];
-    const result = computeCarryover(issues, BASE_CONFIG);
+    const result = computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName);
     expect(result[0].risk).toBe("medium");
   });
 
@@ -539,7 +615,7 @@ describe("computeCarryover", () => {
         resolution: "",
       }),
     ];
-    const result = computeCarryover(issues, BASE_CONFIG);
+    const result = computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName);
     expect(result[0].risk).toBe("low");
   });
 
@@ -565,7 +641,7 @@ describe("computeCarryover", () => {
         resolution: "",
       }),
     ];
-    const result = computeCarryover(issues, BASE_CONFIG);
+    const result = computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName);
     expect(result.map((r) => r.key)).toEqual(["HIGH-2", "HIGH-1", "LOW-1"]);
   });
 });
@@ -585,7 +661,7 @@ describe("computeBlockers", () => {
         resolution: "",
       }),
     ];
-    const result = computeBlockers(issues, BASE_CONFIG, today);
+    const result = computeBlockers(issues, BASE_CONFIG, today, accountIdToName, displayToName);
     expect(result).toHaveLength(1);
     expect(result[0].kind).toBe("stalled");
     expect(result[0].days_stalled).toBe(
@@ -601,7 +677,7 @@ describe("computeBlockers", () => {
         resolution: "",
       }),
     ];
-    expect(computeBlockers(issues, BASE_CONFIG, today)).toHaveLength(0);
+    expect(computeBlockers(issues, BASE_CONFIG, today, accountIdToName, displayToName)).toHaveLength(0);
   });
 
   it("detects stalled testing items", () => {
@@ -612,14 +688,14 @@ describe("computeBlockers", () => {
         resolution: "",
       }),
     ];
-    const result = computeBlockers(issues, BASE_CONFIG, today);
+    const result = computeBlockers(issues, BASE_CONFIG, today, accountIdToName, displayToName);
     expect(result).toHaveLength(1);
     expect(result[0].kind).toBe("stalled");
   });
 
   it("skips completed items", () => {
     const issues = [makeIssue({ status: "Done", resolution: "Done" })];
-    expect(computeBlockers(issues, BASE_CONFIG, today)).toHaveLength(0);
+    expect(computeBlockers(issues, BASE_CONFIG, today, accountIdToName, displayToName)).toHaveLength(0);
   });
 
   it("sorts by days stalled descending", () => {
@@ -637,7 +713,7 @@ describe("computeBlockers", () => {
         resolution: "",
       }),
     ];
-    const result = computeBlockers(issues, BASE_CONFIG, today);
+    const result = computeBlockers(issues, BASE_CONFIG, today, accountIdToName, displayToName);
     expect(result[0].key).toBe("B-2");
   });
 });

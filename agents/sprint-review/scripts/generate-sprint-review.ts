@@ -30,6 +30,8 @@ export interface SprintIssue {
   sprint_start: string;
   sprint_end: string;
   labels: string[];
+  qa_contact_id: string;
+  qa_contact_name: string;
 }
 
 export interface ChangelogIssue {
@@ -73,6 +75,7 @@ export interface SprintConfig {
     name: string;
     jira_account_id: string;
     jira_display_names: string[];
+    role: "dev" | "qe";
   }[];
 }
 
@@ -240,6 +243,8 @@ function loadSprintIssues(cachePath: string): SprintIssue[] {
       sprint_start: f[13] ?? "",
       sprint_end: f[14] ?? "",
       labels: (f[15] ?? "").split(";").filter(Boolean),
+      qa_contact_id: f[16] ?? "",
+      qa_contact_name: f[17] ?? "",
     };
   });
 }
@@ -375,24 +380,11 @@ export function computeCompletionByEngineer(
     });
   }
 
-  for (const i of issues) {
-    const name =
-      accountIdToName.get(i.assignee_id) ??
-      displayToName.get(i.assignee_name.toLowerCase()) ??
-      i.assignee_name;
-    if (!name) continue;
-    let entry = map.get(name);
-    if (!entry) {
-      entry = {
-        name,
-        assigned: 0,
-        completed: 0,
-        remaining: 0,
-        sp_completed: 0,
-        sp_remaining: 0,
-      };
-      map.set(name, entry);
-    }
+  const qeNames = new Set(
+    config.engineers.filter((e) => e.role === "qe").map((e) => e.name),
+  );
+
+  const accumulate = (entry: EngineerCompletion, i: SprintIssue) => {
     entry.assigned++;
     if (isCompleted(i, config)) {
       entry.completed++;
@@ -400,6 +392,22 @@ export function computeCompletionByEngineer(
     } else {
       entry.remaining++;
       entry.sp_remaining += i.story_points ?? 0;
+    }
+  };
+
+  for (const i of issues) {
+    const name =
+      accountIdToName.get(i.assignee_id) ??
+      displayToName.get(i.assignee_name.toLowerCase());
+    const entry = name ? map.get(name) : undefined;
+    if (entry) accumulate(entry, i);
+
+    const qaName =
+      accountIdToName.get(i.qa_contact_id) ??
+      displayToName.get(i.qa_contact_name.toLowerCase());
+    if (qaName && qeNames.has(qaName) && qaName !== name) {
+      const qaEntry = map.get(qaName);
+      if (qaEntry) accumulate(qaEntry, i);
     }
   }
 
@@ -541,6 +549,8 @@ export function computeScopeChanges(
 export function computeCarryover(
   issues: SprintIssue[],
   config: SprintConfig,
+  accountIdToName: Map<string, string>,
+  displayToName: Map<string, string>,
 ): CarryoverItem[] {
   const items: CarryoverItem[] = [];
   const priorityWeight: Record<string, number> = {
@@ -556,7 +566,7 @@ export function computeCarryover(
     if (isCompleted(i, config)) continue;
     const pw = priorityWeight[i.priority] ?? 2;
     let risk: "high" | "medium" | "low";
-    if (pw >= 4 || (i.story_points !== null && i.story_points > 5)) {
+    if (pw >= 4 || (i.story_points !== null && i.story_points > 8)) {
       risk = "high";
     } else if (
       config.statuses.in_progress.includes(i.status) ||
@@ -574,7 +584,10 @@ export function computeCarryover(
       status: i.status,
       story_points: i.story_points,
       priority: i.priority,
-      assignee: i.assignee_name,
+      assignee:
+        accountIdToName.get(i.assignee_id) ??
+        displayToName.get(i.assignee_name.toLowerCase()) ??
+        i.assignee_name,
       risk,
     });
   }
@@ -591,6 +604,8 @@ export function computeBlockers(
   issues: SprintIssue[],
   config: SprintConfig,
   today: Date,
+  accountIdToName: Map<string, string>,
+  displayToName: Map<string, string>,
 ): BlockerItem[] {
   const items: BlockerItem[] = [];
 
@@ -611,7 +626,10 @@ export function computeBlockers(
           summary: i.summary,
           url: `${config.jira.base_url}/${i.key}`,
           days_stalled: daysBetween(updated, today),
-          assignee: i.assignee_name,
+          assignee:
+            accountIdToName.get(i.assignee_id) ??
+            displayToName.get(i.assignee_name.toLowerCase()) ??
+            i.assignee_name,
           priority: i.priority,
           kind: "stalled",
         });
@@ -933,13 +951,6 @@ function formatReport(
   }
   ln();
 
-  // Time Distribution
-  ln("## Time Distribution");
-  ln();
-  ln(
-    "See **Completion Analysis > By Engineer** above for detailed workload distribution.",
-  );
-  ln();
 
   // Automation Opportunities
   ln("## Automation Opportunities");
@@ -1086,8 +1097,19 @@ function main() {
   const byPriority = computeCompletionByPriority(issues, config);
   const estimationFlags = computeEstimationFlags(issues, config);
   const scopeChanges = computeScopeChanges(issues, changelog, config);
-  const carryover = computeCarryover(issues, config);
-  const blockers = computeBlockers(issues, config, today);
+  const carryover = computeCarryover(
+    issues,
+    config,
+    accountIdToName,
+    displayToName,
+  );
+  const blockers = computeBlockers(
+    issues,
+    config,
+    today,
+    accountIdToName,
+    displayToName,
+  );
   const automationOps = identifyAutomationOpportunities(issues);
 
   // Format report

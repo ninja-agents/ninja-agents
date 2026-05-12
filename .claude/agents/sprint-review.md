@@ -86,7 +86,7 @@ mcp__atlassian__searchJiraIssuesUsingJql:
   cloudId: "redhat.atlassian.net"
   jql: 'sprint = "{sprint_name}" ORDER BY status ASC, priority DESC'
   maxResults: 100
-  fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "issuetype", "priority", "created", "updated", "customfield_10028", "customfield_10020", "labels"]
+  fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "issuetype", "priority", "created", "updated", "customfield_10028", "customfield_10020", "labels", "customfield_10470"]
   responseContentFormat: "markdown"
 ```
 
@@ -119,7 +119,7 @@ Extract fields from the JSON response and write CSV files to `agents/sprint-revi
 
 ### sprint-issues.csv
 
-Header: `key,summary,status,resolution,resolutiondate,issuetype,priority,assignee_id,assignee_name,story_points,created,updated,sprint_name,sprint_start,sprint_end,labels`
+Header: `key,summary,status,resolution,resolutiondate,issuetype,priority,assignee_id,assignee_name,story_points,created,updated,sprint_name,sprint_start,sprint_end,labels,qa_contact_id,qa_contact_name`
 
 For each issue in the response `issues.nodes` array, extract one CSV row:
 
@@ -141,6 +141,8 @@ For each issue in the response `issues.nodes` array, extract one CSV row:
 | sprint_start   | `{sprint_start}` from Step 1                | same for all rows                   |
 | sprint_end     | `{sprint_end}` from Step 1                  | same for all rows                   |
 | labels         | `node.fields.labels` joined by ";"          | array of strings; use empty if null |
+| qa_contact_id  | `node.fields.customfield_10470.accountId` or empty | QA Contact may be null     |
+| qa_contact_name| `node.fields.customfield_10470.displayName` or empty | QA Contact may be null   |
 
 **CSV quoting rules:**
 

@@ -746,6 +746,7 @@ export function computeRetroGuide(
   const added = scopeChanges.filter((s) => s.kind === "added");
   const removed = scopeChanges.filter((s) => s.kind === "removed");
   const slow = estimationFlags.filter((f) => f.kind === "slow");
+  const fast = estimationFlags.filter((f) => f.kind === "fast");
   const highRisk = carryover.filter((c) => c.risk === "high");
   const highRiskSp = highRisk.reduce((s, i) => s + (i.story_points ?? 0), 0);
 
@@ -765,7 +766,8 @@ export function computeRetroGuide(
 
   let typeWellCount = 0;
   for (const t of byType) {
-    if (t.total >= 2 && t.completed === t.total && typeWellCount < 2) {
+    if (typeWellCount >= 2) break;
+    if (t.total >= 2 && t.completed === t.total) {
       wentWell.push(`All ${t.type} issues completed (${t.total}/${t.total})`);
       typeWellCount++;
     }
@@ -774,11 +776,39 @@ export function computeRetroGuide(
   for (const p of byPriority) {
     if (
       (p.type === "Blocker" || p.type === "Critical") &&
-      p.total >= 1 &&
-      p.completed === p.total
+      p.total >= 2
+    ) {
+      const rate = p.completed / p.total;
+      if (rate >= 1) {
+        wentWell.push(
+          `All ${p.type}-priority items completed (${p.completed}/${p.total})`,
+        );
+      } else if (rate >= 0.75) {
+        wentWell.push(
+          `${p.type}-priority items mostly resolved (${p.completed}/${p.total}, ${Math.round(rate * 100)}%)`,
+        );
+      }
+    } else if (
+      (p.type === "Blocker" || p.type === "Critical") &&
+      p.total === 1 &&
+      p.completed === 1
     ) {
       wentWell.push(
-        `All ${p.type}-priority items completed (${p.total}/${p.total})`,
+        `All ${p.type}-priority items completed (${p.completed}/${p.total})`,
+      );
+    }
+  }
+
+  if (typeWellCount === 0 && summary.total_issues > 0) {
+    const best = byType
+      .filter((t) => t.total >= 3)
+      .sort((a, b) => b.completed / b.total - a.completed / a.total)[0];
+    if (
+      best &&
+      best.completed / best.total > issueCompletionRate + 0.1
+    ) {
+      wentWell.push(
+        `${best.type} completion outpaced overall (${Math.round((best.completed / best.total) * 100)}% vs ${Math.round(issueCompletionRate * 100)}% overall)`,
       );
     }
   }
@@ -789,6 +819,12 @@ export function computeRetroGuide(
       wentWell.push(`${e.name} completed all ${e.assigned} assigned items`);
       engWellCount++;
     }
+  }
+
+  if (fast.length > 0) {
+    wentWell.push(
+      `${fast.length} item${fast.length !== 1 ? "s" : ""} completed faster than estimated -- good execution on well-understood work`,
+    );
   }
 
   if (blockers.length === 0) {
@@ -807,51 +843,65 @@ export function computeRetroGuide(
     );
   }
 
-  // --- Went Less Well ---
+  // --- Went Less Well (collect candidates, then cap at 5) ---
 
-  const lowIssueCompletion = issueCompletionRate < 0.6;
-  if (lowIssueCompletion) {
-    wentLessWell.push(
-      `Completed only ${Math.round(issueCompletionRate * 100)}% of issues (${summary.completed_issues}/${summary.total_issues})`,
-    );
+  interface WeightedBullet {
+    text: string;
+    weight: number;
   }
+  const lessCandidates: WeightedBullet[] = [];
 
-  const lowSpCompletion =
-    spCompletionRate !== null && spCompletionRate < 0.6;
-  if (spCompletionRate !== null && lowSpCompletion) {
-    wentLessWell.push(
-      `Delivered only ${Math.round(spCompletionRate * 100)}% of planned story points (${spStr(summary.completed_sp)}/${spStr(summary.total_sp)})`,
-    );
+  const lowCompletion = issueCompletionRate < 0.6;
+  const lowSp = spCompletionRate !== null && spCompletionRate < 0.6;
+  if (lowCompletion && lowSp) {
+    lessCandidates.push({
+      text: `Completed only ${Math.round(issueCompletionRate * 100)}% of issues and ${Math.round(spCompletionRate * 100)}% of story points`,
+      weight: 10,
+    });
+  } else if (lowCompletion) {
+    lessCandidates.push({
+      text: `Completed only ${Math.round(issueCompletionRate * 100)}% of issues (${summary.completed_issues}/${summary.total_issues})`,
+      weight: 10,
+    });
+  } else if (lowSp && spCompletionRate !== null) {
+    lessCandidates.push({
+      text: `Delivered only ${Math.round(spCompletionRate * 100)}% of planned story points (${spStr(summary.completed_sp)}/${spStr(summary.total_sp)})`,
+      weight: 10,
+    });
   }
 
   const scopeCreep = added.length >= 3;
   if (scopeCreep) {
     const addedSp = added.reduce((s, i) => s + (i.story_points ?? 0), 0);
-    wentLessWell.push(
-      `${added.length} items were added mid-sprint, increasing scope by ${addedSp} story points`,
-    );
+    lessCandidates.push({
+      text: `${added.length} items were added mid-sprint, increasing scope by ${addedSp} story points`,
+      weight: 8,
+    });
   }
 
   const estimationMisses = slow.length >= 2;
   if (estimationMisses) {
-    wentLessWell.push(
-      `${slow.length} items took significantly longer than estimated, suggesting sizing inaccuracy`,
-    );
+    lessCandidates.push({
+      text: `${slow.length} items took significantly longer than estimated, suggesting sizing inaccuracy`,
+      weight: 7,
+    });
   }
 
   const hasHighRiskCarryover = highRisk.length >= 1;
   if (hasHighRiskCarryover) {
-    wentLessWell.push(
-      `${highRisk.length} high-risk item${highRisk.length !== 1 ? "s" : ""} likely to carry over, totaling ${highRiskSp} story points`,
-    );
+    lessCandidates.push({
+      text: `${highRisk.length} high-risk item${highRisk.length !== 1 ? "s" : ""} likely to carry over, totaling ${highRiskSp} story points`,
+      weight: 9,
+    });
   }
 
   const hasBlockers = blockers.length >= 1;
   if (hasBlockers) {
     const maxDays = Math.max(...blockers.map((b) => b.days_stalled));
-    wentLessWell.push(
-      `${blockers.length} item${blockers.length !== 1 ? "s" : ""} stalled for ${maxDays}+ days without updates`,
-    );
+    lessCandidates.push({
+      text: `${blockers.length} item${blockers.length !== 1 ? "s" : ""} stalled for ${maxDays}+ days without updates`,
+      weight: 8,
+    });
   }
 
   let criticalIncomplete = false;
@@ -860,77 +910,105 @@ export function computeRetroGuide(
       (p.type === "Blocker" || p.type === "Critical") &&
       p.remaining > 0
     ) {
-      wentLessWell.push(
-        `${p.remaining} ${p.type}-priority item${p.remaining !== 1 ? "s" : ""} remain incomplete`,
-      );
+      lessCandidates.push({
+        text: `${p.remaining} ${p.type}-priority item${p.remaining !== 1 ? "s" : ""} remain incomplete`,
+        weight: p.type === "Blocker" ? 9 : 7,
+      });
       criticalIncomplete = true;
     }
   }
 
   let engOverloadCount = 0;
-  const engineerOverload = byEngineer.some((e) => {
+  let engineerOverload = false;
+  for (const e of byEngineer) {
     if (e.assigned >= 3 && e.completed / e.assigned < 0.4) {
       if (engOverloadCount < 2) {
-        wentLessWell.push(
-          `${e.name} completed only ${e.completed}/${e.assigned} items -- may be overloaded or blocked`,
-        );
+        lessCandidates.push({
+          text: `${e.name} completed only ${e.completed}/${e.assigned} items -- may be overloaded or blocked`,
+          weight: 6,
+        });
         engOverloadCount++;
       }
-      return true;
+      engineerOverload = true;
     }
-    return false;
-  });
+  }
 
   const itemsRemoved = removed.length >= 2;
   if (itemsRemoved) {
-    wentLessWell.push(
-      `${removed.length} items were removed mid-sprint, suggesting planning instability`,
-    );
+    lessCandidates.push({
+      text: `${removed.length} items were removed mid-sprint, suggesting planning instability`,
+      weight: 5,
+    });
   }
 
-  // --- Try Next (derived from went-less-well triggers) ---
+  const MAX_LESS_WELL = 5;
+  lessCandidates
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, MAX_LESS_WELL)
+    .forEach((c) => wentLessWell.push(c.text));
 
-  if (lowIssueCompletion || lowSpCompletion) {
-    tryNext.push(
-      "Review sprint capacity during planning -- consider committing to fewer items",
-    );
+  // --- Try Next (derived from went-less-well triggers, cap at 4) ---
+
+  interface WeightedAction {
+    text: string;
+    weight: number;
+  }
+  const tryCandidates: WeightedAction[] = [];
+
+  if (lowCompletion || lowSp) {
+    tryCandidates.push({
+      text: "Review sprint capacity during planning -- consider committing to fewer items",
+      weight: 10,
+    });
   }
 
   if (scopeCreep) {
-    tryNext.push(
-      "Establish a sprint scope freeze after day 2 -- new items go to backlog unless critical",
-    );
+    tryCandidates.push({
+      text: "Establish a sprint scope freeze after day 2 -- new items go to backlog unless critical",
+      weight: 8,
+    });
   }
 
   if (estimationMisses) {
-    tryNext.push(
-      "Run a story point calibration session before next sprint planning",
-    );
+    tryCandidates.push({
+      text: "Run a story point calibration session before next sprint planning",
+      weight: 7,
+    });
   }
 
   if (hasHighRiskCarryover) {
-    tryNext.push(
-      "Decompose large items (8+ SP) into smaller deliverables before committing them to a sprint",
-    );
+    tryCandidates.push({
+      text: "Decompose large items (8+ SP) into smaller deliverables before committing them to a sprint",
+      weight: 9,
+    });
   }
 
   if (hasBlockers) {
-    tryNext.push(
-      "Add a daily check for items in progress with no updates for 3+ days",
-    );
+    tryCandidates.push({
+      text: "Add a daily check for items in progress with no updates for 3+ days",
+      weight: 8,
+    });
   }
 
   if (criticalIncomplete) {
-    tryNext.push(
-      "Prioritize Blocker/Critical items in the first half of the sprint",
-    );
+    tryCandidates.push({
+      text: "Prioritize Blocker/Critical items in the first half of the sprint",
+      weight: 7,
+    });
   }
 
   if (engineerOverload) {
-    tryNext.push(
-      "Rebalance workload during sprint planning -- cap individual assignments or pair on complex items",
-    );
+    tryCandidates.push({
+      text: "Rebalance workload during sprint planning -- cap individual assignments or pair on complex items",
+      weight: 6,
+    });
   }
+
+  const MAX_TRY_NEXT = 4;
+  tryCandidates
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, MAX_TRY_NEXT)
+    .forEach((c) => tryNext.push(c.text));
 
   // Fallbacks
   if (wentWell.length === 0) {

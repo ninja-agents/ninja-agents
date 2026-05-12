@@ -810,19 +810,19 @@ function makeBaseSummary(
   };
 }
 
-function makeBaseRetroInput(
-  overrides: Partial<{
-    summary: SprintSummary;
-    byType: TypeCompletion[];
-    byEngineer: EngineerCompletion[];
-    byPriority: TypeCompletion[];
-    estimationFlags: EstimationFlag[];
-    scopeChanges: ScopeChange[];
-    carryover: CarryoverItem[];
-    blockers: BlockerItem[];
-    hasStoryPoints: boolean;
-  }> = {},
-) {
+interface RetroInput {
+  summary: SprintSummary;
+  byType: TypeCompletion[];
+  byEngineer: EngineerCompletion[];
+  byPriority: TypeCompletion[];
+  estimationFlags: EstimationFlag[];
+  scopeChanges: ScopeChange[];
+  carryover: CarryoverItem[];
+  blockers: BlockerItem[];
+  hasStoryPoints: boolean;
+}
+
+function makeBaseRetroInput(overrides: Partial<RetroInput> = {}): RetroInput {
   return {
     summary: overrides.summary ?? makeBaseSummary(),
     byType: overrides.byType ?? [
@@ -830,22 +830,8 @@ function makeBaseRetroInput(
       { type: "Story", total: 5, completed: 4, remaining: 1 },
     ],
     byEngineer: overrides.byEngineer ?? [
-      {
-        name: "Alice",
-        assigned: 5,
-        completed: 5,
-        remaining: 0,
-        sp_completed: 25,
-        sp_remaining: 0,
-      },
-      {
-        name: "Bob",
-        assigned: 5,
-        completed: 4,
-        remaining: 1,
-        sp_completed: 20,
-        sp_remaining: 5,
-      },
+      { name: "Alice", assigned: 5, completed: 5, remaining: 0, sp_completed: 25, sp_remaining: 0 },
+      { name: "Bob", assigned: 5, completed: 4, remaining: 1, sp_completed: 20, sp_remaining: 5 },
     ],
     byPriority: overrides.byPriority ?? [
       { type: "Blocker", total: 2, completed: 2, remaining: 0 },
@@ -859,79 +845,71 @@ function makeBaseRetroInput(
   };
 }
 
+function runRetro(overrides: Partial<RetroInput> = {}) {
+  const i = makeBaseRetroInput(overrides);
+  return computeRetroGuide(
+    i.summary, i.byType, i.byEngineer, i.byPriority,
+    i.estimationFlags, i.scopeChanges, i.carryover, i.blockers, i.hasStoryPoints,
+  );
+}
+
 describe("computeRetroGuide", () => {
-  it("flags high issue completion rate as went well", () => {
-    const input = makeBaseRetroInput();
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
+  // --- Went Well ---
+
+  it("flags high issue completion rate (>=80%) as went well", () => {
+    const guide = runRetro();
     expect(guide.wentWell.some((b) => b.includes("90%"))).toBe(true);
   });
 
-  it("flags high SP completion rate as went well", () => {
-    const input = makeBaseRetroInput();
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
+  it("flags high SP completion rate (>=80%) as went well", () => {
+    const guide = runRetro();
     expect(guide.wentWell.some((b) => b.includes("story points"))).toBe(true);
   });
 
   it("flags type with 100% completion as went well", () => {
-    const input = makeBaseRetroInput({
+    const guide = runRetro({
       byType: [{ type: "Bug", total: 3, completed: 3, remaining: 0 }],
     });
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
-    expect(guide.wentWell.some((b) => b.includes("All Bug issues"))).toBe(
-      true,
-    );
+    expect(guide.wentWell.some((b) => b.includes("All Bug issues"))).toBe(true);
+  });
+
+  it("flags Blocker priority at 75%+ as went well", () => {
+    const guide = runRetro({
+      byPriority: [
+        { type: "Blocker", total: 4, completed: 3, remaining: 1 },
+        { type: "Major", total: 6, completed: 6, remaining: 0 },
+      ],
+    });
+    expect(guide.wentWell.some((b) => b.includes("Blocker-priority items mostly resolved"))).toBe(true);
+  });
+
+  it("flags type outpacing overall as went well when no type is 100%", () => {
+    const guide = runRetro({
+      summary: makeBaseSummary({ total_issues: 20, completed_issues: 10, remaining_issues: 10 }),
+      byType: [
+        { type: "Bug", total: 10, completed: 8, remaining: 2 },
+        { type: "Story", total: 10, completed: 2, remaining: 8 },
+      ],
+    });
+    expect(guide.wentWell.some((b) => b.includes("Bug completion outpaced overall"))).toBe(true);
+  });
+
+  it("flags fast-completed items as went well", () => {
+    const guide = runRetro({
+      estimationFlags: [
+        { key: "T-1", summary: "a", url: "", story_points: 13, days_taken: 3, kind: "fast" },
+      ],
+    });
+    expect(guide.wentWell.some((b) => b.includes("completed faster than estimated"))).toBe(true);
   });
 
   it("flags engineer who completed all items as went well", () => {
-    const input = makeBaseRetroInput();
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
-    expect(
-      guide.wentWell.some((b) => b.includes("Alice completed all 5")),
-    ).toBe(true);
+    const guide = runRetro();
+    expect(guide.wentWell.some((b) => b.includes("Alice completed all 5"))).toBe(true);
   });
 
   it("caps engineer went-well bullets at 3", () => {
-    const input = makeBaseRetroInput({
+    const guide = runRetro({
       byEngineer: [
         { name: "A", assigned: 3, completed: 3, remaining: 0, sp_completed: 10, sp_remaining: 0 },
         { name: "B", assigned: 3, completed: 3, remaining: 0, sp_completed: 10, sp_remaining: 0 },
@@ -939,271 +917,198 @@ describe("computeRetroGuide", () => {
         { name: "D", assigned: 3, completed: 3, remaining: 0, sp_completed: 10, sp_remaining: 0 },
       ],
     });
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
     const engBullets = guide.wentWell.filter((b) => b.includes("completed all"));
     expect(engBullets.length).toBeLessThanOrEqual(3);
   });
 
   it("flags no blockers as went well", () => {
-    const input = makeBaseRetroInput();
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
-    expect(guide.wentWell.some((b) => b.includes("No stalled items"))).toBe(
-      true,
-    );
+    const guide = runRetro();
+    expect(guide.wentWell.some((b) => b.includes("No stalled items"))).toBe(true);
   });
 
   it("flags no carryover as went well", () => {
-    const input = makeBaseRetroInput();
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
+    const guide = runRetro();
     expect(guide.wentWell.some((b) => b.includes("no carryover"))).toBe(true);
   });
 
-  it("flags low completion rate as went less well", () => {
-    const input = makeBaseRetroInput({
+  // --- Went Less Well ---
+
+  it("combines low issue + SP completion into one bullet", () => {
+    const guide = runRetro({
       summary: makeBaseSummary({
-        total_issues: 10,
-        completed_issues: 3,
-        remaining_issues: 7,
+        total_issues: 10, completed_issues: 3, remaining_issues: 7,
+        total_sp: 50, completed_sp: 20, remaining_sp: 30,
       }),
     });
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
-    expect(guide.wentLessWell.some((b) => b.includes("30%"))).toBe(true);
+    const combined = guide.wentLessWell.filter((b) => b.includes("issues") && b.includes("story points"));
+    expect(combined.length).toBe(1);
+  });
+
+  it("flags low issue completion alone when SP is fine", () => {
+    const guide = runRetro({
+      summary: makeBaseSummary({
+        total_issues: 10, completed_issues: 3, remaining_issues: 7,
+        total_sp: 50, completed_sp: 45, remaining_sp: 5,
+      }),
+    });
+    expect(guide.wentLessWell.some((b) => b.includes("30%") && b.includes("issues"))).toBe(true);
   });
 
   it("flags scope creep as went less well", () => {
-    const scopeChanges: ScopeChange[] = [
-      { key: "T-1", summary: "a", url: "", kind: "added", date: "2026-05-01", story_points: 3, priority: "Major" },
-      { key: "T-2", summary: "b", url: "", kind: "added", date: "2026-05-02", story_points: 5, priority: "Major" },
-      { key: "T-3", summary: "c", url: "", kind: "added", date: "2026-05-03", story_points: 2, priority: "Major" },
-    ];
-    const input = makeBaseRetroInput({ scopeChanges });
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
-    expect(
-      guide.wentLessWell.some((b) => b.includes("3 items were added")),
-    ).toBe(true);
+    const guide = runRetro({
+      scopeChanges: [
+        { key: "T-1", summary: "a", url: "", kind: "added", date: "2026-05-01", story_points: 3, priority: "Major" },
+        { key: "T-2", summary: "b", url: "", kind: "added", date: "2026-05-02", story_points: 5, priority: "Major" },
+        { key: "T-3", summary: "c", url: "", kind: "added", date: "2026-05-03", story_points: 2, priority: "Major" },
+      ],
+    });
+    expect(guide.wentLessWell.some((b) => b.includes("3 items were added"))).toBe(true);
   });
 
   it("flags estimation misses as went less well", () => {
-    const estimationFlags: EstimationFlag[] = [
-      { key: "T-1", summary: "a", url: "", story_points: 2, days_taken: 10, kind: "slow" },
-      { key: "T-2", summary: "b", url: "", story_points: 3, days_taken: 12, kind: "slow" },
-    ];
-    const input = makeBaseRetroInput({ estimationFlags });
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
-    expect(
-      guide.wentLessWell.some((b) => b.includes("2 items took significantly")),
-    ).toBe(true);
+    const guide = runRetro({
+      estimationFlags: [
+        { key: "T-1", summary: "a", url: "", story_points: 2, days_taken: 10, kind: "slow" },
+        { key: "T-2", summary: "b", url: "", story_points: 3, days_taken: 12, kind: "slow" },
+      ],
+    });
+    expect(guide.wentLessWell.some((b) => b.includes("2 items took significantly"))).toBe(true);
   });
 
   it("flags stalled items as went less well", () => {
-    const blockers: BlockerItem[] = [
-      { key: "T-1", summary: "a", url: "", days_stalled: 7, assignee: "Alice", priority: "Major", kind: "stalled" },
-      { key: "T-2", summary: "b", url: "", days_stalled: 5, assignee: "Bob", priority: "Major", kind: "stalled" },
-    ];
-    const input = makeBaseRetroInput({ blockers });
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
+    const guide = runRetro({
+      blockers: [
+        { key: "T-1", summary: "a", url: "", days_stalled: 7, assignee: "Alice", priority: "Major", kind: "stalled" },
+        { key: "T-2", summary: "b", url: "", days_stalled: 5, assignee: "Bob", priority: "Major", kind: "stalled" },
+      ],
+    });
     expect(guide.wentLessWell.some((b) => b.includes("stalled"))).toBe(true);
   });
 
   it("flags high-risk carryover as went less well", () => {
-    const carryover: CarryoverItem[] = [
-      { key: "T-1", summary: "a", url: "", status: "In Progress", story_points: 13, priority: "Blocker", assignee: "Alice", risk: "high" },
-      { key: "T-2", summary: "b", url: "", status: "New", story_points: 8, priority: "Critical", assignee: "Bob", risk: "high" },
-    ];
-    const input = makeBaseRetroInput({ carryover });
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
+    const guide = runRetro({
+      carryover: [
+        { key: "T-1", summary: "a", url: "", status: "In Progress", story_points: 13, priority: "Blocker", assignee: "Alice", risk: "high" },
+        { key: "T-2", summary: "b", url: "", status: "New", story_points: 8, priority: "Critical", assignee: "Bob", risk: "high" },
+      ],
+    });
     expect(guide.wentLessWell.some((b) => b.includes("high-risk"))).toBe(true);
   });
 
   it("flags critical items incomplete as went less well", () => {
-    const input = makeBaseRetroInput({
-      byPriority: [
-        { type: "Critical", total: 3, completed: 1, remaining: 2 },
-      ],
+    const guide = runRetro({
+      byPriority: [{ type: "Critical", total: 3, completed: 1, remaining: 2 }],
     });
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
-    expect(
-      guide.wentLessWell.some((b) => b.includes("Critical-priority")),
-    ).toBe(true);
+    expect(guide.wentLessWell.some((b) => b.includes("Critical-priority"))).toBe(true);
   });
 
+  it("caps wentLessWell at 5 bullets", () => {
+    const guide = runRetro({
+      summary: makeBaseSummary({
+        total_issues: 10, completed_issues: 3, remaining_issues: 7,
+        total_sp: 50, completed_sp: 20, remaining_sp: 30,
+      }),
+      scopeChanges: [
+        { key: "T-1", summary: "a", url: "", kind: "added", date: "2026-05-01", story_points: 3, priority: "Major" },
+        { key: "T-2", summary: "b", url: "", kind: "added", date: "2026-05-02", story_points: 5, priority: "Major" },
+        { key: "T-3", summary: "c", url: "", kind: "added", date: "2026-05-03", story_points: 2, priority: "Major" },
+      ],
+      estimationFlags: [
+        { key: "T-1", summary: "a", url: "", story_points: 2, days_taken: 10, kind: "slow" },
+        { key: "T-2", summary: "b", url: "", story_points: 3, days_taken: 12, kind: "slow" },
+      ],
+      carryover: [
+        { key: "T-1", summary: "a", url: "", status: "In Progress", story_points: 13, priority: "Blocker", assignee: "Alice", risk: "high" },
+      ],
+      blockers: [
+        { key: "T-1", summary: "a", url: "", days_stalled: 7, assignee: "Alice", priority: "Major", kind: "stalled" },
+      ],
+      byPriority: [
+        { type: "Blocker", total: 3, completed: 1, remaining: 2 },
+        { type: "Critical", total: 3, completed: 1, remaining: 2 },
+      ],
+      byEngineer: [
+        { name: "Phil", assigned: 10, completed: 2, remaining: 8, sp_completed: 5, sp_remaining: 40 },
+      ],
+    });
+    expect(guide.wentLessWell.length).toBeLessThanOrEqual(5);
+  });
+
+  // --- Try Next ---
+
   it("derives try-next from scope creep", () => {
-    const scopeChanges: ScopeChange[] = [
-      { key: "T-1", summary: "a", url: "", kind: "added", date: "2026-05-01", story_points: 3, priority: "Major" },
-      { key: "T-2", summary: "b", url: "", kind: "added", date: "2026-05-02", story_points: 5, priority: "Major" },
-      { key: "T-3", summary: "c", url: "", kind: "added", date: "2026-05-03", story_points: 2, priority: "Major" },
-    ];
-    const input = makeBaseRetroInput({ scopeChanges });
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
+    const guide = runRetro({
+      scopeChanges: [
+        { key: "T-1", summary: "a", url: "", kind: "added", date: "2026-05-01", story_points: 3, priority: "Major" },
+        { key: "T-2", summary: "b", url: "", kind: "added", date: "2026-05-02", story_points: 5, priority: "Major" },
+        { key: "T-3", summary: "c", url: "", kind: "added", date: "2026-05-03", story_points: 2, priority: "Major" },
+      ],
+    });
     expect(guide.tryNext.some((b) => b.includes("scope freeze"))).toBe(true);
   });
 
   it("derives try-next from estimation misses", () => {
-    const estimationFlags: EstimationFlag[] = [
-      { key: "T-1", summary: "a", url: "", story_points: 2, days_taken: 10, kind: "slow" },
-      { key: "T-2", summary: "b", url: "", story_points: 3, days_taken: 12, kind: "slow" },
-    ];
-    const input = makeBaseRetroInput({ estimationFlags });
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
+    const guide = runRetro({
+      estimationFlags: [
+        { key: "T-1", summary: "a", url: "", story_points: 2, days_taken: 10, kind: "slow" },
+        { key: "T-2", summary: "b", url: "", story_points: 3, days_taken: 12, kind: "slow" },
+      ],
+    });
     expect(guide.tryNext.some((b) => b.includes("calibration"))).toBe(true);
   });
 
   it("derives try-next from blockers", () => {
-    const blockers: BlockerItem[] = [
-      { key: "T-1", summary: "a", url: "", days_stalled: 7, assignee: "Alice", priority: "Major", kind: "stalled" },
-    ];
-    const input = makeBaseRetroInput({ blockers });
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
+    const guide = runRetro({
+      blockers: [
+        { key: "T-1", summary: "a", url: "", days_stalled: 7, assignee: "Alice", priority: "Major", kind: "stalled" },
+      ],
+    });
     expect(guide.tryNext.some((b) => b.includes("daily check"))).toBe(true);
   });
 
-  it("provides clean-sprint fallback for tryNext", () => {
-    const input = makeBaseRetroInput();
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
-    expect(guide.tryNext.some((b) => b.includes("Continue current"))).toBe(
-      true,
-    );
+  it("caps tryNext at 4 bullets", () => {
+    const guide = runRetro({
+      summary: makeBaseSummary({
+        total_issues: 10, completed_issues: 3, remaining_issues: 7,
+        total_sp: 50, completed_sp: 20, remaining_sp: 30,
+      }),
+      scopeChanges: [
+        { key: "T-1", summary: "a", url: "", kind: "added", date: "2026-05-01", story_points: 3, priority: "Major" },
+        { key: "T-2", summary: "b", url: "", kind: "added", date: "2026-05-02", story_points: 5, priority: "Major" },
+        { key: "T-3", summary: "c", url: "", kind: "added", date: "2026-05-03", story_points: 2, priority: "Major" },
+      ],
+      estimationFlags: [
+        { key: "T-1", summary: "a", url: "", story_points: 2, days_taken: 10, kind: "slow" },
+        { key: "T-2", summary: "b", url: "", story_points: 3, days_taken: 12, kind: "slow" },
+      ],
+      carryover: [
+        { key: "T-1", summary: "a", url: "", status: "In Progress", story_points: 13, priority: "Blocker", assignee: "Alice", risk: "high" },
+      ],
+      blockers: [
+        { key: "T-1", summary: "a", url: "", days_stalled: 7, assignee: "Alice", priority: "Major", kind: "stalled" },
+      ],
+      byPriority: [
+        { type: "Critical", total: 3, completed: 1, remaining: 2 },
+      ],
+      byEngineer: [
+        { name: "Phil", assigned: 10, completed: 2, remaining: 8, sp_completed: 5, sp_remaining: 40 },
+      ],
+    });
+    expect(guide.tryNext.length).toBeLessThanOrEqual(4);
   });
 
+  it("provides clean-sprint fallback for tryNext", () => {
+    const guide = runRetro();
+    expect(guide.tryNext.some((b) => b.includes("Continue current"))).toBe(true);
+  });
+
+  // --- Guarantees ---
+
   it("guarantees all three arrays are non-empty", () => {
-    const input = makeBaseRetroInput({
+    const guide = runRetro({
       summary: makeBaseSummary({
-        total_issues: 10,
-        completed_issues: 7,
-        remaining_issues: 3,
-        total_sp: 50,
-        completed_sp: 35,
-        remaining_sp: 15,
+        total_issues: 10, completed_issues: 7, remaining_issues: 3,
+        total_sp: 50, completed_sp: 35, remaining_sp: 15,
       }),
       byType: [{ type: "Story", total: 10, completed: 7, remaining: 3 }],
       byEngineer: [
@@ -1211,31 +1116,16 @@ describe("computeRetroGuide", () => {
       ],
       byPriority: [{ type: "Major", total: 10, completed: 7, remaining: 3 }],
     });
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
     expect(guide.wentWell.length).toBeGreaterThanOrEqual(1);
     expect(guide.wentLessWell.length).toBeGreaterThanOrEqual(1);
     expect(guide.tryNext.length).toBeGreaterThanOrEqual(1);
   });
 
   it("uses fallback when no rules trigger for wentWell", () => {
-    const input = makeBaseRetroInput({
+    const guide = runRetro({
       summary: makeBaseSummary({
-        total_issues: 10,
-        completed_issues: 7,
-        remaining_issues: 3,
-        total_sp: 50,
-        completed_sp: 35,
-        remaining_sp: 15,
+        total_issues: 10, completed_issues: 7, remaining_issues: 3,
+        total_sp: 50, completed_sp: 35, remaining_sp: 15,
       }),
       byType: [{ type: "Story", total: 10, completed: 7, remaining: 3 }],
       byEngineer: [
@@ -1252,19 +1142,27 @@ describe("computeRetroGuide", () => {
         { key: "T-1", summary: "a", url: "", status: "New", story_points: 5, priority: "Major", assignee: "X", risk: "low" },
       ],
     });
-    const guide = computeRetroGuide(
-      input.summary,
-      input.byType,
-      input.byEngineer,
-      input.byPriority,
-      input.estimationFlags,
-      input.scopeChanges,
-      input.carryover,
-      input.blockers,
-      input.hasStoryPoints,
-    );
-    expect(
-      guide.wentWell.some((b) => b.includes("No standout positives")),
-    ).toBe(true);
+    expect(guide.wentWell.some((b) => b.includes("No standout positives"))).toBe(true);
+  });
+
+  it("wentLessWell prioritizes higher-weight bullets", () => {
+    const guide = runRetro({
+      summary: makeBaseSummary({
+        total_issues: 10, completed_issues: 3, remaining_issues: 7,
+        total_sp: 50, completed_sp: 20, remaining_sp: 30,
+      }),
+      carryover: [
+        { key: "T-1", summary: "a", url: "", status: "In Progress", story_points: 13, priority: "Blocker", assignee: "Alice", risk: "high" },
+      ],
+      scopeChanges: [
+        { key: "T-1", summary: "a", url: "", kind: "added", date: "2026-05-01", story_points: 3, priority: "Major" },
+        { key: "T-2", summary: "b", url: "", kind: "added", date: "2026-05-02", story_points: 5, priority: "Major" },
+        { key: "T-3", summary: "c", url: "", kind: "added", date: "2026-05-03", story_points: 2, priority: "Major" },
+        { key: "T-4", summary: "d", url: "", kind: "removed", date: "2026-05-04", story_points: 2, priority: "Major" },
+        { key: "T-5", summary: "e", url: "", kind: "removed", date: "2026-05-05", story_points: 3, priority: "Major" },
+      ],
+    });
+    const first = guide.wentLessWell[0];
+    expect(first.includes("issues") || first.includes("story points")).toBe(true);
   });
 });

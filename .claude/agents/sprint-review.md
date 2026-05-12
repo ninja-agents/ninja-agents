@@ -127,6 +127,7 @@ mcp__atlassian__getJiraIssue:
 ```
 
 Parse the `changelog.histories` array. Each history entry has:
+
 - `created` — timestamp of the change
 - `items[]` — array of field changes
 
@@ -150,26 +151,26 @@ Header: `key,summary,status,resolution,resolutiondate,issuetype,priority,assigne
 
 For each issue in the response `issues.nodes` array, extract one CSV row:
 
-| CSV Column     | JSON Path                                   | Notes                               |
-| -------------- | ------------------------------------------- | ----------------------------------- |
-| key            | `node.key`                                  | e.g., "CNV-86227"                   |
-| summary        | `node.fields.summary`                       | double-quote if contains commas     |
-| status         | `node.fields.status.name`                   |                                     |
-| resolution     | `node.fields.resolution.name` or empty      | resolution may be null              |
-| resolutiondate | `node.fields.resolutiondate` or empty       | may be null                         |
-| issuetype      | `node.fields.issuetype.name`                |                                     |
-| priority       | `node.fields.priority.name`                 |                                     |
-| assignee_id    | `node.fields.assignee.accountId` or empty   | assignee may be null                |
-| assignee_name  | `node.fields.assignee.displayName` or empty | assignee may be null                |
-| story_points   | `node.fields.customfield_10028` or empty    | number or null                      |
-| created        | `node.fields.created`                       | ISO-8601                            |
-| updated        | `node.fields.updated`                       | ISO-8601                            |
-| sprint_name    | `{sprint_name}` from Step 1                 | same for all rows                   |
-| sprint_start   | `{sprint_start}` from Step 1                | same for all rows                   |
-| sprint_end     | `{sprint_end}` from Step 1                  | same for all rows                   |
-| labels         | `node.fields.labels` joined by ";"          | array of strings; use empty if null |
-| qa_contact_id  | `node.fields.customfield_10470.accountId` or empty | QA Contact may be null     |
-| qa_contact_name| `node.fields.customfield_10470.displayName` or empty | QA Contact may be null   |
+| CSV Column      | JSON Path                                            | Notes                               |
+| --------------- | ---------------------------------------------------- | ----------------------------------- |
+| key             | `node.key`                                           | e.g., "CNV-86227"                   |
+| summary         | `node.fields.summary`                                | double-quote if contains commas     |
+| status          | `node.fields.status.name`                            |                                     |
+| resolution      | `node.fields.resolution.name` or empty               | resolution may be null              |
+| resolutiondate  | `node.fields.resolutiondate` or empty                | may be null                         |
+| issuetype       | `node.fields.issuetype.name`                         |                                     |
+| priority        | `node.fields.priority.name`                          |                                     |
+| assignee_id     | `node.fields.assignee.accountId` or empty            | assignee may be null                |
+| assignee_name   | `node.fields.assignee.displayName` or empty          | assignee may be null                |
+| story_points    | `node.fields.customfield_10028` or empty             | number or null                      |
+| created         | `node.fields.created`                                | ISO-8601                            |
+| updated         | `node.fields.updated`                                | ISO-8601                            |
+| sprint_name     | `{sprint_name}` from Step 1                          | same for all rows                   |
+| sprint_start    | `{sprint_start}` from Step 1                         | same for all rows                   |
+| sprint_end      | `{sprint_end}` from Step 1                           | same for all rows                   |
+| labels          | `node.fields.labels` joined by ";"                   | array of strings; use empty if null |
+| qa_contact_id   | `node.fields.customfield_10470.accountId` or empty   | QA Contact may be null              |
+| qa_contact_name | `node.fields.customfield_10470.displayName` or empty | QA Contact may be null              |
 
 **CSV quoting rules:**
 

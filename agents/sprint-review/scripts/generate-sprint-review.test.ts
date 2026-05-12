@@ -564,14 +564,21 @@ describe("computeScopeChanges", () => {
 describe("computeCarryover", () => {
   it("excludes completed items", () => {
     const issues = [makeIssue({ resolution: "Done" })];
-    expect(computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName)).toHaveLength(0);
+    expect(
+      computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName),
+    ).toHaveLength(0);
   });
 
   it("classifies high risk for Blocker/Critical priority", () => {
     const issues = [
       makeIssue({ priority: "Blocker", story_points: 2, resolution: "" }),
     ];
-    const result = computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName);
+    const result = computeCarryover(
+      issues,
+      BASE_CONFIG,
+      accountIdToName,
+      displayToName,
+    );
     expect(result[0].risk).toBe("high");
   });
 
@@ -579,7 +586,12 @@ describe("computeCarryover", () => {
     const issues = [
       makeIssue({ priority: "Normal", story_points: 13, resolution: "" }),
     ];
-    const result = computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName);
+    const result = computeCarryover(
+      issues,
+      BASE_CONFIG,
+      accountIdToName,
+      displayToName,
+    );
     expect(result[0].risk).toBe("high");
   });
 
@@ -587,7 +599,12 @@ describe("computeCarryover", () => {
     const issues = [
       makeIssue({ priority: "Normal", story_points: 8, resolution: "" }),
     ];
-    const result = computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName);
+    const result = computeCarryover(
+      issues,
+      BASE_CONFIG,
+      accountIdToName,
+      displayToName,
+    );
     expect(result[0].risk).not.toBe("high");
   });
 
@@ -600,7 +617,12 @@ describe("computeCarryover", () => {
         resolution: "",
       }),
     ];
-    const result = computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName);
+    const result = computeCarryover(
+      issues,
+      BASE_CONFIG,
+      accountIdToName,
+      displayToName,
+    );
     expect(result[0].risk).toBe("medium");
   });
 
@@ -613,7 +635,12 @@ describe("computeCarryover", () => {
         resolution: "",
       }),
     ];
-    const result = computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName);
+    const result = computeCarryover(
+      issues,
+      BASE_CONFIG,
+      accountIdToName,
+      displayToName,
+    );
     expect(result[0].risk).toBe("medium");
   });
 
@@ -626,7 +653,12 @@ describe("computeCarryover", () => {
         resolution: "",
       }),
     ];
-    const result = computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName);
+    const result = computeCarryover(
+      issues,
+      BASE_CONFIG,
+      accountIdToName,
+      displayToName,
+    );
     expect(result[0].risk).toBe("low");
   });
 
@@ -652,7 +684,12 @@ describe("computeCarryover", () => {
         resolution: "",
       }),
     ];
-    const result = computeCarryover(issues, BASE_CONFIG, accountIdToName, displayToName);
+    const result = computeCarryover(
+      issues,
+      BASE_CONFIG,
+      accountIdToName,
+      displayToName,
+    );
     expect(result.map((r) => r.key)).toEqual(["HIGH-2", "HIGH-1", "LOW-1"]);
   });
 });
@@ -672,7 +709,13 @@ describe("computeBlockers", () => {
         resolution: "",
       }),
     ];
-    const result = computeBlockers(issues, BASE_CONFIG, today, accountIdToName, displayToName);
+    const result = computeBlockers(
+      issues,
+      BASE_CONFIG,
+      today,
+      accountIdToName,
+      displayToName,
+    );
     expect(result).toHaveLength(1);
     expect(result[0].kind).toBe("stalled");
     expect(result[0].days_stalled).toBe(
@@ -688,7 +731,15 @@ describe("computeBlockers", () => {
         resolution: "",
       }),
     ];
-    expect(computeBlockers(issues, BASE_CONFIG, today, accountIdToName, displayToName)).toHaveLength(0);
+    expect(
+      computeBlockers(
+        issues,
+        BASE_CONFIG,
+        today,
+        accountIdToName,
+        displayToName,
+      ),
+    ).toHaveLength(0);
   });
 
   it("detects stalled testing items", () => {
@@ -699,14 +750,28 @@ describe("computeBlockers", () => {
         resolution: "",
       }),
     ];
-    const result = computeBlockers(issues, BASE_CONFIG, today, accountIdToName, displayToName);
+    const result = computeBlockers(
+      issues,
+      BASE_CONFIG,
+      today,
+      accountIdToName,
+      displayToName,
+    );
     expect(result).toHaveLength(1);
     expect(result[0].kind).toBe("stalled");
   });
 
   it("skips completed items", () => {
     const issues = [makeIssue({ status: "Done", resolution: "Done" })];
-    expect(computeBlockers(issues, BASE_CONFIG, today, accountIdToName, displayToName)).toHaveLength(0);
+    expect(
+      computeBlockers(
+        issues,
+        BASE_CONFIG,
+        today,
+        accountIdToName,
+        displayToName,
+      ),
+    ).toHaveLength(0);
   });
 
   it("sorts by days stalled descending", () => {
@@ -724,7 +789,13 @@ describe("computeBlockers", () => {
         resolution: "",
       }),
     ];
-    const result = computeBlockers(issues, BASE_CONFIG, today, accountIdToName, displayToName);
+    const result = computeBlockers(
+      issues,
+      BASE_CONFIG,
+      today,
+      accountIdToName,
+      displayToName,
+    );
     expect(result[0].key).toBe("B-2");
   });
 });
@@ -834,8 +905,22 @@ function makeBaseRetroInput(overrides: Partial<RetroInput> = {}): RetroInput {
       { type: "Story", total: 5, completed: 4, remaining: 1 },
     ],
     byEngineer: overrides.byEngineer ?? [
-      { name: "Alice", assigned: 5, completed: 5, remaining: 0, sp_completed: 25, sp_remaining: 0 },
-      { name: "Bob", assigned: 5, completed: 4, remaining: 1, sp_completed: 20, sp_remaining: 5 },
+      {
+        name: "Alice",
+        assigned: 5,
+        completed: 5,
+        remaining: 0,
+        sp_completed: 25,
+        sp_remaining: 0,
+      },
+      {
+        name: "Bob",
+        assigned: 5,
+        completed: 4,
+        remaining: 1,
+        sp_completed: 20,
+        sp_remaining: 5,
+      },
     ],
     byPriority: overrides.byPriority ?? [
       { type: "Blocker", total: 2, completed: 2, remaining: 0 },
@@ -853,9 +938,16 @@ function makeBaseRetroInput(overrides: Partial<RetroInput> = {}): RetroInput {
 function runRetro(overrides: Partial<RetroInput> = {}) {
   const i = makeBaseRetroInput(overrides);
   return computeRetroGuide(
-    i.summary, i.byType, i.byEngineer, i.byPriority,
-    i.estimationFlags, i.scopeChanges, i.carryover, i.blockers,
-    i.cycleTime, i.hasStoryPoints,
+    i.summary,
+    i.byType,
+    i.byEngineer,
+    i.byPriority,
+    i.estimationFlags,
+    i.scopeChanges,
+    i.carryover,
+    i.blockers,
+    i.cycleTime,
+    i.hasStoryPoints,
   );
 }
 
@@ -886,50 +978,103 @@ describe("computeRetroGuide", () => {
         { type: "Major", total: 6, completed: 6, remaining: 0 },
       ],
     });
-    expect(guide.wentWell.some((b) => b.includes("Blocker-priority items mostly resolved"))).toBe(true);
+    expect(
+      guide.wentWell.some((b) =>
+        b.includes("Blocker-priority items mostly resolved"),
+      ),
+    ).toBe(true);
   });
 
   it("flags type outpacing overall as went well when no type is 100%", () => {
     const guide = runRetro({
-      summary: makeBaseSummary({ total_issues: 20, completed_issues: 10, remaining_issues: 10 }),
+      summary: makeBaseSummary({
+        total_issues: 20,
+        completed_issues: 10,
+        remaining_issues: 10,
+      }),
       byType: [
         { type: "Bug", total: 10, completed: 8, remaining: 2 },
         { type: "Story", total: 10, completed: 2, remaining: 8 },
       ],
     });
-    expect(guide.wentWell.some((b) => b.includes("Bug completion outpaced overall"))).toBe(true);
+    expect(
+      guide.wentWell.some((b) => b.includes("Bug completion outpaced overall")),
+    ).toBe(true);
   });
 
   it("flags fast-completed items as went well", () => {
     const guide = runRetro({
       estimationFlags: [
-        { key: "T-1", summary: "a", url: "", story_points: 13, days_taken: 3, kind: "fast" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          story_points: 13,
+          days_taken: 3,
+          kind: "fast",
+        },
       ],
     });
-    expect(guide.wentWell.some((b) => b.includes("completed faster than estimated"))).toBe(true);
+    expect(
+      guide.wentWell.some((b) => b.includes("completed faster than estimated")),
+    ).toBe(true);
   });
 
   it("flags engineer who completed all items as went well", () => {
     const guide = runRetro();
-    expect(guide.wentWell.some((b) => b.includes("Alice completed all 5"))).toBe(true);
+    expect(
+      guide.wentWell.some((b) => b.includes("Alice completed all 5")),
+    ).toBe(true);
   });
 
   it("caps engineer went-well bullets at 3", () => {
     const guide = runRetro({
       byEngineer: [
-        { name: "A", assigned: 3, completed: 3, remaining: 0, sp_completed: 10, sp_remaining: 0 },
-        { name: "B", assigned: 3, completed: 3, remaining: 0, sp_completed: 10, sp_remaining: 0 },
-        { name: "C", assigned: 3, completed: 3, remaining: 0, sp_completed: 10, sp_remaining: 0 },
-        { name: "D", assigned: 3, completed: 3, remaining: 0, sp_completed: 10, sp_remaining: 0 },
+        {
+          name: "A",
+          assigned: 3,
+          completed: 3,
+          remaining: 0,
+          sp_completed: 10,
+          sp_remaining: 0,
+        },
+        {
+          name: "B",
+          assigned: 3,
+          completed: 3,
+          remaining: 0,
+          sp_completed: 10,
+          sp_remaining: 0,
+        },
+        {
+          name: "C",
+          assigned: 3,
+          completed: 3,
+          remaining: 0,
+          sp_completed: 10,
+          sp_remaining: 0,
+        },
+        {
+          name: "D",
+          assigned: 3,
+          completed: 3,
+          remaining: 0,
+          sp_completed: 10,
+          sp_remaining: 0,
+        },
       ],
     });
-    const engBullets = guide.wentWell.filter((b) => b.includes("completed all"));
+    const engBullets = guide.wentWell.filter((b) =>
+      b.includes("completed all"),
+    );
     expect(engBullets.length).toBeLessThanOrEqual(3);
   });
 
   it("flags no blockers as went well", () => {
     const guide = runRetro();
-    expect(guide.wentWell.some((b) => b.includes("No stalled items"))).toBe(true);
+    expect(guide.wentWell.some((b) => b.includes("No stalled items"))).toBe(
+      true,
+    );
   });
 
   it("flags no carryover as went well", () => {
@@ -942,50 +1087,120 @@ describe("computeRetroGuide", () => {
   it("combines low issue + SP completion into one bullet", () => {
     const guide = runRetro({
       summary: makeBaseSummary({
-        total_issues: 10, completed_issues: 3, remaining_issues: 7,
-        total_sp: 50, completed_sp: 20, remaining_sp: 30,
+        total_issues: 10,
+        completed_issues: 3,
+        remaining_issues: 7,
+        total_sp: 50,
+        completed_sp: 20,
+        remaining_sp: 30,
       }),
     });
-    const combined = guide.wentLessWell.filter((b) => b.includes("issues") && b.includes("story points"));
+    const combined = guide.wentLessWell.filter(
+      (b) => b.includes("issues") && b.includes("story points"),
+    );
     expect(combined.length).toBe(1);
   });
 
   it("flags low issue completion alone when SP is fine", () => {
     const guide = runRetro({
       summary: makeBaseSummary({
-        total_issues: 10, completed_issues: 3, remaining_issues: 7,
-        total_sp: 50, completed_sp: 45, remaining_sp: 5,
+        total_issues: 10,
+        completed_issues: 3,
+        remaining_issues: 7,
+        total_sp: 50,
+        completed_sp: 45,
+        remaining_sp: 5,
       }),
     });
-    expect(guide.wentLessWell.some((b) => b.includes("30%") && b.includes("issues"))).toBe(true);
+    expect(
+      guide.wentLessWell.some((b) => b.includes("30%") && b.includes("issues")),
+    ).toBe(true);
   });
 
   it("flags scope creep as went less well", () => {
     const guide = runRetro({
       scopeChanges: [
-        { key: "T-1", summary: "a", url: "", kind: "added", date: "2026-05-01", story_points: 3, priority: "Major" },
-        { key: "T-2", summary: "b", url: "", kind: "added", date: "2026-05-02", story_points: 5, priority: "Major" },
-        { key: "T-3", summary: "c", url: "", kind: "added", date: "2026-05-03", story_points: 2, priority: "Major" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          kind: "added",
+          date: "2026-05-01",
+          story_points: 3,
+          priority: "Major",
+        },
+        {
+          key: "T-2",
+          summary: "b",
+          url: "",
+          kind: "added",
+          date: "2026-05-02",
+          story_points: 5,
+          priority: "Major",
+        },
+        {
+          key: "T-3",
+          summary: "c",
+          url: "",
+          kind: "added",
+          date: "2026-05-03",
+          story_points: 2,
+          priority: "Major",
+        },
       ],
     });
-    expect(guide.wentLessWell.some((b) => b.includes("3 items were added"))).toBe(true);
+    expect(
+      guide.wentLessWell.some((b) => b.includes("3 items were added")),
+    ).toBe(true);
   });
 
   it("flags estimation misses as went less well", () => {
     const guide = runRetro({
       estimationFlags: [
-        { key: "T-1", summary: "a", url: "", story_points: 2, days_taken: 10, kind: "slow" },
-        { key: "T-2", summary: "b", url: "", story_points: 3, days_taken: 12, kind: "slow" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          story_points: 2,
+          days_taken: 10,
+          kind: "slow",
+        },
+        {
+          key: "T-2",
+          summary: "b",
+          url: "",
+          story_points: 3,
+          days_taken: 12,
+          kind: "slow",
+        },
       ],
     });
-    expect(guide.wentLessWell.some((b) => b.includes("2 items took significantly"))).toBe(true);
+    expect(
+      guide.wentLessWell.some((b) => b.includes("2 items took significantly")),
+    ).toBe(true);
   });
 
   it("flags stalled items as went less well", () => {
     const guide = runRetro({
       blockers: [
-        { key: "T-1", summary: "a", url: "", days_stalled: 7, assignee: "Alice", priority: "Major", kind: "stalled" },
-        { key: "T-2", summary: "b", url: "", days_stalled: 5, assignee: "Bob", priority: "Major", kind: "stalled" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          days_stalled: 7,
+          assignee: "Alice",
+          priority: "Major",
+          kind: "stalled",
+        },
+        {
+          key: "T-2",
+          summary: "b",
+          url: "",
+          days_stalled: 5,
+          assignee: "Bob",
+          priority: "Major",
+          kind: "stalled",
+        },
       ],
     });
     expect(guide.wentLessWell.some((b) => b.includes("stalled"))).toBe(true);
@@ -994,8 +1209,26 @@ describe("computeRetroGuide", () => {
   it("flags high-risk carryover as went less well", () => {
     const guide = runRetro({
       carryover: [
-        { key: "T-1", summary: "a", url: "", status: "In Progress", story_points: 13, priority: "Blocker", assignee: "Alice", risk: "high" },
-        { key: "T-2", summary: "b", url: "", status: "New", story_points: 8, priority: "Critical", assignee: "Bob", risk: "high" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          status: "In Progress",
+          story_points: 13,
+          priority: "Blocker",
+          assignee: "Alice",
+          risk: "high",
+        },
+        {
+          key: "T-2",
+          summary: "b",
+          url: "",
+          status: "New",
+          story_points: 8,
+          priority: "Critical",
+          assignee: "Bob",
+          risk: "high",
+        },
       ],
     });
     expect(guide.wentLessWell.some((b) => b.includes("high-risk"))).toBe(true);
@@ -1005,36 +1238,104 @@ describe("computeRetroGuide", () => {
     const guide = runRetro({
       byPriority: [{ type: "Critical", total: 3, completed: 1, remaining: 2 }],
     });
-    expect(guide.wentLessWell.some((b) => b.includes("Critical-priority"))).toBe(true);
+    expect(
+      guide.wentLessWell.some((b) => b.includes("Critical-priority")),
+    ).toBe(true);
   });
 
   it("caps wentLessWell at 5 bullets", () => {
     const guide = runRetro({
       summary: makeBaseSummary({
-        total_issues: 10, completed_issues: 3, remaining_issues: 7,
-        total_sp: 50, completed_sp: 20, remaining_sp: 30,
+        total_issues: 10,
+        completed_issues: 3,
+        remaining_issues: 7,
+        total_sp: 50,
+        completed_sp: 20,
+        remaining_sp: 30,
       }),
       scopeChanges: [
-        { key: "T-1", summary: "a", url: "", kind: "added", date: "2026-05-01", story_points: 3, priority: "Major" },
-        { key: "T-2", summary: "b", url: "", kind: "added", date: "2026-05-02", story_points: 5, priority: "Major" },
-        { key: "T-3", summary: "c", url: "", kind: "added", date: "2026-05-03", story_points: 2, priority: "Major" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          kind: "added",
+          date: "2026-05-01",
+          story_points: 3,
+          priority: "Major",
+        },
+        {
+          key: "T-2",
+          summary: "b",
+          url: "",
+          kind: "added",
+          date: "2026-05-02",
+          story_points: 5,
+          priority: "Major",
+        },
+        {
+          key: "T-3",
+          summary: "c",
+          url: "",
+          kind: "added",
+          date: "2026-05-03",
+          story_points: 2,
+          priority: "Major",
+        },
       ],
       estimationFlags: [
-        { key: "T-1", summary: "a", url: "", story_points: 2, days_taken: 10, kind: "slow" },
-        { key: "T-2", summary: "b", url: "", story_points: 3, days_taken: 12, kind: "slow" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          story_points: 2,
+          days_taken: 10,
+          kind: "slow",
+        },
+        {
+          key: "T-2",
+          summary: "b",
+          url: "",
+          story_points: 3,
+          days_taken: 12,
+          kind: "slow",
+        },
       ],
       carryover: [
-        { key: "T-1", summary: "a", url: "", status: "In Progress", story_points: 13, priority: "Blocker", assignee: "Alice", risk: "high" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          status: "In Progress",
+          story_points: 13,
+          priority: "Blocker",
+          assignee: "Alice",
+          risk: "high",
+        },
       ],
       blockers: [
-        { key: "T-1", summary: "a", url: "", days_stalled: 7, assignee: "Alice", priority: "Major", kind: "stalled" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          days_stalled: 7,
+          assignee: "Alice",
+          priority: "Major",
+          kind: "stalled",
+        },
       ],
       byPriority: [
         { type: "Blocker", total: 3, completed: 1, remaining: 2 },
         { type: "Critical", total: 3, completed: 1, remaining: 2 },
       ],
       byEngineer: [
-        { name: "Phil", assigned: 10, completed: 2, remaining: 8, sp_completed: 5, sp_remaining: 40 },
+        {
+          name: "Phil",
+          assigned: 10,
+          completed: 2,
+          remaining: 8,
+          sp_completed: 5,
+          sp_remaining: 40,
+        },
       ],
     });
     expect(guide.wentLessWell.length).toBeLessThanOrEqual(6);
@@ -1045,9 +1346,33 @@ describe("computeRetroGuide", () => {
   it("derives try-next from scope creep", () => {
     const guide = runRetro({
       scopeChanges: [
-        { key: "T-1", summary: "a", url: "", kind: "added", date: "2026-05-01", story_points: 3, priority: "Major" },
-        { key: "T-2", summary: "b", url: "", kind: "added", date: "2026-05-02", story_points: 5, priority: "Major" },
-        { key: "T-3", summary: "c", url: "", kind: "added", date: "2026-05-03", story_points: 2, priority: "Major" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          kind: "added",
+          date: "2026-05-01",
+          story_points: 3,
+          priority: "Major",
+        },
+        {
+          key: "T-2",
+          summary: "b",
+          url: "",
+          kind: "added",
+          date: "2026-05-02",
+          story_points: 5,
+          priority: "Major",
+        },
+        {
+          key: "T-3",
+          summary: "c",
+          url: "",
+          kind: "added",
+          date: "2026-05-03",
+          story_points: 2,
+          priority: "Major",
+        },
       ],
     });
     expect(guide.tryNext.some((b) => b.includes("scope freeze"))).toBe(true);
@@ -1056,8 +1381,22 @@ describe("computeRetroGuide", () => {
   it("derives try-next from estimation misses", () => {
     const guide = runRetro({
       estimationFlags: [
-        { key: "T-1", summary: "a", url: "", story_points: 2, days_taken: 10, kind: "slow" },
-        { key: "T-2", summary: "b", url: "", story_points: 3, days_taken: 12, kind: "slow" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          story_points: 2,
+          days_taken: 10,
+          kind: "slow",
+        },
+        {
+          key: "T-2",
+          summary: "b",
+          url: "",
+          story_points: 3,
+          days_taken: 12,
+          kind: "slow",
+        },
       ],
     });
     expect(guide.tryNext.some((b) => b.includes("calibration"))).toBe(true);
@@ -1066,7 +1405,15 @@ describe("computeRetroGuide", () => {
   it("derives try-next from blockers", () => {
     const guide = runRetro({
       blockers: [
-        { key: "T-1", summary: "a", url: "", days_stalled: 7, assignee: "Alice", priority: "Major", kind: "stalled" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          days_stalled: 7,
+          assignee: "Alice",
+          priority: "Major",
+          kind: "stalled",
+        },
       ],
     });
     expect(guide.tryNext.some((b) => b.includes("daily check"))).toBe(true);
@@ -1075,29 +1422,93 @@ describe("computeRetroGuide", () => {
   it("caps tryNext at 4 bullets", () => {
     const guide = runRetro({
       summary: makeBaseSummary({
-        total_issues: 10, completed_issues: 3, remaining_issues: 7,
-        total_sp: 50, completed_sp: 20, remaining_sp: 30,
+        total_issues: 10,
+        completed_issues: 3,
+        remaining_issues: 7,
+        total_sp: 50,
+        completed_sp: 20,
+        remaining_sp: 30,
       }),
       scopeChanges: [
-        { key: "T-1", summary: "a", url: "", kind: "added", date: "2026-05-01", story_points: 3, priority: "Major" },
-        { key: "T-2", summary: "b", url: "", kind: "added", date: "2026-05-02", story_points: 5, priority: "Major" },
-        { key: "T-3", summary: "c", url: "", kind: "added", date: "2026-05-03", story_points: 2, priority: "Major" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          kind: "added",
+          date: "2026-05-01",
+          story_points: 3,
+          priority: "Major",
+        },
+        {
+          key: "T-2",
+          summary: "b",
+          url: "",
+          kind: "added",
+          date: "2026-05-02",
+          story_points: 5,
+          priority: "Major",
+        },
+        {
+          key: "T-3",
+          summary: "c",
+          url: "",
+          kind: "added",
+          date: "2026-05-03",
+          story_points: 2,
+          priority: "Major",
+        },
       ],
       estimationFlags: [
-        { key: "T-1", summary: "a", url: "", story_points: 2, days_taken: 10, kind: "slow" },
-        { key: "T-2", summary: "b", url: "", story_points: 3, days_taken: 12, kind: "slow" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          story_points: 2,
+          days_taken: 10,
+          kind: "slow",
+        },
+        {
+          key: "T-2",
+          summary: "b",
+          url: "",
+          story_points: 3,
+          days_taken: 12,
+          kind: "slow",
+        },
       ],
       carryover: [
-        { key: "T-1", summary: "a", url: "", status: "In Progress", story_points: 13, priority: "Blocker", assignee: "Alice", risk: "high" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          status: "In Progress",
+          story_points: 13,
+          priority: "Blocker",
+          assignee: "Alice",
+          risk: "high",
+        },
       ],
       blockers: [
-        { key: "T-1", summary: "a", url: "", days_stalled: 7, assignee: "Alice", priority: "Major", kind: "stalled" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          days_stalled: 7,
+          assignee: "Alice",
+          priority: "Major",
+          kind: "stalled",
+        },
       ],
-      byPriority: [
-        { type: "Critical", total: 3, completed: 1, remaining: 2 },
-      ],
+      byPriority: [{ type: "Critical", total: 3, completed: 1, remaining: 2 }],
       byEngineer: [
-        { name: "Phil", assigned: 10, completed: 2, remaining: 8, sp_completed: 5, sp_remaining: 40 },
+        {
+          name: "Phil",
+          assigned: 10,
+          completed: 2,
+          remaining: 8,
+          sp_completed: 5,
+          sp_remaining: 40,
+        },
       ],
     });
     expect(guide.tryNext.length).toBeLessThanOrEqual(4);
@@ -1105,7 +1516,9 @@ describe("computeRetroGuide", () => {
 
   it("provides clean-sprint fallback for tryNext", () => {
     const guide = runRetro();
-    expect(guide.tryNext.some((b) => b.includes("Continue current"))).toBe(true);
+    expect(guide.tryNext.some((b) => b.includes("Continue current"))).toBe(
+      true,
+    );
   });
 
   // --- Guarantees ---
@@ -1113,12 +1526,23 @@ describe("computeRetroGuide", () => {
   it("guarantees all three arrays are non-empty", () => {
     const guide = runRetro({
       summary: makeBaseSummary({
-        total_issues: 10, completed_issues: 7, remaining_issues: 3,
-        total_sp: 50, completed_sp: 35, remaining_sp: 15,
+        total_issues: 10,
+        completed_issues: 7,
+        remaining_issues: 3,
+        total_sp: 50,
+        completed_sp: 35,
+        remaining_sp: 15,
       }),
       byType: [{ type: "Story", total: 10, completed: 7, remaining: 3 }],
       byEngineer: [
-        { name: "Alice", assigned: 10, completed: 7, remaining: 3, sp_completed: 35, sp_remaining: 15 },
+        {
+          name: "Alice",
+          assigned: 10,
+          completed: 7,
+          remaining: 3,
+          sp_completed: 35,
+          sp_remaining: 15,
+        },
       ],
       byPriority: [{ type: "Major", total: 10, completed: 7, remaining: 3 }],
     });
@@ -1130,74 +1554,201 @@ describe("computeRetroGuide", () => {
   it("uses fallback when no rules trigger for wentWell", () => {
     const guide = runRetro({
       summary: makeBaseSummary({
-        total_issues: 10, completed_issues: 7, remaining_issues: 3,
-        total_sp: 50, completed_sp: 35, remaining_sp: 15,
+        total_issues: 10,
+        completed_issues: 7,
+        remaining_issues: 3,
+        total_sp: 50,
+        completed_sp: 35,
+        remaining_sp: 15,
       }),
       byType: [{ type: "Story", total: 10, completed: 7, remaining: 3 }],
       byEngineer: [
-        { name: "Alice", assigned: 10, completed: 7, remaining: 3, sp_completed: 35, sp_remaining: 15 },
+        {
+          name: "Alice",
+          assigned: 10,
+          completed: 7,
+          remaining: 3,
+          sp_completed: 35,
+          sp_remaining: 15,
+        },
       ],
       byPriority: [{ type: "Major", total: 10, completed: 7, remaining: 3 }],
       blockers: [
-        { key: "T-1", summary: "a", url: "", days_stalled: 5, assignee: "X", priority: "Major", kind: "stalled" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          days_stalled: 5,
+          assignee: "X",
+          priority: "Major",
+          kind: "stalled",
+        },
       ],
       scopeChanges: [
-        { key: "T-1", summary: "a", url: "", kind: "added", date: "2026-05-01", story_points: 2, priority: "Major" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          kind: "added",
+          date: "2026-05-01",
+          story_points: 2,
+          priority: "Major",
+        },
       ],
       carryover: [
-        { key: "T-1", summary: "a", url: "", status: "New", story_points: 5, priority: "Major", assignee: "X", risk: "low" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          status: "New",
+          story_points: 5,
+          priority: "Major",
+          assignee: "X",
+          risk: "low",
+        },
       ],
     });
-    expect(guide.wentWell.some((b) => b.includes("No standout positives"))).toBe(true);
+    expect(
+      guide.wentWell.some((b) => b.includes("No standout positives")),
+    ).toBe(true);
   });
 
   it("wentLessWell prioritizes higher-weight bullets", () => {
     const guide = runRetro({
       summary: makeBaseSummary({
-        total_issues: 10, completed_issues: 3, remaining_issues: 7,
-        total_sp: 50, completed_sp: 20, remaining_sp: 30,
+        total_issues: 10,
+        completed_issues: 3,
+        remaining_issues: 7,
+        total_sp: 50,
+        completed_sp: 20,
+        remaining_sp: 30,
       }),
       carryover: [
-        { key: "T-1", summary: "a", url: "", status: "In Progress", story_points: 13, priority: "Blocker", assignee: "Alice", risk: "high" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          status: "In Progress",
+          story_points: 13,
+          priority: "Blocker",
+          assignee: "Alice",
+          risk: "high",
+        },
       ],
       scopeChanges: [
-        { key: "T-1", summary: "a", url: "", kind: "added", date: "2026-05-01", story_points: 3, priority: "Major" },
-        { key: "T-2", summary: "b", url: "", kind: "added", date: "2026-05-02", story_points: 5, priority: "Major" },
-        { key: "T-3", summary: "c", url: "", kind: "added", date: "2026-05-03", story_points: 2, priority: "Major" },
-        { key: "T-4", summary: "d", url: "", kind: "removed", date: "2026-05-04", story_points: 2, priority: "Major" },
-        { key: "T-5", summary: "e", url: "", kind: "removed", date: "2026-05-05", story_points: 3, priority: "Major" },
+        {
+          key: "T-1",
+          summary: "a",
+          url: "",
+          kind: "added",
+          date: "2026-05-01",
+          story_points: 3,
+          priority: "Major",
+        },
+        {
+          key: "T-2",
+          summary: "b",
+          url: "",
+          kind: "added",
+          date: "2026-05-02",
+          story_points: 5,
+          priority: "Major",
+        },
+        {
+          key: "T-3",
+          summary: "c",
+          url: "",
+          kind: "added",
+          date: "2026-05-03",
+          story_points: 2,
+          priority: "Major",
+        },
+        {
+          key: "T-4",
+          summary: "d",
+          url: "",
+          kind: "removed",
+          date: "2026-05-04",
+          story_points: 2,
+          priority: "Major",
+        },
+        {
+          key: "T-5",
+          summary: "e",
+          url: "",
+          kind: "removed",
+          date: "2026-05-05",
+          story_points: 3,
+          priority: "Major",
+        },
       ],
     });
     const first = guide.wentLessWell[0];
-    expect(first.includes("issues") || first.includes("story points")).toBe(true);
+    expect(first.includes("issues") || first.includes("story points")).toBe(
+      true,
+    );
   });
 
   it("flags fast cycle time as went well", () => {
     const guide = runRetro({
       cycleTime: [
-        { type: "Bug", count: 10, median_days: 2, avg_days: 2.5, min_days: 1, max_days: 5 },
+        {
+          type: "Bug",
+          count: 10,
+          median_days: 2,
+          avg_days: 2.5,
+          min_days: 1,
+          max_days: 5,
+        },
       ],
     });
-    expect(guide.wentWell.some((b) => b.includes("Bug cycle time is fast"))).toBe(true);
+    expect(
+      guide.wentWell.some((b) => b.includes("Bug cycle time is fast")),
+    ).toBe(true);
   });
 
   it("flags slow cycle time as went less well for single type", () => {
     const guide = runRetro({
       cycleTime: [
-        { type: "Story", count: 5, median_days: 10, avg_days: 11, min_days: 5, max_days: 18 },
+        {
+          type: "Story",
+          count: 5,
+          median_days: 10,
+          avg_days: 11,
+          min_days: 5,
+          max_days: 18,
+        },
       ],
     });
-    expect(guide.wentLessWell.some((b) => b.includes("Story cycle time is slow"))).toBe(true);
+    expect(
+      guide.wentLessWell.some((b) => b.includes("Story cycle time is slow")),
+    ).toBe(true);
   });
 
   it("reports multiple slow cycle time types in one bullet", () => {
     const guide = runRetro({
       cycleTime: [
-        { type: "Bug", count: 10, median_days: 16, avg_days: 20, min_days: 2, max_days: 100 },
-        { type: "Story", count: 5, median_days: 10, avg_days: 11, min_days: 5, max_days: 18 },
+        {
+          type: "Bug",
+          count: 10,
+          median_days: 16,
+          avg_days: 20,
+          min_days: 2,
+          max_days: 100,
+        },
+        {
+          type: "Story",
+          count: 5,
+          median_days: 10,
+          avg_days: 11,
+          min_days: 5,
+          max_days: 18,
+        },
       ],
     });
-    expect(guide.wentLessWell.some((b) => b.includes("2 issue types"))).toBe(true);
+    expect(guide.wentLessWell.some((b) => b.includes("2 issue types"))).toBe(
+      true,
+    );
   });
 });
 
@@ -1208,9 +1759,24 @@ describe("computeRetroGuide", () => {
 describe("computeCycleTime", () => {
   it("computes median/avg/min/max for one type", () => {
     const issues = [
-      makeIssue({ key: "T-1", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-05T10:00:00Z" }),
-      makeIssue({ key: "T-2", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-08T10:00:00Z" }),
-      makeIssue({ key: "T-3", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-10T10:00:00Z" }),
+      makeIssue({
+        key: "T-1",
+        issuetype: "Bug",
+        resolution: "Done",
+        resolutiondate: "2026-05-05T10:00:00Z",
+      }),
+      makeIssue({
+        key: "T-2",
+        issuetype: "Bug",
+        resolution: "Done",
+        resolutiondate: "2026-05-08T10:00:00Z",
+      }),
+      makeIssue({
+        key: "T-3",
+        issuetype: "Bug",
+        resolution: "Done",
+        resolutiondate: "2026-05-10T10:00:00Z",
+      }),
     ];
     const transitions: TransitionRecord[] = [
       { key: "T-1", first_in_progress_date: "2026-05-01T10:00:00Z" },
@@ -1228,8 +1794,18 @@ describe("computeCycleTime", () => {
 
   it("groups by issue type", () => {
     const issues = [
-      makeIssue({ key: "T-1", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-05T10:00:00Z" }),
-      makeIssue({ key: "T-2", issuetype: "Story", resolution: "Done", resolutiondate: "2026-05-08T10:00:00Z" }),
+      makeIssue({
+        key: "T-1",
+        issuetype: "Bug",
+        resolution: "Done",
+        resolutiondate: "2026-05-05T10:00:00Z",
+      }),
+      makeIssue({
+        key: "T-2",
+        issuetype: "Story",
+        resolution: "Done",
+        resolutiondate: "2026-05-08T10:00:00Z",
+      }),
     ];
     const transitions: TransitionRecord[] = [
       { key: "T-1", first_in_progress_date: "2026-05-01T10:00:00Z" },
@@ -1244,8 +1820,18 @@ describe("computeCycleTime", () => {
 
   it("skips issues without transition records", () => {
     const issues = [
-      makeIssue({ key: "T-1", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-05T10:00:00Z" }),
-      makeIssue({ key: "T-2", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-08T10:00:00Z" }),
+      makeIssue({
+        key: "T-1",
+        issuetype: "Bug",
+        resolution: "Done",
+        resolutiondate: "2026-05-05T10:00:00Z",
+      }),
+      makeIssue({
+        key: "T-2",
+        issuetype: "Bug",
+        resolution: "Done",
+        resolutiondate: "2026-05-08T10:00:00Z",
+      }),
     ];
     const transitions: TransitionRecord[] = [
       { key: "T-1", first_in_progress_date: "2026-05-01T10:00:00Z" },
@@ -1256,7 +1842,12 @@ describe("computeCycleTime", () => {
 
   it("skips issues without resolutiondate", () => {
     const issues = [
-      makeIssue({ key: "T-1", issuetype: "Bug", resolution: "", resolutiondate: "" }),
+      makeIssue({
+        key: "T-1",
+        issuetype: "Bug",
+        resolution: "",
+        resolutiondate: "",
+      }),
     ];
     const transitions: TransitionRecord[] = [
       { key: "T-1", first_in_progress_date: "2026-05-01T10:00:00Z" },
@@ -1267,7 +1858,14 @@ describe("computeCycleTime", () => {
 
   it("falls back to updated when resolutiondate is empty", () => {
     const issues = [
-      makeIssue({ key: "T-1", issuetype: "Bug", status: "Verified", resolution: "", resolutiondate: "", updated: "2026-05-08T10:00:00Z" }),
+      makeIssue({
+        key: "T-1",
+        issuetype: "Bug",
+        status: "Verified",
+        resolution: "",
+        resolutiondate: "",
+        updated: "2026-05-08T10:00:00Z",
+      }),
     ];
     const transitions: TransitionRecord[] = [
       { key: "T-1", first_in_progress_date: "2026-05-01T10:00:00Z" },
@@ -1280,7 +1878,12 @@ describe("computeCycleTime", () => {
 
   it("handles single-item type", () => {
     const issues = [
-      makeIssue({ key: "T-1", issuetype: "Task", resolution: "Done", resolutiondate: "2026-05-06T10:00:00Z" }),
+      makeIssue({
+        key: "T-1",
+        issuetype: "Task",
+        resolution: "Done",
+        resolutiondate: "2026-05-06T10:00:00Z",
+      }),
     ];
     const transitions: TransitionRecord[] = [
       { key: "T-1", first_in_progress_date: "2026-05-03T10:00:00Z" },
@@ -1293,7 +1896,12 @@ describe("computeCycleTime", () => {
 
   it("returns empty array when no transitions", () => {
     const issues = [
-      makeIssue({ key: "T-1", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-05T10:00:00Z" }),
+      makeIssue({
+        key: "T-1",
+        issuetype: "Bug",
+        resolution: "Done",
+        resolutiondate: "2026-05-05T10:00:00Z",
+      }),
     ];
     const stats = computeCycleTime(issues, [], BASE_CONFIG);
     expect(stats).toHaveLength(0);
@@ -1301,7 +1909,12 @@ describe("computeCycleTime", () => {
 
   it("enforces minimum 1 day floor", () => {
     const issues = [
-      makeIssue({ key: "T-1", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-01T12:00:00Z" }),
+      makeIssue({
+        key: "T-1",
+        issuetype: "Bug",
+        resolution: "Done",
+        resolutiondate: "2026-05-01T12:00:00Z",
+      }),
     ];
     const transitions: TransitionRecord[] = [
       { key: "T-1", first_in_progress_date: "2026-05-01T10:00:00Z" },
@@ -1312,9 +1925,24 @@ describe("computeCycleTime", () => {
 
   it("sorts by count descending", () => {
     const issues = [
-      makeIssue({ key: "T-1", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-05T10:00:00Z" }),
-      makeIssue({ key: "T-2", issuetype: "Bug", resolution: "Done", resolutiondate: "2026-05-06T10:00:00Z" }),
-      makeIssue({ key: "T-3", issuetype: "Story", resolution: "Done", resolutiondate: "2026-05-07T10:00:00Z" }),
+      makeIssue({
+        key: "T-1",
+        issuetype: "Bug",
+        resolution: "Done",
+        resolutiondate: "2026-05-05T10:00:00Z",
+      }),
+      makeIssue({
+        key: "T-2",
+        issuetype: "Bug",
+        resolution: "Done",
+        resolutiondate: "2026-05-06T10:00:00Z",
+      }),
+      makeIssue({
+        key: "T-3",
+        issuetype: "Story",
+        resolution: "Done",
+        resolutiondate: "2026-05-07T10:00:00Z",
+      }),
     ];
     const transitions: TransitionRecord[] = [
       { key: "T-1", first_in_progress_date: "2026-05-01T10:00:00Z" },

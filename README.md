@@ -35,7 +35,7 @@ See [docs/mcp-setup.md](docs/mcp-setup.md) for the full token setup guide and tr
 | Agent                                                  | Claude Code              | Cursor                   | Description                                                     |
 | ------------------------------------------------------ | ------------------------ | ------------------------ | --------------------------------------------------------------- |
 | [weekly-team-update](agents/weekly-team-update/)       | `/team-update`           | `@weekly-team-update`    | Weekly team report for leadership from GitHub, GitLab, and Jira |
-| [sprint-review](agents/sprint-review/)                   | `/sprint-review`          | `@sprint-review`          | Sprint retrospective analysis from active Jira sprint           |
+| [sprint-review](agents/sprint-review/)                 | `/sprint-review`         | `@sprint-review`         | Sprint retrospective analysis from active Jira sprint           |
 | [repo-contextification](agents/repo-contextification/) | `/repo-contextification` | `@repo-contextification` | Audit repo docs and AI-readiness, scaffold missing files        |
 | _(scaffold a new agent)_                               | `/create-agent`          | copy `agents/_template/` | Scaffold a new agent with best-practice structure and specs     |
 

@@ -133,7 +133,7 @@ Include only scripts that apply. If the agent has no validation script, omit the
 
 Generate the agent spec with this structure:
 
-````markdown
+```markdown
 ---
 name: { name }
 description: "{description with trigger phrases and examples}"
@@ -144,7 +144,7 @@ memory: { memory or omit if none }
 {Role statement — one sentence defining what the agent does and doesn't do.}
 
 You do NOT {anti-pattern from Phase 1.1 — e.g., "format the report yourself. The TypeScript script handles all filtering, nesting, and formatting deterministically."}.
-````
+```
 
 **If the agent has 5+ steps**, add a Progress Communication section immediately after the role statement:
 
@@ -155,27 +155,28 @@ Before starting Step 1, display a step overview so the user knows the full workf
 
 \```text
 Starting {name} ({N} steps):
- 1. {Step1}  2. {Step2}  3. {Step3}  ...
-\```
+
+1.  {Step1} 2. {Step2} 3. {Step3} ...
+    \```
 
 Prefix every status line with `[N/{total}]` where N is the current step number. Display a status line when starting each step and at key milestones. Keep updates to one line each — be transparent, not verbose.
 ````
 
 Then generate the workflow steps:
 
-````markdown
+```markdown
 ## Step 1: {Setup/Read Config}
 
 {Read config from `agents/{name}/data/config.json` (if applicable).
 Calculate parameters (dates, filters, etc.).
 Validate prerequisites (required files exist, MCP servers respond).}
-````
+```
 
 **If a skill argument was defined**, add conditional handling at the start of Step 1:
 
-````markdown
+```markdown
 If `${argument-name}` was provided, use it. Otherwise {default behavior or ask user}.
-````
+```
 
 ### Data Fetching Steps — MCP Tool Call Templates
 
@@ -183,15 +184,15 @@ Generate the data-fetching step(s) using the batch structure and MCP tool call t
 
 **If no data dependencies exist** (or single data source), generate one batch:
 
-````markdown
+```markdown
 ## Step 2: Fetch Data
 
 Launch ALL of these in a single parallel tool call:
-````
+```
 
 **If data dependencies exist**, generate multiple batches with validation between them:
 
-````markdown
+```markdown
 ## Step 2: Fetch Data (Batch 1)
 
 Launch ALL of these in a single parallel tool call:
@@ -209,7 +210,7 @@ Only proceed to Batch 2 after validation passes.
 Launch ALL of these in a single parallel tool call:
 
 {...tool calls for dependent sources...}
-````
+```
 
 **Include these platform-specific MCP tool call blocks** based on selected servers:
 
@@ -219,8 +220,8 @@ For **GitHub MCP**:
 **GitHub {PRs/commits/etc.}** — one query per {entity}:
 
 \```
-mcp__github__search_pull_requests:
-  query: "author:{username} is:merged merged:{seven_days_ago}..{today}"
+mcp**github**search_pull_requests:
+query: "author:{username} is:merged merged:{seven_days_ago}..{today}"
 \```
 ````
 
@@ -230,12 +231,12 @@ For **GitLab MCP**:
 **GitLab {MRs/commits/etc.}** — one query per {entity}:
 
 \```
-mcp__gitlab__list_merge_requests:
-  author_username: {username}
-  scope: "all"              # REQUIRED — without this, results may be empty
-  state: "merged"
-  updated_after: {seven_days_ago}  # ISO-8601: YYYY-MM-DDT00:00:00Z
-  per_page: 100
+mcp**gitlab**list_merge_requests:
+author_username: {username}
+scope: "all" # REQUIRED — without this, results may be empty
+state: "merged"
+updated_after: {seven_days_ago} # ISO-8601: YYYY-MM-DDT00:00:00Z
+per_page: 100
 \```
 ````
 
@@ -245,12 +246,12 @@ For **Jira/Atlassian MCP**:
 **Jira tickets** — one query per {entity}:
 
 \```
-mcp__atlassian__searchJiraIssuesUsingJql:
-  cloudId: "{jira.cloud_id}"
-  jql: '{JQL query based on agent purpose}'
-  maxResults: 100
-  fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "issuetype", "priority", "updated", "created"]
-  responseContentFormat: "markdown"
+mcp**atlassian**searchJiraIssuesUsingJql:
+cloudId: "{jira.cloud_id}"
+jql: '{JQL query based on agent purpose}'
+maxResults: 100
+fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "issuetype", "priority", "updated", "created"]
+responseContentFormat: "markdown"
 \```
 ````
 
@@ -266,11 +267,11 @@ Adapt the tool names, parameters, and query patterns to the agent's actual purpo
 If any query returns exactly 100 results, paginate using `nextPageToken`:
 
 \```
-mcp__atlassian__searchJiraIssuesUsingJql:
-  cloudId: "{jira.cloud_id}"
-  jql: '{same JQL}'
-  maxResults: 100
-  nextPageToken: "{token from previous response}"
+mcp**atlassian**searchJiraIssuesUsingJql:
+cloudId: "{jira.cloud_id}"
+jql: '{same JQL}'
+maxResults: 100
+nextPageToken: "{token from previous response}"
 \```
 
 Repeat until fewer than 100 results are returned. Combine all pages before proceeding.
@@ -282,11 +283,11 @@ Repeat until fewer than 100 results are returned. Combine all pages before proce
 
 Generate data-source-specific checks based on selected MCP servers:
 
-````markdown
+```markdown
 ### Validation Checkpoint
 
 After data collection, verify:
-````
+```
 
 Include the relevant checks from this list:
 
@@ -295,15 +296,15 @@ Include the relevant checks from this list:
 - **Jira**: `- Check all Jira queries succeeded (no errors). If ALL queries returned 0 tickets combined: display warning, STOP and ask user.`
 - **General**: `- If any MCP call returned an error: display the error, STOP, ask user how to proceed.`
 
-````markdown
+```markdown
 If validation fails, display what's missing and STOP.
-````
+```
 
 ### Save to CSV Step (if MCP data sources + scripts)
 
 **If the agent uses MCP data sources and has TypeScript/Python scripts**, generate a "Save to CSV" step between data fetching and processing. Use the data fields from Phase 1.2:
 
-````markdown
+```markdown
 ## Step N: Save to CSV
 
 Save results to `agents/{name}/data/cache/` using these exact schemas.
@@ -312,10 +313,10 @@ Save results to `agents/{name}/data/cache/` using these exact schemas.
 
 Header: `{comma-separated field names from Phase 1.2}`
 
-| Field | Source | Notes |
-| ----- | ------ | ----- |
+| Field      | Source                   | Notes                                    |
+| ---------- | ------------------------ | ---------------------------------------- |
 | `{field1}` | {JSON path or API field} | {type, quoting rule, or "empty if none"} |
-| `{field2}` | {JSON path or API field} | {notes} |
+| `{field2}` | {JSON path or API field} | {notes}                                  |
 
 <!-- TODO: Define dedup rules. Example from weekly-team-update:
 "If the same PR appears in both merged and open searches, keep the merged version."
@@ -326,7 +327,7 @@ If your agent fetches overlapping data sets, specify which version wins. -->
 ### last-updated.txt
 
 Write current ISO-8601 timestamp.
-````
+```
 
 Generate one CSV schema subsection per data source. Use the field names the user confirmed in Phase 1.2.
 
@@ -423,7 +424,7 @@ user-invocable: true
 ## Usage
 
 \```bash
-/{skill-name} {<argument-description>  # if skill accepts an argument}
+/{skill-name} {<argument-description> # if skill accepts an argument}
 \```
 
 ## What This Does

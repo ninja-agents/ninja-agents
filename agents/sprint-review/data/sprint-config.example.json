@@ -19,7 +19,15 @@
   },
   "statuses": {
     "not_started": ["New", "To Do"],
-    "in_progress": ["Assigned", "In Progress", "Code Review", "Review", "Post", "Modified", "Dev Complete"],
+    "in_progress": [
+      "Assigned",
+      "In Progress",
+      "Code Review",
+      "Review",
+      "Post",
+      "Modified",
+      "Dev Complete"
+    ],
     "testing": ["ON_QA", "Testing"],
     "done": ["Release Pending", "Verified", "Closed"]
   },

@@ -773,7 +773,8 @@ export function computeCycleTime(
 
   for (const issue of issues) {
     if (!isCompleted(issue, config)) continue;
-    const resolved = parseDate(issue.resolutiondate) ?? parseDate(issue.updated);
+    const resolved =
+      parseDate(issue.resolutiondate) ?? parseDate(issue.updated);
     if (!resolved) continue;
     const inProgressDate = transMap.get(issue.key);
     if (!inProgressDate) continue;
@@ -788,7 +789,8 @@ export function computeCycleTime(
 
   const stats: CycleTimeStat[] = [];
   for (const [type, days] of byType) {
-    const avg = Math.round((days.reduce((s, d) => s + d, 0) / days.length) * 10) / 10;
+    const avg =
+      Math.round((days.reduce((s, d) => s + d, 0) / days.length) * 10) / 10;
     stats.push({
       type,
       count: days.length,
@@ -862,10 +864,7 @@ export function computeRetroGuide(
   }
 
   for (const p of byPriority) {
-    if (
-      (p.type === "Blocker" || p.type === "Critical") &&
-      p.total >= 2
-    ) {
+    if ((p.type === "Blocker" || p.type === "Critical") && p.total >= 2) {
       const rate = p.completed / p.total;
       if (rate >= 1) {
         wentWell.push(
@@ -891,10 +890,7 @@ export function computeRetroGuide(
     const best = byType
       .filter((t) => t.total >= 3)
       .sort((a, b) => b.completed / b.total - a.completed / a.total)[0];
-    if (
-      best &&
-      best.completed / best.total > issueCompletionRate + 0.1
-    ) {
+    if (best && best.completed / best.total > issueCompletionRate + 0.1) {
       wentWell.push(
         `${best.type} completion outpaced overall (${Math.round((best.completed / best.total) * 100)}% vs ${Math.round(issueCompletionRate * 100)}% overall)`,
       );
@@ -1003,10 +999,7 @@ export function computeRetroGuide(
 
   let criticalIncomplete = false;
   for (const p of byPriority) {
-    if (
-      (p.type === "Blocker" || p.type === "Critical") &&
-      p.remaining > 0
-    ) {
+    if ((p.type === "Blocker" || p.type === "Critical") && p.remaining > 0) {
       lessCandidates.push({
         text: `${p.remaining} ${p.type}-priority item${p.remaining !== 1 ? "s" : ""} remain incomplete`,
         weight: p.type === "Blocker" ? 9 : 7,
@@ -1040,7 +1033,8 @@ export function computeRetroGuide(
 
   const slowCycleTypes = cycleTime.filter((ct) => ct.median_days > 7);
   if (slowCycleTypes.length > 0) {
-    const allSlow = slowCycleTypes.length === cycleTime.length && cycleTime.length > 1;
+    const allSlow =
+      slowCycleTypes.length === cycleTime.length && cycleTime.length > 1;
     const worst = slowCycleTypes.sort(
       (a, b) => b.median_days - a.median_days,
     )[0];
@@ -1334,9 +1328,7 @@ function formatReport(
   ln("## Cycle Time");
   ln();
   if (cycleTime.length === 0) {
-    ln(
-      "Cycle time analysis unavailable -- no transition data collected.",
-    );
+    ln("Cycle time analysis unavailable -- no transition data collected.");
   } else {
     ln("Days from In Progress to Done, by issue type.");
     ln();
@@ -1434,7 +1426,6 @@ function formatReport(
     ln();
   }
   ln();
-
 
   // Automation Opportunities
   ln("## Automation Opportunities");
@@ -1636,7 +1627,8 @@ function main() {
 
   // Write output
   const outputPath =
-    args.output ?? resolve(__dirname, `../data/output/sprint-review-${date}.md`);
+    args.output ??
+    resolve(__dirname, `../data/output/sprint-review-${date}.md`);
   writeFileSync(outputPath, report);
   console.log(`${GREEN}Report written to ${outputPath}${RESET}`);
 

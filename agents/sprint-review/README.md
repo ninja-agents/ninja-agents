@@ -35,7 +35,7 @@ npm run sprint-review:generate -- --date 2026-05-07
 3. Fetches all issues in the active sprint via Jira JQL
 4. Fetches recently-updated issues to detect scope changes
 5. Saves data to CSV cache files
-6. Runs the TypeScript analysis script which computes metrics and generates the report
+6. Runs the TypeScript analysis script which computes metrics, the Retro Discussion Guide, and generates the report
 7. Agent writes Key Takeaways section with actionable observations
 8. Displays the final report
 

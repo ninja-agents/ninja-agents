@@ -33,6 +33,7 @@ Launches the `sprint-review` agent which:
 A markdown report saved to `agents/sprint-review/data/output/sprint-review-{date}.md` with:
 
 - **Key Takeaways** — 3-5 actionable observations with implications
+- **Retro Discussion Guide** — what went well, what went less well, what to try next (script-generated)
 - **Sprint Summary** — total issues/SP, completed vs. remaining
 - **Completion Analysis** — by issue type, engineer, and priority
 - **Estimation Accuracy** — SP accuracy, flagged anomalies

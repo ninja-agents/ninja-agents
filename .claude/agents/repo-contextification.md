@@ -302,9 +302,9 @@ After writing each file, display: `[6/11] Created {filename}` or `[6/11] Updated
 1. **README.md** — update/create with overview, quick start, prerequisites, development, testing, contributing link
 2. **CONTRIBUTING.md** — coding standards (from lint config), PR process (from git log/OWNERS), testing, commit conventions. **Deduplication rule:** CONTRIBUTING.md MUST NOT repeat setup steps (clone, install, prerequisites, start commands) that are in README.md. Instead, link to README: "For initial setup, see [README.md](README.md#quick-start)." Only include CONTRIBUTING-specific setup that goes beyond what README covers.
 3. **AGENTS.md** — repo structure, key patterns, conventions, review guidelines (derived from reading the actual code)
-4. **ARCHITECTURE.md** — system context, component relationships, data flow, dependencies, build/deploy pipeline
+4. **ARCHITECTURE.md** — system context, component relationships, data flow, dependencies, build/deploy pipeline. If AGENTS.md already contains a tech stack section or directory tree, do NOT reproduce them — link to AGENTS.md instead.
 5. **.coderabbit.yaml** — review tone, path-specific instructions, file filters (exclude generated/vendored/lock files)
-6. **CLAUDE.md** — Claude Code project context file. Points to AGENTS.md, ARCHITECTURE.md, and CONTRIBUTING.md for full context. Includes a quick reference section with stack, path aliases, key rules, linting, and testing commands. Keep it concise — it's loaded into every Claude conversation automatically.
+6. **CLAUDE.md** — Claude Code project context file. Points to AGENTS.md, ARCHITECTURE.md, and CONTRIBUTING.md for full context. Includes a quick reference section with stack, path aliases, key rules, linting, and testing commands. Keep it concise — it's loaded into every Claude conversation automatically. If Key Rules are condensed from AGENTS.md, include an explicit attribution line citing AGENTS.md as the authoritative source.
 7. **.cursor/rules/{repo-name}.mdc** — Cursor project rules. Create `.cursor/rules/` directory if needed. Use the `.mdc` format with YAML frontmatter (`description`, `globs`, `alwaysApply: true`). Content mirrors CLAUDE.md: conventions summary, context file pointers, key patterns. Use relative paths from `.cursor/rules/` to reference docs (e.g., `../../AGENTS.md`).
 
 Follow the style guide below for all prose.
@@ -370,16 +370,17 @@ Display: `[7/11] Checking for cross-file duplication...`
 
 Before validating, check that generated files follow Rule 9 (link-don't-copy). Compare each file pair below and replace duplicated content with a link to the authoritative source.
 
-| Content category                  | Authoritative source                              | Must link, not copy                                |
-| --------------------------------- | ------------------------------------------------- | -------------------------------------------------- |
-| Setup / install / prerequisites   | README.md                                         | CONTRIBUTING.md                                    |
-| Commit message format             | README.md (or COMMIT_MESSAGE_GUIDE.md if present) | CONTRIBUTING.md                                    |
-| Directory tree / source structure | AGENTS.md                                         | ARCHITECTURE.md                                    |
-| Dependency flow                   | AGENTS.md                                         | ARCHITECTURE.md                                    |
-| Coding conventions (full detail)  | AGENTS.md                                         | CONTRIBUTING.md (brief summary + link is OK)       |
-| Lint / test / build commands      | README.md                                         | CONTRIBUTING.md (subset OK, no full repeat)        |
-| CRD / domain reference            | .cursor/rules/project-context.mdc (if present)    | ARCHITECTURE.md (summary table OK, no detail copy) |
-| All detailed content              | AGENTS.md, ARCHITECTURE.md, CONTRIBUTING.md       | CLAUDE.md, .cursor/rules/\*.mdc (pointers only)    |
+| Content category                                                     | Authoritative source                              | Must link, not copy                                                    |
+| -------------------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------- |
+| Setup / install / prerequisites                                      | README.md                                         | CONTRIBUTING.md                                                        |
+| Commit message format                                                | README.md (or COMMIT_MESSAGE_GUIDE.md if present) | CONTRIBUTING.md                                                        |
+| Directory tree / source structure (including feature module layouts) | AGENTS.md                                         | ARCHITECTURE.md                                                        |
+| Technology stack table or list                                       | AGENTS.md                                         | ARCHITECTURE.md, CLAUDE.md (one-line summary OK), .cursor/rules/\*.mdc |
+| Dependency flow                                                      | AGENTS.md                                         | ARCHITECTURE.md                                                        |
+| Coding conventions (full detail)                                     | AGENTS.md                                         | CONTRIBUTING.md (brief summary + link is OK)                           |
+| Lint / test / build commands                                         | README.md                                         | CONTRIBUTING.md (subset OK, no full repeat)                            |
+| CRD / domain reference                                               | .cursor/rules/project-context.mdc (if present)    | ARCHITECTURE.md (summary table OK, no detail copy)                     |
+| All detailed content                                                 | AGENTS.md, ARCHITECTURE.md, CONTRIBUTING.md       | CLAUDE.md, .cursor/rules/\*.mdc (pointers only)                        |
 
 ### How to check
 

@@ -183,6 +183,8 @@ export const COMMIT_FORMAT_PATTERNS = [
 
 export const DIRECTORY_TREE_PATTERN = /src\/\n(?:[\s│├└─|]*\S.*\n){3,}/;
 
+export const TECH_STACK_PATTERN = /#{1,4}\s*tech(?:nology)?\s*stack\b/i;
+
 export const FILE_DESCRIPTIONS: Record<string, string> = {
   "README.md": "Repo-level foundational context for developers",
   "CONTRIBUTING.md": "Contribution conventions for humans and agents",

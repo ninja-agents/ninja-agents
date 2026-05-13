@@ -8,6 +8,7 @@ import {
   SETUP_COMMAND_PATTERNS,
   COMMIT_FORMAT_PATTERNS,
   DIRECTORY_TREE_PATTERN,
+  TECH_STACK_PATTERN,
   CI_HEADING_STEMS,
   parseArgs,
   extractHeadings,
@@ -205,6 +206,39 @@ export function checkArchitectureDedup(repoPath: string): string[] {
   return warnings;
 }
 
+export function checkArchitectureTechStackDedup(repoPath: string): string[] {
+  const archPath = join(repoPath, "ARCHITECTURE.md");
+  const agentsPath = join(repoPath, "AGENTS.md");
+  if (!existsSync(archPath) || !existsSync(agentsPath)) return [];
+
+  const archContent = readFileSync(archPath, "utf-8");
+  const agentsContent = readFileSync(agentsPath, "utf-8");
+
+  if (
+    !TECH_STACK_PATTERN.test(archContent) ||
+    !TECH_STACK_PATTERN.test(agentsContent)
+  ) {
+    return [];
+  }
+
+  const archSections = extractSections(archContent);
+  const stackSection = archSections.find((s) =>
+    TECH_STACK_PATTERN.test(s.heading),
+  );
+  if (!stackSection) return [];
+
+  const hasTable = /\|.*\|.*\|/.test(stackSection.body);
+  const hasList =
+    /^[-*]\s+\*?\*?(?:React|TypeScript|PatternFly|Webpack|Vite|Next|Jest|Playwright)/im.test(
+      stackSection.body,
+    );
+  if (!hasTable && !hasList) return [];
+
+  return [
+    "ARCHITECTURE.md duplicates technology stack from AGENTS.md — link to AGENTS.md instead",
+  ];
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help === true) {
@@ -266,6 +300,7 @@ function main() {
   warnings.push(...checkContributingDedup(repoPath));
   warnings.push(...checkContributingCommitDedup(repoPath));
   warnings.push(...checkArchitectureDedup(repoPath));
+  warnings.push(...checkArchitectureTechStackDedup(repoPath));
   warnings.push(...checkClaudeMdContextLinks(repoPath));
 
   if (errors.length > 0) {

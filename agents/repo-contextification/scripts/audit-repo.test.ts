@@ -217,6 +217,11 @@ describe("auditFile", () => {
     expect(result.missingSections).not.toContain("overview");
   });
 
+  it("does not set existsInSubdir by default", () => {
+    const result = auditFile(tempDir, "ARCHITECTURE.md");
+    expect(result.existsInSubdir).toBeUndefined();
+  });
+
   it("gives heading-only gaps 75% credit in score", () => {
     const content = [
       "# My Project",
@@ -434,6 +439,54 @@ describe("generateReport", () => {
     expect(output).toContain("**CI/CD:** None detected");
   });
 
+  it("shows pointer recommendation when existsInSubdir is set", () => {
+    const report = makeReport({
+      files: [
+        {
+          path: "ARCHITECTURE.md",
+          exists: false,
+          existsInSubdir: "docs/architecture.md",
+          sections: [],
+          missingSections: ["components"],
+          headingOnlyGaps: [],
+          thinSections: [],
+          boilerplate: false,
+          score: 0,
+        },
+      ],
+    });
+    const output = generateReport(report);
+    expect(output).toContain("docs/architecture.md");
+    expect(output).toContain("pointer file");
+  });
+
+  it("includes SUBDIR_DOCS in AUDIT_SUMMARY when existsInSubdir is set", () => {
+    const report = makeReport({
+      files: [
+        {
+          path: "ARCHITECTURE.md",
+          exists: false,
+          existsInSubdir: "docs/architecture.md",
+          sections: [],
+          missingSections: ["components"],
+          headingOnlyGaps: [],
+          thinSections: [],
+          boilerplate: false,
+          score: 0,
+        },
+      ],
+    });
+    const output = generateReport(report);
+    expect(output).toContain(
+      "SUBDIR_DOCS=ARCHITECTURE.md:docs/architecture.md",
+    );
+  });
+
+  it("omits SUBDIR_DOCS from AUDIT_SUMMARY when not applicable", () => {
+    const output = generateReport(makeReport());
+    expect(output).not.toContain("SUBDIR_DOCS=");
+  });
+
   it("shows all-complete message when no gaps exist", () => {
     const report = makeReport({
       files: [
@@ -583,6 +636,28 @@ describe("generateDryRunPlan", () => {
     const output = generateDryRunPlan(report);
     expect(output).toContain("**UPDATE** `README.md`");
     expect(output).toContain("add headings: overview");
+  });
+
+  it("marks files with existsInSubdir as CREATE pointer", () => {
+    const report = makeReport({
+      files: [
+        {
+          path: "ARCHITECTURE.md",
+          exists: false,
+          existsInSubdir: "docs/architecture.md",
+          sections: [],
+          missingSections: ["components"],
+          headingOnlyGaps: [],
+          thinSections: [],
+          boilerplate: false,
+          score: 0,
+        },
+      ],
+    });
+    const output = generateDryRunPlan(report);
+    expect(output).toContain("**CREATE** `ARCHITECTURE.md`");
+    expect(output).toContain("pointer");
+    expect(output).toContain("docs/architecture.md");
   });
 
   it("includes dry-run footer", () => {

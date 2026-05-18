@@ -69,9 +69,16 @@ Scan the repository for these files. For each, check both existence and complete
 | `CLAUDE.md`           | Claude Code project context                    | Key context file pointers, quick reference, key rules                                     |
 | `.cursor/rules/*.mdc` | Cursor project rules                           | Conventions, patterns, context file pointers                                              |
 
+### Subdirectory Documentation Check
+
+Before generating root-level files, check for equivalent documentation in subdirectories:
+
+- If `docs/architecture.md` (or `docs/ARCHITECTURE.md`) exists and root `ARCHITECTURE.md` does not: the audit report will flag this. In Step 6, generate ARCHITECTURE.md as a **concise pointer file** (title + one-paragraph summary + link to `docs/architecture.md`), NOT a full duplicate. The `docs/` version is the authoritative source.
+- Apply the same pattern to other root files: if substantive content exists at `docs/contributing.md`, `docs/readme.md`, etc., link to it rather than duplicating.
+
 ### Additional Checks
 
-- **`/docs` directory** — does it exist? What granular context files are present?
+- **`/docs` directory** — does it exist? What granular context files are present? Check for architecture documentation in subdirectories (e.g., `docs/architecture.md`).
 - **CI/CD config** — `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile` — note what exists
 
 For GitHub repos, use these MCP calls in parallel:
@@ -279,6 +286,8 @@ Before generating any documentation, read the repo thoroughly. As you read, disp
 
 - Read `package.json`, `go.mod`, `Cargo.toml`, or equivalent for dependencies and project metadata
 - Scan directory structure for architecture clues (`find` or `ls` key directories)
+- **Feature module discovery**: Identify ALL feature modules by scanning for entry point files. For dynamic plugins: `find src -name "dynamic-plugin.ts"`. For standard React: scan for route definitions or lazy-loaded page components. Record the complete list — this list feeds ARCHITECTURE.md (feature module structure) and .coderabbit.yaml (path instructions). Do not rely on reading a subset of the directory tree; explicitly search for entry points.
+- **IDE tooling detection**: Check for `.cursor/rules/` (Cursor), `.claude/` directory (Claude Code), `.github/copilot-instructions.md` (Copilot). Note which tools the team uses — this affects CLAUDE.md generation in Step 6 (minimal pointer vs full context file).
 - Read existing docs for tone and conventions
 - Check CI config for build/test/deploy patterns (`.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `OWNERS`). Distinguish between Prow-based `OWNERS` files (OpenShift ecosystem — uses `lgtm` + `approved` labels, reviewers vs approvers with required counts) and GitHub `CODEOWNERS` (PR approval counts). Describe the actual merge mechanism, not a generic summary.
 - Read source files to understand key patterns (imports, component structure, state management)
@@ -302,9 +311,9 @@ After writing each file, display: `[6/11] Created {filename}` or `[6/11] Updated
 1. **README.md** — update/create with overview, quick start, prerequisites, development, testing, contributing link
 2. **CONTRIBUTING.md** — coding standards (from lint config), PR process (from git log/OWNERS), testing, commit conventions. **Deduplication rule:** CONTRIBUTING.md MUST NOT repeat setup steps (clone, install, prerequisites, start commands) that are in README.md. Instead, link to README: "For initial setup, see [README.md](README.md#quick-start)." Only include CONTRIBUTING-specific setup that goes beyond what README covers.
 3. **AGENTS.md** — repo structure, key patterns, conventions, review guidelines (derived from reading the actual code)
-4. **ARCHITECTURE.md** — system context, component relationships, data flow, dependencies, build/deploy pipeline. If AGENTS.md already contains a tech stack section or directory tree, do NOT reproduce them — link to AGENTS.md instead.
+4. **ARCHITECTURE.md** — system context, component relationships, data flow, dependencies, build/deploy pipeline. If AGENTS.md already contains a tech stack section or directory tree, do NOT reproduce them — link to AGENTS.md instead. **If `docs/architecture.md` or equivalent exists and is substantive (50+ lines), generate ARCHITECTURE.md as a concise pointer (title, one-paragraph summary, link to the docs/ file) — do NOT duplicate the content.** The `docs/` version is the authoritative source; the root file exists only for discoverability.
 5. **.coderabbit.yaml** — review tone, path-specific instructions, file filters (exclude generated/vendored/lock files)
-6. **CLAUDE.md** — Claude Code project context file. Points to AGENTS.md, ARCHITECTURE.md, and CONTRIBUTING.md for full context. Includes a quick reference section with stack, path aliases, key rules, linting, and testing commands. Keep it concise — it's loaded into every Claude conversation automatically. If Key Rules are condensed from AGENTS.md, include an explicit attribution line citing AGENTS.md as the authoritative source.
+6. **CLAUDE.md** — Claude Code project context file. **If the target team does not use Claude Code** (e.g., has `.cursor/rules/` but no `.claude/` directory), generate a minimal 1-3 line pointer: project name + link to AGENTS.md. Do not generate a full summary — the team's primary IDE context is already served. **If the team uses Claude Code** (or no IDE preference is apparent), generate a full context file: points to AGENTS.md, ARCHITECTURE.md, and CONTRIBUTING.md for full context. Includes a quick reference section with stack, path aliases, key rules, linting, and testing commands. Keep it concise — it's loaded into every Claude conversation automatically. If Key Rules are condensed from AGENTS.md, include an explicit attribution line citing AGENTS.md as the authoritative source.
 7. **.cursor/rules/{repo-name}.mdc** — Cursor project rules. Create `.cursor/rules/` directory if needed. Use the `.mdc` format with YAML frontmatter (`description`, `globs`, `alwaysApply: true`). Content mirrors CLAUDE.md: conventions summary, context file pointers, key patterns. Use relative paths from `.cursor/rules/` to reference docs (e.g., `../../AGENTS.md`).
 
 Follow the style guide below for all prose.
@@ -323,7 +332,9 @@ CLAUDE.md and .cursor/rules/\*.mdc are **pointers and summaries**, not duplicate
 When generating `.coderabbit.yaml`:
 
 - Default to `chill` review profile (valid values: `chill`, `assertive`)
-- Add path-specific instructions for key directories (models, components, config)
+- Add a top-level `instructions` field telling CodeRabbit to read AGENTS.md for full coding standards and review guidelines
+- Add path-specific instructions for key directories — these should contain **CodeRabbit-specific review guidance only** (what to verify, domain context, feature-specific constraints), NOT duplications of rules already in AGENTS.md (dependency flow, file limits, naming conventions, etc.)
+- Discover ALL feature modules by scanning for entry point files (e.g., `dynamic-plugin.ts`, route definitions). Include every discovered module in path instructions, not just the most prominent ones
 - Exclude generated files, lock files, vendored code, and locale files from review
 - Enable auto-review on non-draft PRs
 
@@ -355,6 +366,9 @@ When drafting any documentation file, follow these rules strictly.
 - "You should probably look at the code to understand how it works." (unhelpful)
 - "The architecture is complex but well-designed." (opinion without substance)
 - "As an AI language model, I've analyzed this repository and..." (never reference yourself)
+- "explicit loading/error guards are not always needed if the wizard prevents advancing" (editorial opinion that contradicts a project rule — never inject opinions about when to skip patterns the project enforces)
+
+**Never inject editorial opinions that contradict or weaken project rules.** When documenting a pattern, describe what the project does and enforces — not what you think could be skipped. If AGENTS.md or project rules say "always handle loading/error/empty states," the generated .coderabbit.yaml must not say "loading guards are not always needed."
 
 ### Self-check before proceeding:
 

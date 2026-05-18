@@ -10,6 +10,8 @@ import {
   checkContributingCommitDedup,
   checkArchitectureDedup,
   checkClaudeMdContextLinks,
+  checkCoderabbitAgentsReference,
+  checkCoderabbitFeatureModuleCoverage,
 } from "./validate-output.js";
 import { LINE_LIMITS } from "./lib.js";
 
@@ -415,6 +417,103 @@ describe("checkContributingCommitDedup", () => {
       "# Contributing\n\n## Commit Format\n\nAll commits require DCO sign-off (`git commit -s`) and a Resolves line (`Resolves: MTV-XXXX` or `Resolves: None`). See [README](README.md#development) for details.\n",
     );
     expect(checkContributingCommitDedup(tempDir)).toEqual([]);
+  });
+});
+
+describe("checkCoderabbitAgentsReference", () => {
+  it("returns no warnings when .coderabbit.yaml does not exist", () => {
+    writeFileSync(join(tempDir, "AGENTS.md"), "# Agents\n");
+    expect(checkCoderabbitAgentsReference(tempDir)).toEqual([]);
+  });
+
+  it("returns no warnings when AGENTS.md does not exist", () => {
+    writeFileSync(
+      join(tempDir, ".coderabbit.yaml"),
+      "reviews:\n  profile: chill\n",
+    );
+    expect(checkCoderabbitAgentsReference(tempDir)).toEqual([]);
+  });
+
+  it("returns no warnings when .coderabbit.yaml references AGENTS.md", () => {
+    writeFileSync(join(tempDir, "AGENTS.md"), "# Agents\n");
+    writeFileSync(
+      join(tempDir, ".coderabbit.yaml"),
+      "reviews:\n  instructions: |\n    Read AGENTS.md for coding standards.\n",
+    );
+    expect(checkCoderabbitAgentsReference(tempDir)).toEqual([]);
+  });
+
+  it("warns when .coderabbit.yaml does not reference AGENTS.md", () => {
+    writeFileSync(join(tempDir, "AGENTS.md"), "# Agents\n");
+    writeFileSync(
+      join(tempDir, ".coderabbit.yaml"),
+      "reviews:\n  profile: chill\n",
+    );
+    const warnings = checkCoderabbitAgentsReference(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("AGENTS.md");
+  });
+});
+
+describe("checkCoderabbitFeatureModuleCoverage", () => {
+  it("returns no warnings when .coderabbit.yaml does not exist", () => {
+    expect(checkCoderabbitFeatureModuleCoverage(tempDir)).toEqual([]);
+  });
+
+  it("returns no warnings when src directory does not exist", () => {
+    writeFileSync(
+      join(tempDir, ".coderabbit.yaml"),
+      "reviews:\n  profile: chill\n",
+    );
+    expect(checkCoderabbitFeatureModuleCoverage(tempDir)).toEqual([]);
+  });
+
+  it("returns no warnings when no feature modules exist", () => {
+    mkdirSync(join(tempDir, "src", "utils"), { recursive: true });
+    writeFileSync(
+      join(tempDir, ".coderabbit.yaml"),
+      "reviews:\n  profile: chill\n",
+    );
+    expect(checkCoderabbitFeatureModuleCoverage(tempDir)).toEqual([]);
+  });
+
+  it("returns no warnings when all feature modules are covered", () => {
+    mkdirSync(join(tempDir, "src", "providers"), { recursive: true });
+    mkdirSync(join(tempDir, "src", "plans"), { recursive: true });
+    writeFileSync(
+      join(tempDir, "src", "providers", "dynamic-plugin.ts"),
+      "export default {};",
+    );
+    writeFileSync(
+      join(tempDir, "src", "plans", "dynamic-plugin.ts"),
+      "export default {};",
+    );
+    writeFileSync(
+      join(tempDir, ".coderabbit.yaml"),
+      'reviews:\n  path_instructions:\n    - path: "src/providers/**"\n    - path: "src/plans/**"\n',
+    );
+    expect(checkCoderabbitFeatureModuleCoverage(tempDir)).toEqual([]);
+  });
+
+  it("warns when feature modules are missing from path instructions", () => {
+    mkdirSync(join(tempDir, "src", "providers"), { recursive: true });
+    mkdirSync(join(tempDir, "src", "overview"), { recursive: true });
+    writeFileSync(
+      join(tempDir, "src", "providers", "dynamic-plugin.ts"),
+      "export default {};",
+    );
+    writeFileSync(
+      join(tempDir, "src", "overview", "dynamic-plugin.ts"),
+      "export default {};",
+    );
+    writeFileSync(
+      join(tempDir, ".coderabbit.yaml"),
+      'reviews:\n  path_instructions:\n    - path: "src/providers/**"\n',
+    );
+    const warnings = checkCoderabbitFeatureModuleCoverage(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("overview");
+    expect(warnings[0]).not.toContain("providers");
   });
 });
 

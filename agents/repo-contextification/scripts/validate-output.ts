@@ -9,6 +9,7 @@ import {
   COMMIT_FORMAT_PATTERNS,
   DIRECTORY_TREE_PATTERN,
   TECH_STACK_PATTERN,
+  ARCHITECTURE_SUBDIRS,
   CI_HEADING_STEMS,
   parseArgs,
   extractHeadings,
@@ -239,6 +240,51 @@ export function checkArchitectureTechStackDedup(repoPath: string): string[] {
   ];
 }
 
+export function checkCoderabbitAgentsReference(repoPath: string): string[] {
+  const coderabbitPath = join(repoPath, ".coderabbit.yaml");
+  const agentsPath = join(repoPath, "AGENTS.md");
+  if (!existsSync(coderabbitPath) || !existsSync(agentsPath)) return [];
+
+  const content = readFileSync(coderabbitPath, "utf-8");
+  if (content.includes("AGENTS.md")) return [];
+
+  return [
+    ".coderabbit.yaml does not reference AGENTS.md — add a top-level instruction directing CodeRabbit to read AGENTS.md for coding standards",
+  ];
+}
+
+export function checkCoderabbitFeatureModuleCoverage(
+  repoPath: string,
+): string[] {
+  const coderabbitPath = join(repoPath, ".coderabbit.yaml");
+  if (!existsSync(coderabbitPath)) return [];
+
+  const content = readFileSync(coderabbitPath, "utf-8");
+  const srcDir = join(repoPath, "src");
+  if (!existsSync(srcDir)) return [];
+
+  const featureModules: string[] = [];
+  for (const entry of readdirSync(srcDir, { withFileTypes: true })) {
+    if (
+      entry.isDirectory() &&
+      existsSync(join(srcDir, entry.name, "dynamic-plugin.ts"))
+    ) {
+      featureModules.push(entry.name);
+    }
+  }
+
+  if (featureModules.length === 0) return [];
+
+  const missing = featureModules.filter(
+    (mod) => !content.includes(`src/${mod}/`),
+  );
+  if (missing.length === 0) return [];
+
+  return [
+    `.coderabbit.yaml is missing path instructions for feature modules: ${missing.join(", ")}`,
+  ];
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help === true) {
@@ -265,7 +311,16 @@ function main() {
   for (const file of requiredFiles) {
     const filePath = join(repoPath, file);
     if (!existsSync(filePath)) {
-      errors.push(`Missing required file: ${file}`);
+      if (
+        file === "ARCHITECTURE.md" &&
+        ARCHITECTURE_SUBDIRS.some((p) => existsSync(join(repoPath, p)))
+      ) {
+        warnings.push(
+          `ARCHITECTURE.md not at repo root — exists as subdirectory doc (acceptable)`,
+        );
+      } else {
+        errors.push(`Missing required file: ${file}`);
+      }
       continue;
     }
 
@@ -302,6 +357,8 @@ function main() {
   warnings.push(...checkArchitectureDedup(repoPath));
   warnings.push(...checkArchitectureTechStackDedup(repoPath));
   warnings.push(...checkClaudeMdContextLinks(repoPath));
+  warnings.push(...checkCoderabbitAgentsReference(repoPath));
+  warnings.push(...checkCoderabbitFeatureModuleCoverage(repoPath));
 
   if (errors.length > 0) {
     console.error(`\n${errors.length} error(s) found:`);

@@ -3,6 +3,7 @@ import { readFileSync, existsSync, statSync } from "node:fs";
 export interface FileCheck {
   path: string;
   exists: boolean;
+  existsInSubdir?: string;
   sections: string[];
   missingSections: string[];
   headingOnlyGaps: string[];
@@ -179,6 +180,11 @@ export const COMMIT_FORMAT_PATTERNS = [
   /\bnpm run validate-commits\b/,
   /\bgit commit -s\b/,
   /\bSigned-off-by:/,
+];
+
+export const ARCHITECTURE_SUBDIRS = [
+  "docs/architecture.md",
+  "docs/ARCHITECTURE.md",
 ];
 
 export const DIRECTORY_TREE_PATTERN = /src\/\n(?:[\s│├└─|]*\S.*\n){3,}/;

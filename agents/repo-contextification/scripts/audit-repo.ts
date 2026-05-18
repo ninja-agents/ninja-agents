@@ -8,6 +8,7 @@ import {
   FILE_DESCRIPTIONS,
   BOILERPLATE_PATTERNS,
   CI_INDICATORS,
+  ARCHITECTURE_SUBDIRS,
   parseArgs,
   extractHeadings,
   findMissingSections,
@@ -118,9 +119,15 @@ export function generateReport(report: AuditReport): string {
   if (missingFiles.length > 0) {
     lines.push("### Missing Files (create these first)");
     for (const f of missingFiles) {
-      lines.push(
-        `- **${f.path}** — ${FILE_DESCRIPTIONS[f.path] ?? "Documentation file"}`,
-      );
+      if (f.existsInSubdir) {
+        lines.push(
+          `- **${f.path}** — exists as \`${f.existsInSubdir}\`; generate a concise pointer file, not a full duplicate`,
+        );
+      } else {
+        lines.push(
+          `- **${f.path}** — ${FILE_DESCRIPTIONS[f.path] ?? "Documentation file"}`,
+        );
+      }
     }
     lines.push("");
   }
@@ -201,6 +208,11 @@ export function generateReport(report: AuditReport): string {
     thinFiles.length === 0 &&
     boilerplateFiles.length === 0;
 
+  const subdirDocs = report.files
+    .filter((f) => f.existsInSubdir)
+    .map((f) => `${f.path}:${f.existsInSubdir}`)
+    .join(",");
+
   lines.push(
     "",
     `<!-- AUDIT_SUMMARY`,
@@ -208,6 +220,7 @@ export function generateReport(report: AuditReport): string {
     `COMPLETE_FILES=${complete.join(",")}`,
     `INCOMPLETE_FILES=${incomplete.join(",")}`,
     `HEADING_ONLY=${allGapsHeadingOnly}`,
+    ...(subdirDocs ? [`SUBDIR_DOCS=${subdirDocs}`] : []),
     `AUDIT_SUMMARY -->`,
   );
 
@@ -223,7 +236,11 @@ export function generateDryRunPlan(report: AuditReport): string {
   ];
 
   for (const f of report.files) {
-    if (!f.exists) {
+    if (!f.exists && f.existsInSubdir) {
+      lines.push(
+        `- **CREATE** \`${f.path}\` — pointer to existing \`${f.existsInSubdir}\``,
+      );
+    } else if (!f.exists) {
       lines.push(
         `- **CREATE** \`${f.path}\` — ${FILE_DESCRIPTIONS[f.path] ?? "Documentation file"}`,
       );
@@ -279,6 +296,16 @@ function main() {
   }
 
   const files = Object.keys(REQUIRED_FILES).map((f) => auditFile(repoPath, f));
+
+  const archFile = files.find((f) => f.path === "ARCHITECTURE.md");
+  if (archFile && !archFile.exists) {
+    const existingSubdir = ARCHITECTURE_SUBDIRS.find((p) =>
+      existsSync(join(repoPath, p)),
+    );
+    if (existingSubdir) {
+      archFile.existsInSubdir = existingSubdir;
+    }
+  }
 
   const cursorDir = join(repoPath, ".cursor", "rules");
   const hasCursorRules =

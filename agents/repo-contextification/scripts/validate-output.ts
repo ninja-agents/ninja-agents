@@ -285,6 +285,63 @@ export function checkCoderabbitFeatureModuleCoverage(
   ];
 }
 
+const STANDALONE_DOC_TOPICS: { files: string[]; topic: string }[] = [
+  { files: ["VERSIONING.md"], topic: "versioning" },
+  {
+    files: ["INTERNATIONALIZATION.md", "I18N.md"],
+    topic: "internationalization",
+  },
+  { files: ["SECURITY.md"], topic: "security" },
+  { files: ["docs/development.md", "DEVELOPMENT.md"], topic: "development" },
+];
+
+export function checkContributingExistingDocDedup(repoPath: string): string[] {
+  const contributingPath = join(repoPath, "CONTRIBUTING.md");
+  if (!existsSync(contributingPath)) return [];
+
+  const content = readFileSync(contributingPath, "utf-8");
+  const sections = extractSections(content);
+  const warnings: string[] = [];
+
+  for (const { files, topic } of STANDALONE_DOC_TOPICS) {
+    const existingDoc = files.find((f) => existsSync(join(repoPath, f)));
+    if (!existingDoc) continue;
+
+    const matchingSection = sections.find((s) =>
+      tokenize(s.heading).some((t) => t.startsWith(topic.slice(0, 6))),
+    );
+    if (!matchingSection) continue;
+
+    const bodyLines = matchingSection.body
+      .split("\n")
+      .filter((l) => l.trim().length > 0);
+    if (bodyLines.length > 2) {
+      warnings.push(
+        `CONTRIBUTING.md duplicates content from ${existingDoc} in "${matchingSection.heading}" section — link to it instead`,
+      );
+    }
+  }
+
+  return warnings;
+}
+
+export function checkArchitectureSubdirLink(repoPath: string): string[] {
+  const archPath = join(repoPath, "ARCHITECTURE.md");
+  if (!existsSync(archPath)) return [];
+
+  const subdirDoc = ARCHITECTURE_SUBDIRS.find((p) =>
+    existsSync(join(repoPath, p)),
+  );
+  if (!subdirDoc) return [];
+
+  const content = readFileSync(archPath, "utf-8");
+  if (content.includes(subdirDoc)) return [];
+
+  return [
+    `ARCHITECTURE.md does not link to existing ${subdirDoc} — add a link to avoid content duplication`,
+  ];
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help === true) {
@@ -336,8 +393,11 @@ function main() {
       warnings.push(`${file} has no markdown headings`);
     }
 
+    const proseContent = content
+      .replace(/```[\s\S]*?```/g, "")
+      .replace(/`[^`]+`/g, "");
     for (const pattern of PLACEHOLDER_PATTERNS) {
-      if (pattern.test(content)) {
+      if (pattern.test(proseContent)) {
         warnings.push(`${file} contains placeholder text: ${pattern.source}`);
       }
     }
@@ -354,8 +414,10 @@ function main() {
   warnings.push(...checkLineLimits(repoPath));
   warnings.push(...checkContributingDedup(repoPath));
   warnings.push(...checkContributingCommitDedup(repoPath));
+  warnings.push(...checkContributingExistingDocDedup(repoPath));
   warnings.push(...checkArchitectureDedup(repoPath));
   warnings.push(...checkArchitectureTechStackDedup(repoPath));
+  warnings.push(...checkArchitectureSubdirLink(repoPath));
   warnings.push(...checkClaudeMdContextLinks(repoPath));
   warnings.push(...checkCoderabbitAgentsReference(repoPath));
   warnings.push(...checkCoderabbitFeatureModuleCoverage(repoPath));

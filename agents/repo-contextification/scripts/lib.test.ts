@@ -17,6 +17,7 @@ import {
   isCacheFresh,
   prCacheFilePath,
   BOILERPLATE_PATTERNS,
+  PLACEHOLDER_PATTERNS,
   LINE_LIMITS,
   CI_INDICATORS,
   CI_HEADING_STEMS,
@@ -412,6 +413,44 @@ describe("isCacheFresh", () => {
     const filePath = join(tempDir, "empty.md");
     writeFileSync(filePath, "");
     expect(isCacheFresh(filePath, 60_000)).toBe(true);
+  });
+});
+
+describe("PLACEHOLDER_PATTERNS", () => {
+  const xxxPattern = PLACEHOLDER_PATTERNS.find((p) =>
+    p.source.includes("XXX"),
+  )!;
+
+  it("matches standalone XXX", () => {
+    expect(xxxPattern.test("This is XXX placeholder")).toBe(true);
+  });
+
+  it("does not match XXX after a hyphen (Jira key)", () => {
+    expect(xxxPattern.test("Resolves: MTV-XXX")).toBe(false);
+  });
+
+  it("does not match XXX preceded by an underscore", () => {
+    expect(xxxPattern.test("customfield_XXX")).toBe(false);
+  });
+
+  it("does not match XXX inside backticks", () => {
+    expect(xxxPattern.test("`MTV-XXX`")).toBe(false);
+  });
+
+  it("still matches TODO", () => {
+    expect(PLACEHOLDER_PATTERNS.some((p) => p.test("TODO: fix this"))).toBe(
+      true,
+    );
+  });
+
+  it("still matches TBD", () => {
+    expect(PLACEHOLDER_PATTERNS.some((p) => p.test("TBD"))).toBe(true);
+  });
+
+  it("still matches FIXME", () => {
+    expect(PLACEHOLDER_PATTERNS.some((p) => p.test("FIXME: broken"))).toBe(
+      true,
+    );
   });
 });
 

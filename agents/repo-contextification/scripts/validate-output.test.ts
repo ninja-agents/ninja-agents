@@ -8,7 +8,9 @@ import {
   checkLineLimits,
   checkContributingDedup,
   checkContributingCommitDedup,
+  checkContributingExistingDocDedup,
   checkArchitectureDedup,
+  checkArchitectureSubdirLink,
   checkClaudeMdContextLinks,
   checkCoderabbitAgentsReference,
   checkCoderabbitFeatureModuleCoverage,
@@ -514,6 +516,111 @@ describe("checkCoderabbitFeatureModuleCoverage", () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain("overview");
     expect(warnings[0]).not.toContain("providers");
+  });
+});
+
+describe("checkArchitectureSubdirLink", () => {
+  it("returns no warnings when ARCHITECTURE.md does not exist", () => {
+    expect(checkArchitectureSubdirLink(tempDir)).toEqual([]);
+  });
+
+  it("returns no warnings when no docs/architecture.md exists", () => {
+    writeFileSync(
+      join(tempDir, "ARCHITECTURE.md"),
+      "# Architecture\n\nSystem overview.\n",
+    );
+    expect(checkArchitectureSubdirLink(tempDir)).toEqual([]);
+  });
+
+  it("returns no warnings when ARCHITECTURE.md links to docs/architecture.md", () => {
+    writeFileSync(
+      join(tempDir, "ARCHITECTURE.md"),
+      "# Architecture\n\nSee [docs/architecture.md](docs/architecture.md) for details.\n",
+    );
+    mkdirSync(join(tempDir, "docs"), { recursive: true });
+    writeFileSync(
+      join(tempDir, "docs", "architecture.md"),
+      "# Detailed Architecture\n\nContent here.\n",
+    );
+    expect(checkArchitectureSubdirLink(tempDir)).toEqual([]);
+  });
+
+  it("warns when ARCHITECTURE.md does not link to existing docs/architecture.md", () => {
+    writeFileSync(
+      join(tempDir, "ARCHITECTURE.md"),
+      "# Architecture\n\nSystem overview without a link.\n",
+    );
+    mkdirSync(join(tempDir, "docs"), { recursive: true });
+    writeFileSync(
+      join(tempDir, "docs", "architecture.md"),
+      "# Detailed Architecture\n\nContent here.\n",
+    );
+    const warnings = checkArchitectureSubdirLink(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("docs/architecture.md");
+  });
+});
+
+describe("checkContributingExistingDocDedup", () => {
+  it("returns no warnings when CONTRIBUTING.md does not exist", () => {
+    expect(checkContributingExistingDocDedup(tempDir)).toEqual([]);
+  });
+
+  it("returns no warnings when no standalone docs exist", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Versioning\n\nWe follow semver with lots of details here.\nMore lines.\nEven more lines.\n",
+    );
+    expect(checkContributingExistingDocDedup(tempDir)).toEqual([]);
+  });
+
+  it("returns no warnings when CONTRIBUTING.md section is just a link (2 lines or fewer)", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Versioning\n\nSee [VERSIONING.md](VERSIONING.md) for details.\n",
+    );
+    writeFileSync(join(tempDir, "VERSIONING.md"), "# Versioning\n\nContent.\n");
+    expect(checkContributingExistingDocDedup(tempDir)).toEqual([]);
+  });
+
+  it("warns when CONTRIBUTING.md duplicates VERSIONING.md content", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Versioning\n\nWe follow semantic versioning.\nMajor versions for breaking changes.\nMinor versions for features.\nPatch versions for bug fixes.\n",
+    );
+    writeFileSync(join(tempDir, "VERSIONING.md"), "# Versioning\n\nContent.\n");
+    const warnings = checkContributingExistingDocDedup(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("VERSIONING.md");
+  });
+
+  it("warns when CONTRIBUTING.md duplicates INTERNATIONALIZATION.md content", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Internationalization\n\nAll strings use react-i18next.\nTranslation files in public/locales.\nUse the useTranslation hook.\nSee the docs for adding languages.\n",
+    );
+    writeFileSync(
+      join(tempDir, "INTERNATIONALIZATION.md"),
+      "# i18n\n\nGuide here.\n",
+    );
+    const warnings = checkContributingExistingDocDedup(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("INTERNATIONALIZATION.md");
+  });
+
+  it("warns when CONTRIBUTING.md duplicates docs/development.md content", () => {
+    writeFileSync(
+      join(tempDir, "CONTRIBUTING.md"),
+      "# Contributing\n\n## Development\n\nClone the repo.\nInstall deps with npm install.\nRun npm start.\nOpen localhost:3000.\n",
+    );
+    mkdirSync(join(tempDir, "docs"), { recursive: true });
+    writeFileSync(
+      join(tempDir, "docs", "development.md"),
+      "# Development\n\nFull guide.\n",
+    );
+    const warnings = checkContributingExistingDocDedup(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("docs/development.md");
   });
 });
 

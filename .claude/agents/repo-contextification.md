@@ -143,7 +143,10 @@ In dry-run mode, a "Dry-Run Plan" section shows every file that WOULD be created
 
 After displaying the gap analysis:
 
-1. **If AI-readiness score is 100/100** — run validation (`validate-output.ts --repo-path <path> --verbose`). If validation also passes (exit 0), display "Repo is fully contextified — score 100/100, validation passed. No documentation changes needed." and STOP. Do not proceed to Step 5.
+1. **If AI-readiness score is 100/100** — run validation (`validate-output.ts --repo-path <path> --verbose`).
+   - **Exit 0** (no issues): display "Repo is fully contextified — score 100/100, validation passed. No documentation changes needed." and STOP. Do not proceed to Step 5.
+   - **Exit 3** (warnings only): fix each warning in place (e.g., add a missing AGENTS.md reference to .coderabbit.yaml), then re-run validation. If it passes (exit 0), display "Repo is fully contextified — score 100/100, fixed {n} warnings." and STOP.
+   - **Exit 1** (errors): do not short-circuit — proceed to Step 4 to generate/fix files.
 
 2. **If individual files score 100% with no issues** — skip those files during generation in Step 6. Only generate/update files listed in `INCOMPLETE_FILES`. Tell the user which files are being skipped.
 
@@ -289,6 +292,7 @@ Before generating any documentation, read the repo thoroughly. As you read, disp
 - **Feature module discovery**: Identify ALL feature modules by scanning for entry point files. For dynamic plugins: `find src -name "dynamic-plugin.ts"`. For standard React: scan for route definitions or lazy-loaded page components. Record the complete list — this list feeds ARCHITECTURE.md (feature module structure) and .coderabbit.yaml (path instructions). Do not rely on reading a subset of the directory tree; explicitly search for entry points.
 - **IDE tooling detection**: Check for `.cursor/rules/` (Cursor), `.claude/` directory (Claude Code), `.github/copilot-instructions.md` (Copilot). Note which tools the team uses — this affects CLAUDE.md generation in Step 6 (minimal pointer vs full context file).
 - Read existing docs for tone and conventions
+- **Catalog existing documentation**: scan for standalone docs (`VERSIONING.md`, `INTERNATIONALIZATION.md`, `SECURITY.md`, `docs/*.md`) that cover specific topics. Record the list — CONTRIBUTING.md must link to these instead of duplicating their content (Rule 20)
 - Check CI config for build/test/deploy patterns (`.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `OWNERS`). Distinguish between Prow-based `OWNERS` files (OpenShift ecosystem — uses `lgtm` + `approved` labels, reviewers vs approvers with required counts) and GitHub `CODEOWNERS` (PR approval counts). Describe the actual merge mechanism, not a generic summary.
 - Read source files to understand key patterns (imports, component structure, state management)
 - Check linting/formatting config (`.eslintrc*`, `.prettierrc*`, `.editorconfig`)
@@ -309,11 +313,16 @@ After writing each file, display: `[6/11] Created {filename}` or `[6/11] Updated
 ### File generation order:
 
 1. **README.md** — update/create with overview, quick start, prerequisites, development, testing, contributing link
-2. **CONTRIBUTING.md** — coding standards (from lint config), PR process (from git log/OWNERS), testing, commit conventions. **Deduplication rule:** CONTRIBUTING.md MUST NOT repeat setup steps (clone, install, prerequisites, start commands) that are in README.md. Instead, link to README: "For initial setup, see [README.md](README.md#quick-start)." Only include CONTRIBUTING-specific setup that goes beyond what README covers.
+2. **CONTRIBUTING.md** — coding standards (from lint config), PR process (from git log/OWNERS), testing, commit conventions. **Deduplication rules:**
+   - CONTRIBUTING.md MUST NOT repeat setup steps (clone, install, prerequisites, start commands) that are in README.md. Instead, link to README: "For initial setup, see [README.md](README.md#quick-start)." Only include CONTRIBUTING-specific setup that goes beyond what README covers.
+   - **Scan for existing project docs** (`VERSIONING.md`, `INTERNATIONALIZATION.md`, `docs/development.md`, `docs/tests.md`, etc.) BEFORE writing sections. If the repo already has a dedicated doc for a topic, CONTRIBUTING.md must link to it ("See [VERSIONING.md](VERSIONING.md) for versioning guidelines.") — never reproduce its content. This also applies to linting/formatting sections that duplicate README.
+   - **Do not generate sections with only generic advice** (e.g., "write clear commit messages", "keep PRs small"). Every section must contain project-specific conventions. If a topic has no project-specific rules beyond what another doc covers, replace the section with a link to that doc.
+   - **AI attribution format**: check the repo for existing conventions (e.g., `Assisted-by:` trailers per the [Kernel convention](https://docs.kernel.org/process/coding-assistants.html), `Co-Authored-By:`, or project-specific formats). Document what the project actually uses — do not invent an attribution format.
 3. **AGENTS.md** — repo structure, key patterns, conventions, review guidelines (derived from reading the actual code)
 4. **ARCHITECTURE.md** — system context, component relationships, data flow, dependencies, build/deploy pipeline. If AGENTS.md already contains a tech stack section or directory tree, do NOT reproduce them — link to AGENTS.md instead. **If `docs/architecture.md` or equivalent exists and is substantive (50+ lines), generate ARCHITECTURE.md as a concise pointer (title, one-paragraph summary, link to the docs/ file) — do NOT duplicate the content.** The `docs/` version is the authoritative source; the root file exists only for discoverability.
 5. **.coderabbit.yaml** — review tone, path-specific instructions, file filters (exclude generated/vendored/lock files)
 6. **CLAUDE.md** — Claude Code project context file. **If the target team does not use Claude Code** (e.g., has `.cursor/rules/` but no `.claude/` directory), generate a minimal 1-3 line pointer: project name + link to AGENTS.md. Do not generate a full summary — the team's primary IDE context is already served. **If the team uses Claude Code** (or no IDE preference is apparent), generate a full context file: points to AGENTS.md, ARCHITECTURE.md, and CONTRIBUTING.md for full context. Includes a quick reference section with stack, path aliases, key rules, linting, and testing commands. Keep it concise — it's loaded into every Claude conversation automatically. If Key Rules are condensed from AGENTS.md, include an explicit attribution line citing AGENTS.md as the authoritative source.
+   - **Path aliases vs workspace packages**: when listing import mappings, correctly distinguish TypeScript path aliases (configured in `tsconfig.json` `paths`, e.g., `@app/` -> `client/src/app/`) from npm workspace packages (configured in root `package.json` `workspaces`, consumed as `import ... from "@scope/pkg"`). Label each correctly — do not describe a workspace package as a "path alias".
 7. **.cursor/rules/{repo-name}.mdc** — Cursor project rules. Create `.cursor/rules/` directory if needed. Use the `.mdc` format with YAML frontmatter (`description`, `globs`, `alwaysApply: true`). Content mirrors CLAUDE.md: conventions summary, context file pointers, key patterns. Use relative paths from `.cursor/rules/` to reference docs (e.g., `../../AGENTS.md`).
 
 Follow the style guide below for all prose.
@@ -334,8 +343,12 @@ When generating `.coderabbit.yaml`:
 - Default to `chill` review profile (valid values: `chill`, `assertive`)
 - Add a top-level `instructions` field telling CodeRabbit to read AGENTS.md for full coding standards and review guidelines
 - Add path-specific instructions for key directories — these should contain **CodeRabbit-specific review guidance only** (what to verify, domain context, feature-specific constraints), NOT duplications of rules already in AGENTS.md (dependency flow, file limits, naming conventions, etc.)
+- **Do NOT add instructions for things already enforced by the project's linters or type system.** Read the ESLint config, TypeScript config, and any other linter configs BEFORE writing path instructions. If a rule is already enforced by tooling (e.g., import ordering by `eslint-plugin-import`, type constraints by TypeScript, formatting by Prettier), omit it from `.coderabbit.yaml` — CodeRabbit review comments on lint-enforced rules are noise. Examples of rules to OMIT: "ensure query keys are exported constants" (if ESLint enforces it), "check import ordering" (if eslint-plugin-import handles it), "use FilterSelectOptionProps" (if TypeScript types enforce it).
+- **Do NOT add instructions about design-level choices** (e.g., "forms must use react-hook-form") — these are architecture decisions, not code review guidance. CodeRabbit should verify correctness within the chosen patterns, not enforce which patterns to use.
+- **Do NOT add incorrect or overly strict instructions** without verifying them against the codebase. For UI component libraries like PatternFly, some elements (menus, dropdowns, modals) render outside their parent DOM node — instructions like "ensure selectors scope to the active element" can be wrong. Only add instructions you can verify by reading the actual test patterns.
+- **Include API spec references**: when adding instructions for API-related paths, include a link to the project's OpenAPI spec or API documentation if one exists.
 - Discover ALL feature modules by scanning for entry point files (e.g., `dynamic-plugin.ts`, route definitions). Include every discovered module in path instructions, not just the most prominent ones
-- Exclude generated files, lock files, vendored code, and locale files from review
+- Exclude generated files, lock files, vendored code, locale/translation files, and branding/theme files from review
 - Enable auto-review on non-draft PRs
 
 ### Style Guide
@@ -562,3 +575,5 @@ Present a final summary:
 17. Use the terminology the project uses. If the codebase calls something "selectors", don't call it "getters". Check for naming conventions in progress (recent renames, consistency efforts) and use the target terminology.
 18. The review round (Step 9) fixes issues in place — do not ask for per-file approval. Apply the same one-pass principle as generation (Rule 1).
 19. Prefix every progress message with `[N/11]` where N is the current step number. Display progress at each step and key milestones (file created, validation result, review fixes). Keep updates to one line each — be transparent, not verbose.
+20. Before generating CONTRIBUTING.md, scan the repo for existing documentation files (e.g., `VERSIONING.md`, `INTERNATIONALIZATION.md`, `docs/development.md`, `docs/tests.md`, `docs/contributing.md`). For each topic that already has a dedicated doc, the CONTRIBUTING.md section must be a one-line link — never reproduce the content. This prevents maintainer pushback from duplicated information going stale.
+21. Before generating `.coderabbit.yaml` path instructions, read the project's ESLint config, TypeScript config, and any other linter configs. Never add CodeRabbit instructions for rules already enforced by tooling — these generate false-positive review comments that annoy maintainers. CodeRabbit instructions should focus on semantic/domain concerns that linters cannot catch.

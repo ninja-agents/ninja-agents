@@ -91,7 +91,7 @@ export const PLACEHOLDER_PATTERNS = [
   /\bTODO\b/i,
   /\bTBD\b/i,
   /\bFIXME\b/i,
-  /\bXXX\b/i,
+  /(?<![-_`])XXX(?![-_`])/i,
   /\bHACK\b/i,
   /\bWIP\b/i,
   /\bfill in later\b/i,

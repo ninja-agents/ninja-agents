@@ -15,7 +15,9 @@
     "context:audit": "tsx agents/repo-contextification/scripts/audit-repo.ts",
     "context:audit:dry-run": "tsx agents/repo-contextification/scripts/audit-repo.ts --dry-run",
     "context:validate": "tsx agents/repo-contextification/scripts/validate-output.ts",
-    "context:test": "vitest run --dir agents/repo-contextification"
+    "context:test": "vitest run --dir agents/repo-contextification",
+    "sprint-planning-analysis:generate": "tsx agents/sprint-planning-analysis/scripts/generate-sprint-planning-analysis.ts",
+    "sprint-planning-analysis:test": "vitest run --dir agents/sprint-planning-analysis"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

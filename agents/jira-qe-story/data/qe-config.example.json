@@ -1,0 +1,31 @@
+{
+  "_comment": "Copy this file to qe-config.json and fill in your team's values.",
+  "jira": {
+    "cloud_id": "redhat.atlassian.net",
+    "base_url": "https://redhat.atlassian.net/browse"
+  },
+  "defaults": {
+    "target_project_key": "CNV",
+    "issue_type": "Story",
+    "labels": ["qe"],
+    "components": [],
+    "priority": "Major"
+  },
+  "qe_engineers": [
+    {
+      "name": "Jane Doe",
+      "jira_account_id": "712020:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    }
+  ],
+  "projects": [
+    {
+      "jira_prefix": "PROJ",
+      "name": "My Project",
+      "repository": {
+        "type": "github",
+        "owner": "your-org",
+        "repo": "your-repo"
+      }
+    }
+  ]
+}

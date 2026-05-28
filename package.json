@@ -17,7 +17,9 @@
     "context:validate": "tsx agents/repo-contextification/scripts/validate-output.ts",
     "context:test": "vitest run --dir agents/repo-contextification",
     "sprint-planning-analysis:generate": "tsx agents/sprint-planning-analysis/scripts/generate-sprint-planning-analysis.ts",
-    "sprint-planning-analysis:test": "vitest run --dir agents/sprint-planning-analysis"
+    "sprint-planning-analysis:test": "vitest run --dir agents/sprint-planning-analysis",
+    "jira-qe-story:preview": "tsx agents/jira-qe-story/scripts/format-qe-preview.ts",
+    "jira-qe-story:test": "vitest run --dir agents/jira-qe-story"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -68,6 +68,7 @@ mcp__atlassian__searchJiraIssuesUsingJql:
 | `/sprint-review`            | Sprint retrospective analysis from active Jira sprint       | `sprint-review`            |
 | `/sprint-planning-analysis` | Sprint planning health-check against velocity baseline      | `sprint-planning-analysis` |
 | `/repo-contextification`    | Audit repo docs and AI-readiness, scaffold missing files    | `repo-contextification`    |
+| `/jira-qe-story`            | Generate QE story from dev Jira story, create in Jira       | `jira-qe-story`            |
 
 ## Linting & Formatting
 

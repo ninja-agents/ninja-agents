@@ -8,12 +8,13 @@ The repo follows a "data collector + deterministic script" pattern: the AI agent
 
 ## Available Agents
 
-| Agent                                                        | Description                                                                     | Docs                                                |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------- | --------------------------------------------------- |
-| [weekly-team-update](agents/weekly-team-update/)             | Generates a leadership-ready weekly status report from GitHub, GitLab, and Jira | [README](agents/weekly-team-update/README.md)       |
-| [sprint-review](agents/sprint-review/)                       | Sprint retrospective analysis from active Jira sprint                           | [README](agents/sprint-review/README.md)            |
-| [sprint-planning-analysis](agents/sprint-planning-analysis/) | Sprint planning health-check against velocity baseline                          | [README](agents/sprint-planning-analysis/README.md) |
-| [repo-contextification](agents/repo-contextification/)       | Audit repo docs and AI-readiness, interactively scaffold missing files          | [README](agents/repo-contextification/README.md)    |
+| Agent                                                        | Description                                                                       | Docs                                                |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------- | --------------------------------------------------- |
+| [weekly-team-update](agents/weekly-team-update/)             | Generates a leadership-ready weekly status report from GitHub, GitLab, and Jira   | [README](agents/weekly-team-update/README.md)       |
+| [sprint-review](agents/sprint-review/)                       | Sprint retrospective analysis from active Jira sprint                             | [README](agents/sprint-review/README.md)            |
+| [sprint-planning-analysis](agents/sprint-planning-analysis/) | Sprint planning health-check against velocity baseline                            | [README](agents/sprint-planning-analysis/README.md) |
+| [repo-contextification](agents/repo-contextification/)       | Audit repo docs and AI-readiness, interactively scaffold missing files            | [README](agents/repo-contextification/README.md)    |
+| [jira-qe-story](agents/jira-qe-story/)                       | Generate QE story from dev Jira story with acceptance criteria and test scenarios | [README](agents/jira-qe-story/README.md)            |
 
 ## IDE Support
 

@@ -72,6 +72,7 @@ function makeJira(overrides: Partial<JiraItem> = {}): JiraItem {
     priority: "Major",
     url: "https://redhat.atlassian.net/browse/TEST-123",
     role: "assignee",
+    sprint_name: "",
     nested_prs: [],
     ...overrides,
   };
@@ -300,6 +301,24 @@ describe("filterOpenPrs", () => {
     ];
     expect(filterOpenPrs(prs)).toHaveLength(2);
   });
+
+  it("filters out PRs older than cutoff date", () => {
+    const cutoff = new Date("2026-05-01T00:00:00Z");
+    const prs = [
+      makePR({ state: "open", created_at: "2026-05-10T10:00:00Z" }),
+      makePR({ state: "open", created_at: "2026-04-01T10:00:00Z" }),
+      makePR({ state: "open", created_at: "2026-01-15T10:00:00Z" }),
+    ];
+    expect(filterOpenPrs(prs, cutoff)).toHaveLength(1);
+  });
+
+  it("includes all open PRs when no cutoff is provided", () => {
+    const prs = [
+      makePR({ state: "open", created_at: "2025-01-01T10:00:00Z" }),
+      makePR({ state: "open", created_at: "2026-05-10T10:00:00Z" }),
+    ];
+    expect(filterOpenPrs(prs)).toHaveLength(2);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -381,6 +400,33 @@ describe("filterInProgressJira", () => {
       status: "ON_QA",
     });
     expect(filterInProgressJira([bugDevOther])).toHaveLength(0);
+  });
+
+  it("excludes tickets not in matching sprint when pattern is provided", () => {
+    const pattern = /^MIG-NET-Frontend Sprint \d+$/;
+    const inSprint = makeJira({
+      status: "In Progress",
+      sprint_name: "MIG-NET-Frontend Sprint 5",
+    });
+    const notInSprint = makeJira({
+      status: "In Progress",
+      sprint_name: "",
+    });
+    const wrongSprint = makeJira({
+      status: "In Progress",
+      sprint_name: "Network QE Sprint 12",
+    });
+    expect(
+      filterInProgressJira([inSprint, notInSprint, wrongSprint], pattern),
+    ).toHaveLength(1);
+  });
+
+  it("includes all non-excluded tickets when no sprint pattern is provided", () => {
+    const tickets = [
+      makeJira({ status: "In Progress", sprint_name: "" }),
+      makeJira({ status: "POST", sprint_name: "Some Other Sprint" }),
+    ];
+    expect(filterInProgressJira(tickets)).toHaveLength(2);
   });
 });
 

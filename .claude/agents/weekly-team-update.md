@@ -71,7 +71,7 @@ mcp__atlassian__searchJiraIssuesUsingJql:
   cloudId: "{jira.cloud_id}"
   jql: '(assignee = "{jira_account_id}" OR cf[10470] = "{jira_account_id}") AND project in ({jira_projects_quoted_csv}) AND updated >= -7d ORDER BY updated DESC'
   maxResults: 100
-  fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "issuetype", "priority", "updated", "created", "customfield_10470"]
+  fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "issuetype", "priority", "updated", "created", "customfield_10470", "customfield_10020"]
   responseContentFormat: "markdown"
 ```
 
@@ -142,7 +142,7 @@ Same pattern as GitHub. Use `iid` (not `id`). `project_path` is like "cnv-qe/kub
 
 ### jira-tickets.csv
 
-Header: `key,summary,status,resolution,resolutiondate,issuetype,priority,assignee_id,assignee_name,qa_contact_id,qa_contact_name`
+Header: `key,summary,status,resolution,resolutiondate,issuetype,priority,assignee_id,assignee_name,qa_contact_id,qa_contact_name,sprint_name`
 
 | Field             | Source                                 | Notes                                |
 | ----------------- | -------------------------------------- | ------------------------------------ |
@@ -157,6 +157,9 @@ Header: `key,summary,status,resolution,resolutiondate,issuetype,priority,assigne
 | `assignee_name`   | assignee.displayName or empty          |                                      |
 | `qa_contact_id`   | customfield_10470.accountId or empty   |                                      |
 | `qa_contact_name` | customfield_10470.displayName or empty |                                      |
+| `sprint_name`     | active sprint name or empty            | see extraction rule below            |
+
+**Sprint name extraction**: `customfield_10020` returns an array of sprint objects. Find the sprint with `state: "active"` and use its `name` field. If no active sprint exists, use empty string. Example: `"MIG-NET-Frontend Sprint 5"`.
 
 Save ALL tickets from the query — do NOT filter by team membership. The Python script handles team matching via config.
 

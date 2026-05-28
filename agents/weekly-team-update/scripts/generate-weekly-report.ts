@@ -38,6 +38,7 @@ export interface JiraItem {
   priority: string;
   url: string;
   role: "assignee" | "qa_contact";
+  sprint_name: string;
   nested_prs: PRItem[];
 }
 
@@ -52,6 +53,7 @@ export interface EngineerBlock {
 interface TeamConfig {
   team_name: string;
   report_title: string;
+  sprint_name_pattern?: string;
   jira: {
     cloud_id: string;
     team_filter_id: string;
@@ -367,6 +369,7 @@ export function loadJiraTickets(
       priority: r.priority ?? "",
       url,
       role,
+      sprint_name: r.sprint_name ?? "",
       nested_prs: [],
     });
   }
@@ -442,8 +445,15 @@ export function filterCompletedPrs(
   });
 }
 
-export function filterOpenPrs(prs: PRItem[]): PRItem[] {
-  return prs.filter((p) => p.state === "open" || p.state === "opened");
+export function filterOpenPrs(prs: PRItem[], cutoffDate?: Date): PRItem[] {
+  return prs.filter((p) => {
+    if (p.state !== "open" && p.state !== "opened") return false;
+    if (cutoffDate) {
+      const created = parseDate(p.created_at);
+      if (created !== null && created < cutoffDate) return false;
+    }
+    return true;
+  });
 }
 
 export function filterCompletedJira(
@@ -458,7 +468,10 @@ export function filterCompletedJira(
   });
 }
 
-export function filterInProgressJira(tickets: JiraItem[]): JiraItem[] {
+export function filterInProgressJira(
+  tickets: JiraItem[],
+  sprintPattern?: RegExp,
+): JiraItem[] {
   const excludedStatuses = new Set([
     "Done",
     "Closed",
@@ -479,6 +492,7 @@ export function filterInProgressJira(tickets: JiraItem[]): JiraItem[] {
 
   return tickets.filter((t) => {
     if (excludedStatuses.has(t.status)) return false;
+    if (sprintPattern && !sprintPattern.test(t.sprint_name)) return false;
     if (t.issuetype === "Bug" || t.issuetype === "Vulnerability") {
       const relevant = t.role === "qa_contact" ? qeStatuses : devStatuses;
       if (!relevant.has(t.status)) return false;
@@ -1227,13 +1241,17 @@ export function main(argv: string[] = process.argv): void {
 
   // Filter
   const completedPrs = filterCompletedPrs(allPrs, windowStart, windowEnd);
-  const openPrs = filterOpenPrs(allPrs);
+  const prCutoff = new Date(reportDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const openPrs = filterOpenPrs(allPrs, prCutoff);
   const completedJira = filterCompletedJira(
     jiraTickets,
     windowStart,
     windowEnd,
   );
-  const ipJira = filterInProgressJira(jiraTickets);
+  const sprintPattern = config.sprint_name_pattern
+    ? new RegExp(config.sprint_name_pattern)
+    : undefined;
+  const ipJira = filterInProgressJira(jiraTickets, sprintPattern);
 
   const wsStr = windowStart.toISOString().slice(0, 10);
   const rdStr = reportDate.toISOString().slice(0, 10);

@@ -13,6 +13,7 @@
       "mcp__atlassian__createJiraIssue",
       "mcp__atlassian__createIssueLink",
       "mcp__atlassian__getIssueLinkTypes",
+      "mcp__atlassian__addCommentToJiraIssue",
       "Bash(python3:*)",
       "Bash(find:*)",
       "Bash(git:*)",

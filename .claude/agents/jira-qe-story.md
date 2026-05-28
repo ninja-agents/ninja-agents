@@ -54,10 +54,18 @@ Read `agents/jira-qe-story/data/qe-config.json` to get:
 
 Parse `$ARGUMENTS`:
 
-- **Jira issue key** (required): the first positional argument (e.g., `CNV-12345`). If missing, STOP and ask the user for the issue key.
+Positional arguments (in order):
+
+- **Jira issue key** (required): first positional argument (e.g., `CNV-12345`). If missing, STOP and ask the user for the issue key.
+- **Assignee name** (optional): second positional argument (e.g., `Leon`). Look up in `qe_engineers` by case-insensitive partial match on `name`.
+
+Named arguments (override positional and config):
+
 - `--repo <owner/repo>` or `--repo </local/path>`: overrides config `repository`
 - `--project <KEY>`: overrides `defaults.target_project_key`
-- `--assignee <name-or-id>`: look up in `qe_engineers` by name (case-insensitive partial match) or use directly as account ID if no match found
+- `--assignee <name-or-id>`: same as positional assignee — look up in `qe_engineers` by name, or use directly as account ID if no match found
+
+Any non-flag argument that is not a Jira key (does not match `[A-Z]+-\d+`) is treated as an assignee name.
 
 Resolve final values: CLI args override config, config provides defaults.
 
@@ -81,7 +89,7 @@ mcp__atlassian__getJiraIssue:
   responseContentFormat: "markdown"
 ```
 
-Save the response to `agents/jira-qe-story/data/cache/dev-story.json`.
+Save the issue node (the object containing `key` and `fields`) to `agents/jira-qe-story/data/cache/dev-story.json`. Extract it from the API response wrapper — the file must have the shape `{ "key": "...", "fields": { ... } }` so the preview script can parse it.
 
 Display the dev story to the user for confirmation:
 
@@ -129,6 +137,17 @@ mcp__github__search_pull_requests:
   query: "{issue_key} repo:{owner}/{repo}"
 ```
 
+**Test directory tree** (to discover real test files, page objects, and selectors):
+
+```
+mcp__github__get_file_contents:
+  owner: "{owner}"
+  repo: "{repo}"
+  path: ""
+```
+
+Then navigate into test directories (e.g., `tests/`, `e2e/`, `playwright/`, `cypress/`, `__tests__/`) to find actual test file names, page object patterns, and selector conventions.
+
 ### GitLab
 
 Launch ALL of these in a single parallel tool call:
@@ -151,6 +170,18 @@ mcp__gitlab__list_merge_requests:
   per_page: 10
 ```
 
+**Test directory tree** (to discover real test files, page objects, and selectors):
+
+```
+mcp__gitlab__get_repository_tree:
+  project_id: "{owner}/{repo}"
+  path: ""
+  recursive: true
+  per_page: 100
+```
+
+Filter the tree for test-related files (`.spec.ts`, `.test.ts`, `page-objects/`, `selectors/`, `helpers/`, `fixtures/`). Record the actual directory structure, file names, and any page object patterns for use in automation suggestions.
+
 ### Local Repository
 
 Read the README.md from the provided local path. Scan for test file patterns:
@@ -165,7 +196,11 @@ Save a summary of findings to `agents/jira-qe-story/data/cache/repo-context.md`:
 
 - What the repo does (from README)
 - Related PRs/MRs found (titles, URLs)
-- Test patterns identified
+- Test framework and directory structure (e.g., Playwright in `playwright/tests/tier1/`)
+- Existing test files related to the feature area (e.g., files with "clone", "wizard", "vm" in the name)
+- Page object or helper patterns found (e.g., `page-objects/vm-wizard.ts`)
+- Selector conventions used in the repo (e.g., `data-test=`, `data-testid=`, CSS classes)
+- **QE test repo URL** — `https://gitlab.cee.redhat.com/{project_id}` or `https://github.com/{owner}/{repo}`
 
 This step is **best-effort**. If any MCP call fails (e.g., server not configured), note the failure and proceed without repo context. Repo context enriches the QE story but is not required.
 
@@ -175,19 +210,20 @@ Using the dev story description, acceptance criteria, priority, and optionally r
 
 ### Fields to Generate
 
-| Field                 | How to derive                                                                              |
-| --------------------- | ------------------------------------------------------------------------------------------ |
-| `summary`             | `[QE] {original summary}` — prefix with `[QE]`                                             |
-| `description`         | What is being tested, why (business context), prerequisites, test environment requirements |
-| `acceptance_criteria` | Numbered list of testable criteria from the dev story requirements                         |
-| `test_scenarios`      | Structured scenarios mapped to acceptance criteria                                         |
-| `issue_type`          | From config `defaults.issue_type` (default: "Story")                                       |
-| `priority`            | Inherit from dev story priority, or config default                                         |
-| `labels`              | Merge config `defaults.labels` with relevant dev story labels                              |
-| `components`          | From config `defaults.components`, or inherit from dev story                               |
-| `story_points`        | Suggest based on dev story complexity (2=0.5d, 5=1-2d, 8=2-4d, 13=4-7d)                    |
-| `assignee_account_id` | From CLI `--assignee` resolved via `qe_engineers`, or empty if not specified               |
-| `target_project_key`  | From CLI `--project` or config `defaults.target_project_key`                               |
+| Field                    | How to derive                                                                                                                                                                                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `summary`                | `[QE] {original summary}` — prefix with `[QE]`                                                                                                                                                                                                               |
+| `description`            | What is being tested, why (business context), prerequisites, test environment requirements. Include a link to the QE test repo if repo context was gathered (e.g., `**Test repo:** [cnv-qe/kubevirt-ui](https://gitlab.cee.redhat.com/cnv-qe/kubevirt-ui)`). |
+| `acceptance_criteria`    | Numbered list of testable criteria from the dev story requirements                                                                                                                                                                                           |
+| `test_scenarios`         | Structured scenarios mapped to acceptance criteria                                                                                                                                                                                                           |
+| `issue_type`             | From config `defaults.issue_type` (default: "Story")                                                                                                                                                                                                         |
+| `priority`               | Inherit from dev story priority, or config default                                                                                                                                                                                                           |
+| `labels`                 | Merge config `defaults.labels` with relevant dev story labels                                                                                                                                                                                                |
+| `components`             | From config `defaults.components`, or inherit from dev story                                                                                                                                                                                                 |
+| `story_points`           | Estimate QE effort independently — do NOT just copy the dev SP. Consider: number of test scenarios, environment setup complexity, manual vs automatable, and regression surface. Use the sizing guide (2=0.5d, 5=1-2d, 8=2-4d, 13=4-7d).                     |
+| `automation_suggestions` | If repo context was gathered, suggest where and how to automate. Empty string if no repo context.                                                                                                                                                            |
+| `assignee_account_id`    | From CLI `--assignee` resolved via `qe_engineers`, or empty if not specified                                                                                                                                                                                 |
+| `target_project_key`     | From CLI `--project` or config `defaults.target_project_key`                                                                                                                                                                                                 |
 
 ### Style Guide for QE Content
 
@@ -219,13 +255,26 @@ Using the dev story description, acceptance criteria, priority, and optionally r
 - "Test that everything works as expected" (no specific criteria)
 - "Steps: do the thing, check it works" (no concrete actions)
 
+### QE Automation Suggestions
+
+If repo context was gathered in Step 3 and the repo contains a test framework, generate an `automation_suggestions` section covering:
+
+1. **Test framework & location** — which framework the repo uses (Playwright, Cypress, Jest, etc.) and which directory/tier the new tests belong in (based on the repo's test tier structure)
+2. **Suggested test file** — a concrete file path for the new test, following the repo's naming conventions
+3. **Page objects / selectors** — identify existing page objects or selector patterns in the repo that the test should reuse, or suggest new ones if the area is untested
+4. **Automatable vs manual** — for each acceptance criterion, mark whether it is automatable (and how) or requires manual verification (e.g., visual checks, cross-browser, accessibility)
+5. **Key assertions** — specific Playwright/Cypress assertions or patterns to use (e.g., `expect(locator).toBeVisible()`, `waitForSelector`, network intercepts)
+
+If no repo context is available or the repo has no test framework, set `automation_suggestions` to an empty string.
+
 ### Self-check before proceeding:
 
 - Every acceptance criterion is verifiable (pass/fail)
 - No vague language ("should work", "properly", "as expected")
 - Both positive and negative cases covered
 - Test scenarios have concrete preconditions, steps, and expected results
-- Story points suggestion is justified
+- Story points reflect QE effort (not just dev effort)
+- Automation suggestions reference real paths/patterns from the repo (if available)
 
 Save the generated content as `agents/jira-qe-story/data/cache/qe-story-draft.json`:
 
@@ -236,6 +285,7 @@ Save the generated content as `agents/jira-qe-story/data/cache/qe-story-draft.js
   "description": "...",
   "acceptance_criteria": "...",
   "test_scenarios": "...",
+  "automation_suggestions": "...",
   "issue_type": "Story",
   "priority": "Major",
   "labels": ["qe"],
@@ -323,6 +373,20 @@ mcp__atlassian__createIssueLink:
 ```
 
 If linking fails: display a warning with the created issue key. The QE story exists but is unlinked — the user can link manually. Do NOT treat this as a fatal error.
+
+### Post Automation Suggestions as Comment
+
+If `automation_suggestions` is non-empty, add it as a comment on the created QE story so it doesn't clutter the main description:
+
+```
+mcp__atlassian__addCommentToJiraIssue:
+  cloudId: "redhat.atlassian.net"
+  issueIdOrKey: "{created_qe_key}"
+  commentBody: "## Automation Suggestions\n\n{automation_suggestions}"
+  contentFormat: "markdown"
+```
+
+If the comment fails: display a warning. The story was still created successfully.
 
 ## Step 8: Display Result
 

@@ -3,6 +3,7 @@ import {
   markdownToAdf,
   parseInlineMarkdown,
   buildIssuePayload,
+  parseCliArgs,
 } from "./create-jira-issue.js";
 
 describe("markdownToAdf", () => {
@@ -153,5 +154,36 @@ describe("buildIssuePayload", () => {
       story_points: null,
     }) as { fields: Record<string, unknown> };
     expect(payload.fields.customfield_10028).toBeUndefined();
+  });
+});
+
+describe("parseCliArgs", () => {
+  it("defaults to create mode", () => {
+    const args = parseCliArgs([]);
+    expect(args).toEqual({ help: false, dryRun: false, updateKey: null });
+  });
+
+  it("parses --help", () => {
+    expect(parseCliArgs(["--help"]).help).toBe(true);
+  });
+
+  it("parses --dry-run", () => {
+    expect(parseCliArgs(["--dry-run"]).dryRun).toBe(true);
+  });
+
+  it("parses --update with issue key", () => {
+    const args = parseCliArgs(["--update", "CNV-88823"]);
+    expect(args.updateKey).toBe("CNV-88823");
+  });
+
+  it("parses --update with --dry-run", () => {
+    const args = parseCliArgs(["--update", "CNV-88823", "--dry-run"]);
+    expect(args.updateKey).toBe("CNV-88823");
+    expect(args.dryRun).toBe(true);
+  });
+
+  it("ignores --update without a value", () => {
+    const args = parseCliArgs(["--update"]);
+    expect(args.updateKey).toBeNull();
   });
 });

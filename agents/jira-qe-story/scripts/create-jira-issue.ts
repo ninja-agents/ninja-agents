@@ -185,10 +185,11 @@ async function jiraFetch(
   path: string,
   auth: string,
   body: unknown,
+  method: "POST" | "PUT" = "POST",
 ): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
   const url = `${baseUrl}${path}`;
   const res = await fetch(url, {
-    method: "POST",
+    method,
     headers: {
       Authorization: `Basic ${auth}`,
       "Content-Type": "application/json",
@@ -200,17 +201,71 @@ async function jiraFetch(
   return { ok: res.ok, status: res.status, data };
 }
 
-async function main() {
-  const args = process.argv.slice(2);
+export interface CliArgs {
+  help: boolean;
+  dryRun: boolean;
+  updateKey: string | null;
+}
 
-  if (args.includes("--help")) {
+export function parseCliArgs(argv: string[]): CliArgs {
+  const result: CliArgs = { help: false, dryRun: false, updateKey: null };
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--help") result.help = true;
+    else if (argv[i] === "--dry-run") result.dryRun = true;
+    else if (argv[i] === "--update" && i + 1 < argv.length)
+      result.updateKey = argv[++i];
+  }
+  return result;
+}
+
+async function postAutomationComment(
+  baseUrl: string,
+  auth: string,
+  issueKey: string,
+  suggestions: string,
+): Promise<void> {
+  console.log("Posting automation suggestions as comment...");
+  const commentAdf = markdownToAdf(
+    `## Automation Suggestions\n\n${suggestions}`,
+  );
+  const commentRes = await jiraFetch(
+    baseUrl,
+    `/rest/api/3/issue/${issueKey}/comment`,
+    auth,
+    { body: { version: 1, type: "doc", content: commentAdf } },
+  );
+  if (!commentRes.ok) {
+    console.error(`Warning: comment failed (${String(commentRes.status)})`);
+  } else {
+    console.log("Automation suggestions posted.");
+  }
+}
+
+async function main() {
+  const cliArgs = parseCliArgs(process.argv.slice(2));
+
+  if (cliArgs.help) {
     console.log(
-      "Usage: create-jira-issue.ts [--dry-run] [--help]\n\nReads data/cache/qe-story-draft.json and creates the QE story in Jira via REST API.\nRequires JIRA_API_TOKEN env var and jira.user_email in config.\n\nExit codes:\n  0 — issue created\n  1 — API error\n  2 — missing config, draft, or token",
+      [
+        "Usage: create-jira-issue.ts [--update <KEY>] [--dry-run] [--help]",
+        "",
+        "Reads data/cache/qe-story-draft.json and creates or updates a QE story in Jira.",
+        "Requires JIRA_API_TOKEN env var and jira.user_email in config.",
+        "",
+        "Modes:",
+        "  (default)          Create a new issue, link it, post automation comment",
+        "  --update <KEY>     Update an existing issue's description + post automation comment",
+        "  --dry-run          Preview the payload without calling the API",
+        "",
+        "Exit codes:",
+        "  0 — success",
+        "  1 — API error",
+        "  2 — missing config, draft, or token",
+      ].join("\n"),
     );
     process.exit(0);
   }
 
-  const dryRun = args.includes("--dry-run");
   const dataDir = resolve(import.meta.dirname, "../data");
   const draftPath = resolve(dataDir, "cache/qe-story-draft.json");
   const configPath = resolve(dataDir, "qe-config.json");
@@ -233,11 +288,27 @@ async function main() {
   }
 
   const payload = buildIssuePayload(draft);
+  const fields = payload.fields as Record<string, unknown>;
+  const baseUrl = config.jira.base_url;
+  const isUpdate = cliArgs.updateKey !== null;
 
-  if (dryRun) {
-    console.log("=== DRY RUN — would POST to /rest/api/3/issue ===");
-    console.log(JSON.stringify(payload, null, 2));
-    console.log(`\n=== Would link: ${draft.source_key} (Cloners) ===`);
+  if (cliArgs.dryRun) {
+    if (isUpdate) {
+      console.log(
+        `=== DRY RUN — would PUT to /rest/api/3/issue/${cliArgs.updateKey} ===`,
+      );
+      console.log(
+        JSON.stringify(
+          { fields: { description: fields.description } },
+          null,
+          2,
+        ),
+      );
+    } else {
+      console.log("=== DRY RUN — would POST to /rest/api/3/issue ===");
+      console.log(JSON.stringify(payload, null, 2));
+      console.log(`\n=== Would link: ${draft.source_key} (Cloners) ===`);
+    }
     if (draft.automation_suggestions) {
       console.log("=== Would post automation suggestions as comment ===");
     }
@@ -245,58 +316,82 @@ async function main() {
   }
 
   const auth = getAuth(config);
-  const baseUrl = config.jira.base_url;
 
-  console.log(`Creating QE story in ${draft.target_project_key}...`);
-  const createRes = await jiraFetch(
-    baseUrl,
-    "/rest/api/3/issue",
-    auth,
-    payload,
-  );
-  if (!createRes.ok) {
-    console.error(`Issue creation failed (${String(createRes.status)}):`);
-    console.error(JSON.stringify(createRes.data, null, 2));
-    process.exit(1);
-  }
+  if (isUpdate) {
+    const updateKey = cliArgs.updateKey as string;
+    console.log(`Updating ${updateKey}...`);
 
-  const createdKey = createRes.data.key as string;
-  console.log(`Created: ${createdKey}`);
-  console.log(`Link: ${baseUrl}/browse/${createdKey}`);
-
-  console.log(`Linking ${createdKey} → ${draft.source_key} (Cloners)...`);
-  const linkRes = await jiraFetch(baseUrl, "/rest/api/3/issueLink", auth, {
-    type: { name: "Cloners" },
-    inwardIssue: { key: createdKey },
-    outwardIssue: { key: draft.source_key },
-  });
-  if (!linkRes.ok) {
-    console.error(
-      `Warning: linking failed (${String(linkRes.status)}): ${JSON.stringify(linkRes.data)}`,
-    );
-  } else {
-    console.log(`Linked: ${createdKey} clones ${draft.source_key}`);
-  }
-
-  if (draft.automation_suggestions) {
-    console.log("Posting automation suggestions as comment...");
-    const commentAdf = markdownToAdf(
-      `## Automation Suggestions\n\n${draft.automation_suggestions}`,
-    );
-    const commentRes = await jiraFetch(
+    const updatePayload = {
+      fields: { description: fields.description },
+    };
+    const updateRes = await jiraFetch(
       baseUrl,
-      `/rest/api/3/issue/${createdKey}/comment`,
+      `/rest/api/3/issue/${updateKey}`,
       auth,
-      { body: { version: 1, type: "doc", content: commentAdf } },
+      updatePayload,
+      "PUT",
     );
-    if (!commentRes.ok) {
-      console.error(`Warning: comment failed (${String(commentRes.status)})`);
-    } else {
-      console.log("Automation suggestions posted.");
+    if (!updateRes.ok) {
+      console.error(`Update failed (${String(updateRes.status)}):`);
+      console.error(JSON.stringify(updateRes.data, null, 2));
+      process.exit(1);
     }
-  }
+    console.log(`Updated: ${updateKey}`);
+    console.log(`Link: ${baseUrl}/browse/${updateKey}`);
 
-  console.log(`\nDone. ${createdKey} — ${baseUrl}/browse/${createdKey}`);
+    if (draft.automation_suggestions) {
+      await postAutomationComment(
+        baseUrl,
+        auth,
+        updateKey,
+        draft.automation_suggestions,
+      );
+    }
+
+    console.log(`\nDone. ${updateKey} — ${baseUrl}/browse/${updateKey}`);
+  } else {
+    console.log(`Creating QE story in ${draft.target_project_key}...`);
+    const createRes = await jiraFetch(
+      baseUrl,
+      "/rest/api/3/issue",
+      auth,
+      payload,
+    );
+    if (!createRes.ok) {
+      console.error(`Issue creation failed (${String(createRes.status)}):`);
+      console.error(JSON.stringify(createRes.data, null, 2));
+      process.exit(1);
+    }
+
+    const createdKey = createRes.data.key as string;
+    console.log(`Created: ${createdKey}`);
+    console.log(`Link: ${baseUrl}/browse/${createdKey}`);
+
+    console.log(`Linking ${createdKey} → ${draft.source_key} (Cloners)...`);
+    const linkRes = await jiraFetch(baseUrl, "/rest/api/3/issueLink", auth, {
+      type: { name: "Cloners" },
+      inwardIssue: { key: createdKey },
+      outwardIssue: { key: draft.source_key },
+    });
+    if (!linkRes.ok) {
+      console.error(
+        `Warning: linking failed (${String(linkRes.status)}): ${JSON.stringify(linkRes.data)}`,
+      );
+    } else {
+      console.log(`Linked: ${createdKey} clones ${draft.source_key}`);
+    }
+
+    if (draft.automation_suggestions) {
+      await postAutomationComment(
+        baseUrl,
+        auth,
+        createdKey,
+        draft.automation_suggestions,
+      );
+    }
+
+    console.log(`\nDone. ${createdKey} — ${baseUrl}/browse/${createdKey}`);
+  }
 }
 
 const isDirectRun = process.argv[1]?.endsWith("create-jira-issue.ts");

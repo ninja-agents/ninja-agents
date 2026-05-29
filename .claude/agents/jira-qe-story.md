@@ -102,6 +102,30 @@ Display the dev story to the user for confirmation:
   Type:     {issuetype}
 ```
 
+### Fetch Dev PR from Web Links
+
+After fetching the issue, also fetch its remote links to find the dev PR:
+
+```
+mcp__atlassian__getJiraIssueRemoteIssueLinks:
+  cloudId: "redhat.atlassian.net"
+  issueIdOrKey: "{issue_key}"
+```
+
+Parse the response for GitHub PR URLs matching the pattern `https://github.com/{owner}/{repo}/pull/{number}`. Extract `owner`, `repo`, and `pullNumber` from each match.
+
+Display found PRs:
+
+```text
+[2/8] Dev PR found: {owner}/{repo}#{number} — {title}
+```
+
+If **no GitHub PR found** in remote links, ask the user:
+
+> No dev PR found in Jira web links. Provide the PR URL (e.g., `https://github.com/org/repo/pull/123`) or press Enter to skip.
+
+If the user provides a URL, parse it the same way. If they skip, proceed without PR context.
+
 ### Validation Checkpoint
 
 - If the issue does not exist or the query errors: display the error, STOP.
@@ -190,6 +214,42 @@ Read the README.md from the provided local path. Scan for test file patterns:
 find {path} -name "*.test.*" -o -name "*.spec.*" | head -20
 ```
 
+### Fetch Dev PR Diff
+
+If a dev PR was found in Step 2 (or provided by the user), fetch the PR diff and file list. Launch both in a single parallel tool call:
+
+**PR diff:**
+
+```
+mcp__github__pull_request_read:
+  owner: "{pr_owner}"
+  repo: "{pr_repo}"
+  pullNumber: {pr_number}
+  method: "get_diff"
+```
+
+**PR changed files:**
+
+```
+mcp__github__pull_request_read:
+  owner: "{pr_owner}"
+  repo: "{pr_repo}"
+  pullNumber: {pr_number}
+  method: "get_files"
+```
+
+From the diff and file list, extract:
+
+- **Changed files** with add/delete line counts
+- **New or modified selectors** — look for `data-test=`, `data-testid=`, CSS class names, OUIA component types in the diff
+- **Component names** — React component names from changed `.tsx`/`.jsx` files
+- **Test-related changes** — if the PR includes test files, note the patterns used
+- **UI-facing changes** — form inputs, buttons, dropdowns, table columns that were added or modified
+
+Save to `agents/jira-qe-story/data/cache/pr-diff.md`.
+
+If the PR diff fetch fails (e.g., GitHub MCP not configured), proceed without it.
+
 ### After Repo Context
 
 Save a summary of findings to `agents/jira-qe-story/data/cache/repo-context.md`:
@@ -210,20 +270,20 @@ Using the dev story description, acceptance criteria, priority, and optionally r
 
 ### Fields to Generate
 
-| Field                    | How to derive                                                                                                                                                                                                                                                |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `summary`                | `[QE] {original summary}` — prefix with `[QE]`                                                                                                                                                                                                               |
-| `description`            | What is being tested, why (business context), prerequisites, test environment requirements. Include a link to the QE test repo if repo context was gathered (e.g., `**Test repo:** [cnv-qe/kubevirt-ui](https://gitlab.cee.redhat.com/cnv-qe/kubevirt-ui)`). |
-| `acceptance_criteria`    | Numbered list of testable criteria from the dev story requirements                                                                                                                                                                                           |
-| `test_scenarios`         | Structured scenarios mapped to acceptance criteria                                                                                                                                                                                                           |
-| `issue_type`             | From config `defaults.issue_type` (default: "Story")                                                                                                                                                                                                         |
-| `priority`               | Inherit from dev story priority, or config default                                                                                                                                                                                                           |
-| `labels`                 | Merge config `defaults.labels` with relevant dev story labels                                                                                                                                                                                                |
-| `components`             | From config `defaults.components`, or inherit from dev story                                                                                                                                                                                                 |
-| `story_points`           | Estimate QE effort independently — do NOT just copy the dev SP. Consider: number of test scenarios, environment setup complexity, manual vs automatable, and regression surface. Use the sizing guide (2=0.5d, 5=1-2d, 8=2-4d, 13=4-7d).                     |
-| `automation_suggestions` | If repo context was gathered, suggest where and how to automate. Empty string if no repo context.                                                                                                                                                            |
-| `assignee_account_id`    | From CLI `--assignee` resolved via `qe_engineers`, or empty if not specified                                                                                                                                                                                 |
-| `target_project_key`     | From CLI `--project` or config `defaults.target_project_key`                                                                                                                                                                                                 |
+| Field                    | How to derive                                                                                                                                                                                                                                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `summary`                | `[QE] {original summary}` — prefix with `[QE]`                                                                                                                                                                                                                                                               |
+| `description`            | What is being tested, why (business context), prerequisites, test environment requirements. Include a link to the QE test repo if repo context was gathered (e.g., `**Test repo:** [cnv-qe/kubevirt-ui](https://gitlab.cee.redhat.com/cnv-qe/kubevirt-ui)`).                                                 |
+| `acceptance_criteria`    | Numbered list of testable criteria from the dev story requirements                                                                                                                                                                                                                                           |
+| `test_scenarios`         | Structured scenarios mapped to acceptance criteria                                                                                                                                                                                                                                                           |
+| `issue_type`             | From config `defaults.issue_type` (default: "Story")                                                                                                                                                                                                                                                         |
+| `priority`               | Inherit from dev story priority, or config default                                                                                                                                                                                                                                                           |
+| `labels`                 | Merge config `defaults.labels` with relevant dev story labels                                                                                                                                                                                                                                                |
+| `components`             | From config `defaults.components`, or inherit from dev story                                                                                                                                                                                                                                                 |
+| `story_points`           | Estimate QE effort independently — do NOT just copy the dev SP. Consider: number of test scenarios, environment setup complexity, manual vs automatable, and regression surface. Use the sizing guide (2=0.5d, 5=1-2d, 8=2-4d, 13=4-7d).                                                                     |
+| `automation_suggestions` | If repo context or dev PR diff was gathered, suggest where and how to automate. **Use the PR diff as the primary source** — reference real selectors, component names, and file paths from the diff. Supplement with QE test repo patterns (page objects, test tiers). Empty string if no context available. |
+| `assignee_account_id`    | From CLI `--assignee` resolved via `qe_engineers`, or empty if not specified                                                                                                                                                                                                                                 |
+| `target_project_key`     | From CLI `--project` or config `defaults.target_project_key`                                                                                                                                                                                                                                                 |
 
 ### Style Guide for QE Content
 
@@ -257,15 +317,17 @@ Using the dev story description, acceptance criteria, priority, and optionally r
 
 ### QE Automation Suggestions
 
-If repo context was gathered in Step 3 and the repo contains a test framework, generate an `automation_suggestions` section covering:
+If repo context or dev PR diff was gathered in Step 3, generate an `automation_suggestions` section covering:
 
-1. **Test framework & location** — which framework the repo uses (Playwright, Cypress, Jest, etc.) and which directory/tier the new tests belong in (based on the repo's test tier structure)
-2. **Suggested test file** — a concrete file path for the new test, following the repo's naming conventions
-3. **Page objects / selectors** — identify existing page objects or selector patterns in the repo that the test should reuse, or suggest new ones if the area is untested
-4. **Automatable vs manual** — for each acceptance criterion, mark whether it is automatable (and how) or requires manual verification (e.g., visual checks, cross-browser, accessibility)
-5. **Key assertions** — specific Playwright/Cypress assertions or patterns to use (e.g., `expect(locator).toBeVisible()`, `waitForSelector`, network intercepts)
+1. **Dev PR summary** — link to the PR, list of changed files, and a one-line summary of what the PR does. This is the primary source for automation suggestions.
+2. **Selectors from the PR diff** — extract actual `data-test`, `data-testid`, CSS class names, OUIA component types, and `getByRole`/`getByText` targets from the changed code. Do NOT guess selectors — only reference ones visible in the diff or existing page objects.
+3. **Test framework & location** — which framework the QE test repo uses (Playwright, Cypress, Jest, etc.) and which directory/tier the new tests belong in
+4. **Suggested test file** — a concrete file path for the new test, following the repo's naming conventions
+5. **Page objects / selectors** — identify existing page objects in the QE test repo that the test should reuse, or suggest new methods to add based on the PR diff
+6. **Automatable vs manual** — for each acceptance criterion, mark whether it is automatable (and how) or requires manual verification. Reference specific code changes from the PR diff in the "How" column.
+7. **Key assertions** — specific Playwright/Cypress assertions tied to the actual selectors and components from the PR diff
 
-If no repo context is available or the repo has no test framework, set `automation_suggestions` to an empty string.
+If no repo context and no PR diff are available, set `automation_suggestions` to an empty string.
 
 ### Self-check before proceeding:
 
@@ -328,9 +390,11 @@ Wait for the user's response:
 
 **NEVER proceed to Step 7 without explicit user approval. This is non-negotiable.**
 
-## Step 7: Create Issue & Link
+## Step 7: Create or Update Issue
 
-Use the `create-jira-issue.ts` script to create the issue, link it, and post the automation comment via the Jira REST API. This requires the `JIRA_API_TOKEN` environment variable and `jira.user_email` in the config.
+Use the `create-jira-issue.ts` script via the Jira REST API. This requires the `JIRA_API_TOKEN` environment variable and `jira.user_email` in the config.
+
+### Create a new issue (default)
 
 ```bash
 npx tsx agents/jira-qe-story/scripts/create-jira-issue.ts
@@ -342,9 +406,29 @@ The script reads `data/cache/qe-story-draft.json` and `data/qe-config.json`, the
 2. Links it to the dev story via `POST /rest/api/3/issueLink` (Cloners type)
 3. Posts automation suggestions as a comment via `POST /rest/api/3/issue/{key}/comment`
 
-Handle exit codes:
+### Update an existing issue
 
-- **Exit 0**: Issue created successfully. The script prints the created key and URL.
+If the user asks to re-run or update an existing QE story (e.g., the story was already created and needs refreshed content):
+
+```bash
+npx tsx agents/jira-qe-story/scripts/create-jira-issue.ts --update {existing_qe_key}
+```
+
+The script:
+
+1. Updates the description via `PUT /rest/api/3/issue/{key}` (skips creation and linking)
+2. Posts automation suggestions as a new comment
+
+### Preview (dry run)
+
+```bash
+npx tsx agents/jira-qe-story/scripts/create-jira-issue.ts --dry-run
+npx tsx agents/jira-qe-story/scripts/create-jira-issue.ts --update {key} --dry-run
+```
+
+### Exit codes
+
+- **Exit 0**: Success. The script prints the issue key and URL.
 - **Exit 1**: API error (auth failure, permission denied). Display the error. STOP.
 - **Exit 2**: Missing config, draft, or `JIRA_API_TOKEN` env var. Display the error. STOP.
 
@@ -354,12 +438,6 @@ If the `JIRA_API_TOKEN` env var is not set, display:
 JIRA_API_TOKEN is not set. Get one from:
 https://id.atlassian.com/manage-profile/security/api-tokens
 Then: export JIRA_API_TOKEN=ATATT3x...
-```
-
-To preview the payload without calling the API, use `--dry-run`:
-
-```bash
-npx tsx agents/jira-qe-story/scripts/create-jira-issue.ts --dry-run
 ```
 
 ## Step 8: Display Result

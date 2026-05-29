@@ -4,11 +4,16 @@ Generate a QE (Quality Engineering) story from a dev Jira story with acceptance 
 
 ## Prerequisites
 
-- **Atlassian Rovo MCP** — for reading dev stories and creating QE stories in Jira
+- **Atlassian Rovo MCP** — for reading dev stories from Jira
+- **JIRA_API_TOKEN** — for creating QE stories via the Jira REST API (the Rovo MCP does not support issue creation for all projects). Get one from [Atlassian API tokens](https://id.atlassian.com/manage-profile/security/api-tokens).
 - **GitHub MCP** (optional) — for reading repo context from github.com
 - **GitLab MCP** (optional) — for reading repo context from gitlab.cee.redhat.com
 
-Tokens must be set as environment variables before launching Claude Code.
+Tokens must be set as environment variables before launching Claude Code:
+
+```bash
+export JIRA_API_TOKEN=ATATT3x...
+```
 
 ## Usage
 
@@ -47,10 +52,11 @@ npm run jira-qe-story:preview
 
 Copy `data/qe-config.example.json` to `data/qe-config.json` and fill in your team's values:
 
+- `jira.user_email` — your Jira email (used with `JIRA_API_TOKEN` for REST API auth)
 - `defaults.target_project_key` — Jira project for the QE story (e.g., "CNV")
 - `defaults.labels` — default labels applied to QE stories
 - `qe_engineers` — array of `{ name, jira_account_id }` for resolving `--assignee` by name
-- `repository` — default repo for context (type, owner, repo name)
+- `projects` — array mapping Jira prefixes to repos for auto-resolution
 
 All config values can be overridden via CLI arguments (`--project`, `--assignee`, `--repo`). The `--assignee` flag accepts a name (e.g., `--assignee Leon`) which is matched against the `qe_engineers` list.
 
@@ -61,7 +67,9 @@ agents/jira-qe-story/
 ├── README.md
 ├── scripts/
 │   ├── format-qe-preview.ts       # Preview formatter and validator
-│   └── format-qe-preview.test.ts  # Tests
+│   ├── format-qe-preview.test.ts  # Preview tests
+│   ├── create-jira-issue.ts       # Jira REST API issue creation
+│   └── create-jira-issue.test.ts  # Creation tests
 └── data/
     ├── qe-config.json              # Agent configuration (gitignored)
     ├── qe-config.example.json      # Example config (committed)

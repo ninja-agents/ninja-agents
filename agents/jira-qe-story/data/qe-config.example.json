@@ -2,7 +2,8 @@
   "_comment": "Copy this file to qe-config.json and fill in your team's values.",
   "jira": {
     "cloud_id": "redhat.atlassian.net",
-    "base_url": "https://redhat.atlassian.net/browse"
+    "base_url": "https://redhat.atlassian.net",
+    "user_email": "you@redhat.com"
   },
   "defaults": {
     "target_project_key": "CNV",

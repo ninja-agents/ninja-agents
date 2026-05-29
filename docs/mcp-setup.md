@@ -12,6 +12,7 @@ This guide walks you through configuring the MCP servers that agents in this rep
 ```bash
 export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
 export GITLAB_PAT=glpat-xxxxxxxxxxxxxxxxxxxx
+export JIRA_API_TOKEN=ATATT3x...   # only needed for jira-qe-story (issue creation)
 
 claude          # Claude Code
 # or open the project in Cursor
@@ -48,9 +49,24 @@ Used by the GitLab MCP server for MR data from `gitlab.cee.redhat.com`.
    export GITLAB_PAT=glpat-xxxxxxxxxxxxxxxxxxxx
    ```
 
-### 3. Atlassian (no token needed)
+### 3. Atlassian (browser OAuth for reads, API token for writes)
 
-The Atlassian Rovo MCP server authenticates via browser OAuth. On first use, your IDE will open a browser window for you to log in to your Atlassian account. No environment variable is needed.
+The Atlassian Rovo MCP server authenticates via browser OAuth for **read operations**. On first use, your IDE will open a browser window for you to log in to your Atlassian account.
+
+For **write operations** (creating issues, adding comments), some projects require direct REST API access via a Jira API token. The `jira-qe-story` agent uses this for issue creation.
+
+1. Go to [id.atlassian.com/manage-profile/security/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
+2. Create a new API token
+3. Export the token:
+   ```bash
+   export JIRA_API_TOKEN=ATATT3x...
+   ```
+4. Set your email in the agent config (`agents/jira-qe-story/data/qe-config.json`):
+   ```json
+   "jira": {
+     "user_email": "you@redhat.com"
+   }
+   ```
 
 ## Verification
 

@@ -330,63 +330,37 @@ Wait for the user's response:
 
 ## Step 7: Create Issue & Link
 
-### Discover Link Types
+Use the `create-jira-issue.ts` script to create the issue, link it, and post the automation comment via the Jira REST API. This requires the `JIRA_API_TOKEN` environment variable and `jira.user_email` in the config.
 
-First, discover the available issue link types to find the "Clones" type:
-
-```
-mcp__atlassian__getIssueLinkTypes:
-  cloudId: "redhat.atlassian.net"
+```bash
+npx tsx agents/jira-qe-story/scripts/create-jira-issue.ts
 ```
 
-Find the link type with name containing "Clone" or "Cloners". Record its exact `name` for use in the link call.
+The script reads `data/cache/qe-story-draft.json` and `data/qe-config.json`, then:
 
-### Create the QE Story
+1. Creates the QE story via `POST /rest/api/3/issue`
+2. Links it to the dev story via `POST /rest/api/3/issueLink` (Cloners type)
+3. Posts automation suggestions as a comment via `POST /rest/api/3/issue/{key}/comment`
 
-```
-mcp__atlassian__createJiraIssue:
-  cloudId: "redhat.atlassian.net"
-  projectKey: "{target_project_key}"
-  issueTypeName: "{issue_type}"
-  summary: "{summary}"
-  description: "{description}\n\n## Acceptance Criteria\n\n{acceptance_criteria}\n\n## Test Scenarios\n\n{test_scenarios}"
-  contentFormat: "markdown"
-  assignee_account_id: "{qe_assignee_account_id}"
-  additional_fields:
-    priority: { name: "{priority}" }
-    labels: ["{labels}"]
-    customfield_10028: {story_points}
-```
+Handle exit codes:
 
-Capture the created issue key from the response (e.g., `CNV-99999`).
+- **Exit 0**: Issue created successfully. The script prints the created key and URL.
+- **Exit 1**: API error (auth failure, permission denied). Display the error. STOP.
+- **Exit 2**: Missing config, draft, or `JIRA_API_TOKEN` env var. Display the error. STOP.
 
-If creation fails: display the error. The draft is preserved in `data/cache/qe-story-draft.json` for retry. STOP.
+If the `JIRA_API_TOKEN` env var is not set, display:
 
-### Link to Dev Story
-
-```
-mcp__atlassian__createIssueLink:
-  cloudId: "redhat.atlassian.net"
-  inwardIssue: "{created_qe_key}"
-  outwardIssue: "{source_key}"
-  type: "{clone_link_type_name}"
+```text
+JIRA_API_TOKEN is not set. Get one from:
+https://id.atlassian.com/manage-profile/security/api-tokens
+Then: export JIRA_API_TOKEN=ATATT3x...
 ```
 
-If linking fails: display a warning with the created issue key. The QE story exists but is unlinked — the user can link manually. Do NOT treat this as a fatal error.
+To preview the payload without calling the API, use `--dry-run`:
 
-### Post Automation Suggestions as Comment
-
-If `automation_suggestions` is non-empty, add it as a comment on the created QE story so it doesn't clutter the main description:
-
+```bash
+npx tsx agents/jira-qe-story/scripts/create-jira-issue.ts --dry-run
 ```
-mcp__atlassian__addCommentToJiraIssue:
-  cloudId: "redhat.atlassian.net"
-  issueIdOrKey: "{created_qe_key}"
-  commentBody: "## Automation Suggestions\n\n{automation_suggestions}"
-  contentFormat: "markdown"
-```
-
-If the comment fails: display a warning. The story was still created successfully.
 
 ## Step 8: Display Result
 

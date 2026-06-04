@@ -5,37 +5,19 @@ alwaysApply: true
 
 # Ninja Agents
 
-A shared playground for AI agents that help engineering teams. Each agent is self-contained under `agents/`.
+AI agents for engineering teams. Each agent is self-contained under `agents/`. Full workflow specs live in `.claude/agents/{name}.md`.
 
-## Available Workflows
+## Workflows
 
-Invoke these by name (e.g., `@weekly-team-update`) or describe what you need:
+Invoke by name (`@weekly-team-update`) or describe what you need. Each rule in `.cursor/rules/` points to its full spec.
 
-| Rule                    | Purpose                                                        |
-| ----------------------- | -------------------------------------------------------------- |
-| `@weekly-team-update`   | Weekly team report for leadership (GitHub + GitLab + Jira)     |
-| `@sprint-review`         | Sprint retrospective analysis from active Jira sprint          |
-| `@repo-contextification`| Audit repo docs and scaffold missing files                     |
-| `@jira-qe-story`       | Generate QE story from dev Jira story, create in Jira with link |
+## Key Rules
 
-Each rule points to its full workflow in `.claude/agents/{name}.md` — the single source of truth.
-
-## MCP Servers
-
-Configured in `.cursor/mcp.json`. Tokens from environment variables:
-
-- **GitHub MCP** — `GITHUB_PAT`
-- **GitLab MCP** — `GITLAB_PAT` (gitlab.cee.redhat.com)
-- **Atlassian Rovo MCP** — browser OAuth (redhat.atlassian.net)
-
-## Key Conventions
-
-- Only `resolution = "Done"` counts as a completed Jira deliverable
 - GitLab queries MUST include `scope: "all"` or results may be empty
-- All report links use markdown hyperlinks with descriptive text
-- CSV fields containing commas must be wrapped in double quotes
-- Never commit tokens or secrets
+- Only `resolution = "Done"` counts as a completed Jira deliverable
+- CSV fields with commas must be double-quoted; report links use markdown hyperlinks
+- Never commit tokens or secrets — env vars only (`GITHUB_PAT`, `GITLAB_PAT`)
 
-## Contributing
+## Full Context
 
-See `agents/_template/README.md` for the expected structure when adding a new agent.
+See [../../AGENTS.md](../../AGENTS.md) for conventions, patterns, and review guidelines. See [../../CONTRIBUTING.md](../../CONTRIBUTING.md) for contribution workflow. See `agents/_template/README.md` for new agent structure.

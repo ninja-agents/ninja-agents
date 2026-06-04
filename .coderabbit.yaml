@@ -1,6 +1,12 @@
 # CodeRabbit AI Code Review Configuration
 # https://docs.coderabbit.ai/guides/configure-coderabbit
 
+instructions: >
+  Read AGENTS.md for the full coding standards and review guidelines for this repo.
+  Key rules: agent isolation (no cross-agent imports), deterministic scripts separate
+  from AI-written prose, no hardcoded team data, no committed secrets, CSV quoting for
+  fields with commas, and markdown hyperlinks with descriptive text in all reports.
+
 reviews:
   auto_review:
     enabled: true

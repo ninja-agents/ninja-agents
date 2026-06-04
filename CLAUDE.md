@@ -2,95 +2,33 @@
 
 A shared playground for AI agents that help engineering teams. Each agent lives in its own directory under `agents/`.
 
-> **Cursor users:** This file is Claude Code's project context. For Cursor, see `.cursor/rules/` for equivalent project rules and `.cursor/mcp.json` for MCP config.
+> **Cursor users:** see `.cursor/rules/` for project rules and `.cursor/mcp.json` for MCP config.
 
-## Project Structure
+## Quick Reference
 
-- `agents/{name}/` — self-contained agent directories (scripts, data, config, README)
-- `.claude/agents/` — Claude Code agent specs (wiring into agent directories)
-- `.claude/skills/` — Claude Code skill shortcuts
-- `.mcp.json` — MCP server definitions for Claude Code (committed, no secrets; tokens resolve from env vars)
-- `.cursor/mcp.json` — MCP server definitions for Cursor (mirrors `.mcp.json`)
-- `.cursor/rules/` — Cursor rules that point to `.claude/agents/` specs
+- **Stack:** TypeScript (ES2022, `tsx`, no build step), Vitest, ESLint + Prettier
+- **Agents:** `agents/{name}/` — self-contained directories (scripts, data, config, README)
+- **Agent specs:** `.claude/agents/{name}.md` (shared source of truth for workflows)
+- **Skills:** `.claude/skills/{name}/SKILL.md` — invoke via `/skill-name`
+- **MCP config:** `.mcp.json` (tokens from env vars, never committed)
 
-## Adding a New Agent
+## Key Rules
 
-1. Create `agents/{your-agent}/` with a README, scripts, and data
-2. Wire it up in `.claude/agents/{your-agent}.md` (agent spec) and `.claude/skills/{your-skill}.md` (skill shortcut)
-3. See `agents/_template/` for the expected structure
+- Never commit tokens or secrets — tokens resolve from `$GITHUB_PAT`, `$GITLAB_PAT` env vars
+- GitLab queries MUST include `scope: "all"` or results may be empty
+- Jira `cloudId` uses site URL (`redhat.atlassian.net`)
+- Only `resolution = "Done"` counts as a completed Jira deliverable
+- All report links use markdown hyperlinks with descriptive text
+- Add type assertions to `JSON.parse` calls; use `import.meta.dirname`; use `String(e)` for caught errors
 
-## MCP Servers
-
-Agents in this repo may use these MCP servers:
-
-| Server                                                                          | Purpose                                       |
-| ------------------------------------------------------------------------------- | --------------------------------------------- |
-| [GitHub MCP](https://github.com/github/github-mcp-server)                       | PR and commit data from github.com            |
-| [@zereight/mcp-gitlab](https://www.npmjs.com/package/@zereight/mcp-gitlab)      | MR and commit data from gitlab.cee.redhat.com |
-| [Atlassian Rovo MCP](https://www.npmjs.com/package/@anthropic-ai/mcp-atlassian) | Jira ticket data from redhat.atlassian.net    |
-
-## MCP Tool Patterns
-
-### GitHub (search PRs)
-
-```
-mcp__github__search_pull_requests:
-  query: "author:{username} is:merged merged:{7_days_ago}..{today}"
-```
-
-### GitLab (list MRs)
-
-```
-mcp__gitlab__list_merge_requests:
-  author_username: {username}
-  scope: "all"              # REQUIRED — without this, results may be empty
-  state: "merged"
-  updated_after: {7_days_ago}  # ISO-8601: YYYY-MM-DDT00:00:00Z
-  per_page: 100
-```
-
-### Jira (search with JQL)
-
-```
-mcp__atlassian__searchJiraIssuesUsingJql:
-  cloudId: "redhat.atlassian.net"
-  jql: '(assignee = "{account_id}" OR cf[10470] = "{account_id}") AND project in (...) AND updated >= -7d'
-  maxResults: 100
-  fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "issuetype", "priority", "updated", "created", "customfield_10470"]
-```
-
-## Available Skills
-
-| Skill                       | Description                                                 | Agent                      |
-| --------------------------- | ----------------------------------------------------------- | -------------------------- |
-| `/team-update`              | Weekly team report for leadership (7-day window)            | `weekly-team-update`       |
-| `/create-agent`             | Scaffold a new agent with best-practice structure and specs | — (interactive)            |
-| `/sprint-review`            | Sprint retrospective analysis from active Jira sprint       | `sprint-review`            |
-| `/sprint-planning-analysis` | Sprint planning health-check against velocity baseline      | `sprint-planning-analysis` |
-| `/repo-contextification`    | Audit repo docs and AI-readiness, scaffold missing files    | `repo-contextification`    |
-| `/jira-qe-story`            | Generate QE story from dev Jira story, create in Jira       | `jira-qe-story`            |
-
-## Linting & Formatting
-
-The repo uses ESLint (flat config) + Prettier at the root. Run from the repo root:
+## Commands
 
 ```bash
-npm run lint          # ESLint with type-checked rules
-npm run lint:fix      # auto-fix
+npm run lint          # ESLint
 npm run format:check  # Prettier dry-run
-npm run format        # Prettier auto-format
+npm test              # all agent tests
 ```
 
-TypeScript conventions enforced by ESLint:
+## Full Context
 
-- Add type assertions to `JSON.parse` calls: `JSON.parse(...) as MyType`
-- Use `import.meta.dirname` instead of `dirname(fileURLToPath(import.meta.url))`
-- Use `String(e)` when interpolating caught errors in template literals
-- Mark top-level async calls with `void` when not awaited
-- `@types/node` is in the root devDependencies (shared by all agents)
-
-## Rules
-
-- Never commit tokens or secrets
-- All links in reports use markdown hyperlinks with descriptive text
-- Only `resolution = "Done"` counts as a completed Jira deliverable
+See [AGENTS.md](AGENTS.md) for conventions, patterns, MCP tool usage, and review guidelines. See [ARCHITECTURE.md](ARCHITECTURE.md) for system design and data flow. See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow.

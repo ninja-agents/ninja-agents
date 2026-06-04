@@ -11,12 +11,15 @@ import {
   computeCarryoverAnalysis,
   computePlanningHygiene,
   generateRecommendations,
+  computeIndividualVelocityAverages,
+  generateEngineerProposals,
   buildAccountIdToName,
   buildDisplayToName,
   type SprintIssue,
   type SprintConfig,
   type VelocitySummary,
   type PlanningReport,
+  type IndividualVelocityAverage,
 } from "./generate-sprint-planning-analysis.js";
 
 // ---------------------------------------------------------------------------
@@ -343,7 +346,7 @@ describe("computeLoadDistribution", () => {
     expect(alice.load_ratio).toBe(1);
   });
 
-  it("flags heavy when load > 2x previous", () => {
+  it("flags heavy when load > 1.5x previous", () => {
     const issues = [
       makeIssue({ key: "T-1", assignee_id: "alice-id", story_points: 100 }),
     ];
@@ -646,10 +649,12 @@ describe("generateRecommendations", () => {
         status: "overcommitted",
       },
       load: [],
+      individualVelocity: [],
       retro: [],
       carryover: [],
       hygiene: [],
       recommendations: [],
+      engineerProposals: [],
       ...overrides,
     };
   }
@@ -726,5 +731,561 @@ describe("generateRecommendations", () => {
     });
     const recs = generateRecommendations(report);
     expect(recs.some((r) => r.includes("retro action items"))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeIndividualVelocityAverages
+// ---------------------------------------------------------------------------
+
+describe("computeIndividualVelocityAverages", () => {
+  it("averages SP across two sprints", () => {
+    const n1 = makeVelocity({
+      by_engineer: [
+        {
+          name: "Alice",
+          assigned: 20,
+          completed: 16,
+          sp_completed: 80,
+          sp_remaining: 20,
+        },
+        {
+          name: "Bob",
+          assigned: 30,
+          completed: 24,
+          sp_completed: 60,
+          sp_remaining: 20,
+        },
+      ],
+    });
+    const n2 = makeVelocity({
+      sprint_name: "Test Sprint 0",
+      by_engineer: [
+        {
+          name: "Alice",
+          assigned: 15,
+          completed: 12,
+          sp_completed: 60,
+          sp_remaining: 15,
+        },
+        {
+          name: "Bob",
+          assigned: 25,
+          completed: 18,
+          sp_completed: 40,
+          sp_remaining: 10,
+        },
+      ],
+    });
+    const result = computeIndividualVelocityAverages(n1, n2, BASE_CONFIG);
+    const alice = result.find((r) => r.name === "Alice")!;
+    expect(alice.sprints_available).toBe(2);
+    expect(alice.n1_sp_completed).toBe(80);
+    expect(alice.n2_sp_completed).toBe(60);
+    expect(alice.avg_sp_completed).toBe(70);
+    expect(alice.avg_items_completed).toBe(14);
+    const bob = result.find((r) => r.name === "Bob")!;
+    expect(bob.avg_sp_completed).toBe(50);
+    expect(bob.avg_items_completed).toBe(21);
+  });
+
+  it("uses N-1 only when N-2 is null", () => {
+    const n1 = makeVelocity({
+      by_engineer: [
+        {
+          name: "Alice",
+          assigned: 20,
+          completed: 16,
+          sp_completed: 80,
+          sp_remaining: 20,
+        },
+        {
+          name: "Bob",
+          assigned: 30,
+          completed: 24,
+          sp_completed: 60,
+          sp_remaining: 20,
+        },
+      ],
+    });
+    const result = computeIndividualVelocityAverages(n1, null, BASE_CONFIG);
+    const alice = result.find((r) => r.name === "Alice")!;
+    expect(alice.sprints_available).toBe(1);
+    expect(alice.avg_sp_completed).toBe(80);
+    expect(alice.n2_sp_completed).toBeNull();
+  });
+
+  it("handles engineer absent from N-2", () => {
+    const n1 = makeVelocity({
+      by_engineer: [
+        {
+          name: "Alice",
+          assigned: 20,
+          completed: 16,
+          sp_completed: 80,
+          sp_remaining: 20,
+        },
+        {
+          name: "Bob",
+          assigned: 10,
+          completed: 8,
+          sp_completed: 40,
+          sp_remaining: 10,
+        },
+      ],
+    });
+    const n2 = makeVelocity({
+      sprint_name: "Test Sprint 0",
+      by_engineer: [
+        {
+          name: "Alice",
+          assigned: 15,
+          completed: 12,
+          sp_completed: 60,
+          sp_remaining: 15,
+        },
+      ],
+    });
+    const result = computeIndividualVelocityAverages(n1, n2, BASE_CONFIG);
+    const bob = result.find((r) => r.name === "Bob")!;
+    expect(bob.sprints_available).toBe(1);
+    expect(bob.avg_sp_completed).toBe(40);
+    expect(bob.n2_sp_completed).toBeNull();
+  });
+
+  it("handles engineer absent from both sprints", () => {
+    const n1 = makeVelocity({ by_engineer: [] });
+    const n2 = makeVelocity({ sprint_name: "Test Sprint 0", by_engineer: [] });
+    const result = computeIndividualVelocityAverages(n1, n2, BASE_CONFIG);
+    const alice = result.find((r) => r.name === "Alice")!;
+    expect(alice.sprints_available).toBe(0);
+    expect(alice.avg_sp_completed).toBeNull();
+  });
+
+  it("includes QE role correctly", () => {
+    const n1 = makeVelocity({
+      by_engineer: [
+        {
+          name: "Bob",
+          assigned: 30,
+          completed: 24,
+          sp_completed: 60,
+          sp_remaining: 20,
+        },
+      ],
+    });
+    const result = computeIndividualVelocityAverages(n1, null, BASE_CONFIG);
+    const bob = result.find((r) => r.name === "Bob")!;
+    expect(bob.role).toBe("qe");
+  });
+
+  it("sorts by avg_sp_completed descending", () => {
+    const n1 = makeVelocity({
+      by_engineer: [
+        {
+          name: "Alice",
+          assigned: 10,
+          completed: 8,
+          sp_completed: 30,
+          sp_remaining: 10,
+        },
+        {
+          name: "Bob",
+          assigned: 20,
+          completed: 16,
+          sp_completed: 80,
+          sp_remaining: 20,
+        },
+      ],
+    });
+    const result = computeIndividualVelocityAverages(n1, null, BASE_CONFIG);
+    expect(result[0].name).toBe("Bob");
+    expect(result[1].name).toBe("Alice");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeLoadDistribution with averaged baseline
+// ---------------------------------------------------------------------------
+
+describe("computeLoadDistribution with individualAverages", () => {
+  const accountIdToName = buildAccountIdToName(BASE_CONFIG);
+  const displayToName = buildDisplayToName(BASE_CONFIG);
+
+  it("uses averaged SP as baseline when provided", () => {
+    const issues = [
+      makeIssue({ key: "T-1", assignee_id: "alice-id", story_points: 70 }),
+    ];
+    const velocity = makeVelocity({
+      by_engineer: [
+        {
+          name: "Alice",
+          assigned: 10,
+          completed: 8,
+          sp_completed: 80,
+          sp_remaining: 10,
+        },
+        {
+          name: "Bob",
+          assigned: 20,
+          completed: 16,
+          sp_completed: 80,
+          sp_remaining: 20,
+        },
+      ],
+    });
+    const averages: IndividualVelocityAverage[] = [
+      {
+        name: "Alice",
+        role: "dev",
+        sprints_available: 2,
+        n1_sp_completed: 80,
+        n2_sp_completed: 60,
+        avg_sp_completed: 70,
+        n1_items_completed: 16,
+        n2_items_completed: 12,
+        avg_items_completed: 14,
+      },
+      {
+        name: "Bob",
+        role: "qe",
+        sprints_available: 2,
+        n1_sp_completed: 80,
+        n2_sp_completed: 40,
+        avg_sp_completed: 60,
+        n1_items_completed: 24,
+        n2_items_completed: 18,
+        avg_items_completed: 21,
+      },
+    ];
+    const load = computeLoadDistribution(
+      issues,
+      velocity,
+      BASE_CONFIG,
+      accountIdToName,
+      displayToName,
+      averages,
+    );
+    const alice = load.find((l) => l.name === "Alice")!;
+    expect(alice.prev_sp_completed).toBe(70);
+    expect(alice.load_ratio).toBe(1);
+    expect(alice.baseline_sprints).toBe(2);
+  });
+
+  it("falls back to N-1 when no averages provided", () => {
+    const issues = [
+      makeIssue({ key: "T-1", assignee_id: "alice-id", story_points: 40 }),
+    ];
+    const velocity = makeVelocity({
+      by_engineer: [
+        {
+          name: "Alice",
+          assigned: 10,
+          completed: 8,
+          sp_completed: 40,
+          sp_remaining: 10,
+        },
+        {
+          name: "Bob",
+          assigned: 20,
+          completed: 16,
+          sp_completed: 80,
+          sp_remaining: 20,
+        },
+      ],
+    });
+    const load = computeLoadDistribution(
+      issues,
+      velocity,
+      BASE_CONFIG,
+      accountIdToName,
+      displayToName,
+    );
+    const alice = load.find((l) => l.name === "Alice")!;
+    expect(alice.prev_sp_completed).toBe(40);
+    expect(alice.load_ratio).toBe(1);
+    expect(alice.baseline_sprints).toBe(1);
+  });
+
+  it("sets baseline_sprints from individualAverages", () => {
+    const issues = [
+      makeIssue({ key: "T-1", assignee_id: "alice-id", story_points: 10 }),
+    ];
+    const velocity = makeVelocity();
+    const averages: IndividualVelocityAverage[] = [
+      {
+        name: "Alice",
+        role: "dev",
+        sprints_available: 1,
+        n1_sp_completed: 80,
+        n2_sp_completed: null,
+        avg_sp_completed: 80,
+        n1_items_completed: 16,
+        n2_items_completed: null,
+        avg_items_completed: 16,
+      },
+      {
+        name: "Bob",
+        role: "qe",
+        sprints_available: 0,
+        n1_sp_completed: null,
+        n2_sp_completed: null,
+        avg_sp_completed: null,
+        n1_items_completed: null,
+        n2_items_completed: null,
+        avg_items_completed: null,
+      },
+    ];
+    const load = computeLoadDistribution(
+      issues,
+      velocity,
+      BASE_CONFIG,
+      accountIdToName,
+      displayToName,
+      averages,
+    );
+    const alice = load.find((l) => l.name === "Alice")!;
+    expect(alice.baseline_sprints).toBe(1);
+    const bob = load.find((l) => l.name === "Bob")!;
+    expect(bob.baseline_sprints).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computePlanningHygiene — assignee field
+// ---------------------------------------------------------------------------
+
+describe("computePlanningHygiene assignee", () => {
+  const accountIdToName = buildAccountIdToName(BASE_CONFIG);
+  const displayToName = buildDisplayToName(BASE_CONFIG);
+
+  it("populates assignee from account ID map", () => {
+    const issues = [
+      makeIssue({
+        key: "T-1",
+        story_points: null,
+        assignee_id: "alice-id",
+        assignee_name: "Alice Smith",
+      }),
+    ];
+    const flags = computePlanningHygiene(
+      issues,
+      BASE_CONFIG,
+      accountIdToName,
+      displayToName,
+    );
+    const noSp = flags.find((f) => f.kind === "no_sp")!;
+    expect(noSp.assignee).toBe("Alice");
+  });
+
+  it("sets empty assignee for unassigned items", () => {
+    const issues = [
+      makeIssue({ key: "T-1", assignee_id: "", assignee_name: "" }),
+    ];
+    const flags = computePlanningHygiene(
+      issues,
+      BASE_CONFIG,
+      accountIdToName,
+      displayToName,
+    );
+    const unassigned = flags.find((f) => f.kind === "unassigned")!;
+    expect(unassigned.assignee).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// generateEngineerProposals
+// ---------------------------------------------------------------------------
+
+describe("generateEngineerProposals", () => {
+  function makeFullReport(
+    overrides: Partial<PlanningReport> = {},
+  ): PlanningReport {
+    return {
+      capacity: {
+        target_sp: 200,
+        target_issues: 50,
+        velocity_sp: 160,
+        velocity_issues: 40,
+        effective_sp: 200,
+        effective_issues: 50,
+        dead_items: [],
+        delta_pct: 25,
+        status: "overcommitted",
+      },
+      load: [
+        {
+          name: "Alice",
+          role: "dev",
+          target_assigned: 10,
+          target_sp: 100,
+          prev_completed: 8,
+          prev_sp_completed: 40,
+          load_ratio: 2.5,
+          risk: "heavy",
+          baseline_sprints: 2,
+        },
+        {
+          name: "Bob",
+          role: "qe",
+          target_assigned: 5,
+          target_sp: 20,
+          prev_completed: 16,
+          prev_sp_completed: 60,
+          load_ratio: 0.33,
+          risk: "ok",
+          baseline_sprints: 2,
+        },
+      ],
+      individualVelocity: [
+        {
+          name: "Alice",
+          role: "dev",
+          sprints_available: 2,
+          n1_sp_completed: 40,
+          n2_sp_completed: 40,
+          avg_sp_completed: 40,
+          n1_items_completed: 8,
+          n2_items_completed: 8,
+          avg_items_completed: 8,
+        },
+        {
+          name: "Bob",
+          role: "qe",
+          sprints_available: 2,
+          n1_sp_completed: 60,
+          n2_sp_completed: 60,
+          avg_sp_completed: 60,
+          n1_items_completed: 16,
+          n2_items_completed: 16,
+          avg_items_completed: 16,
+        },
+      ],
+      retro: [],
+      carryover: [],
+      hygiene: [],
+      recommendations: [],
+      engineerProposals: [],
+      ...overrides,
+    };
+  }
+
+  it("generates proposals for engineers with items", () => {
+    const report = makeFullReport();
+    const proposals = generateEngineerProposals(report);
+    expect(proposals).toHaveLength(2);
+    expect(proposals[0].name).toBe("Alice");
+    expect(proposals[1].name).toBe("Bob");
+  });
+
+  it("suggests deferring SP for heavy-load engineers", () => {
+    const report = makeFullReport();
+    const proposals = generateEngineerProposals(report);
+    const alice = proposals.find((p) => p.name === "Alice")!;
+    expect(alice.actions.some((a) => a.includes("deferring"))).toBe(true);
+  });
+
+  it("suggests deferring SP for extreme-load engineers", () => {
+    const report = makeFullReport({
+      load: [
+        {
+          name: "Alice",
+          role: "dev",
+          target_assigned: 10,
+          target_sp: 200,
+          prev_completed: 4,
+          prev_sp_completed: 40,
+          load_ratio: 5,
+          risk: "extreme",
+          baseline_sprints: 2,
+        },
+      ],
+    });
+    const proposals = generateEngineerProposals(report);
+    const alice = proposals.find((p) => p.name === "Alice")!;
+    expect(alice.actions.some((a) => a.includes("Defer or reassign"))).toBe(
+      true,
+    );
+  });
+
+  it("includes unsized items for the engineer", () => {
+    const report = makeFullReport({
+      hygiene: [
+        {
+          key: "T-1",
+          summary: "Test",
+          url: "https://test/T-1",
+          kind: "no_sp",
+          detail: "Major priority",
+          assignee: "Alice",
+        },
+      ],
+    });
+    const proposals = generateEngineerProposals(report);
+    const alice = proposals.find((p) => p.name === "Alice")!;
+    expect(alice.actions.some((a) => a.includes("Size 1 unsized"))).toBe(true);
+  });
+
+  it("includes carryover summary for the engineer", () => {
+    const report = makeFullReport({
+      carryover: [
+        {
+          key: "T-100",
+          summary: "Carryover item",
+          url: "https://test/T-100",
+          status: "In Progress",
+          story_points: 5,
+          priority: "Critical",
+          assignee: "Alice",
+        },
+      ],
+    });
+    const proposals = generateEngineerProposals(report);
+    const alice = proposals.find((p) => p.name === "Alice")!;
+    expect(alice.actions.some((a) => a.includes("Critical/Blocker"))).toBe(
+      true,
+    );
+    expect(alice.actions.some((a) => a.includes("carryover"))).toBe(true);
+  });
+
+  it("shows OK message for balanced engineers", () => {
+    const report = makeFullReport({
+      load: [
+        {
+          name: "Bob",
+          role: "qe",
+          target_assigned: 5,
+          target_sp: 20,
+          prev_completed: 16,
+          prev_sp_completed: 60,
+          load_ratio: 0.33,
+          risk: "ok",
+          baseline_sprints: 2,
+        },
+      ],
+    });
+    const proposals = generateEngineerProposals(report);
+    const bob = proposals.find((p) => p.name === "Bob")!;
+    expect(bob.actions.some((a) => a.includes("looks good"))).toBe(true);
+  });
+
+  it("skips engineers with 0 assigned items", () => {
+    const report = makeFullReport({
+      load: [
+        {
+          name: "Alice",
+          role: "dev",
+          target_assigned: 0,
+          target_sp: 0,
+          prev_completed: 8,
+          prev_sp_completed: 40,
+          load_ratio: null,
+          risk: "absent",
+          baseline_sprints: 2,
+        },
+      ],
+    });
+    const proposals = generateEngineerProposals(report);
+    expect(proposals).toHaveLength(0);
   });
 });

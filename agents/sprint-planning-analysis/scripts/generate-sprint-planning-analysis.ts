@@ -96,6 +96,22 @@ export interface VelocitySummary {
   retro_recommendations: string[];
 }
 
+export interface VelocityHistory {
+  sprints: Record<string, VelocitySummary>;
+}
+
+export interface IndividualVelocityAverage {
+  name: string;
+  role: "dev" | "qe";
+  sprints_available: number;
+  n1_sp_completed: number | null;
+  n2_sp_completed: number | null;
+  avg_sp_completed: number | null;
+  n1_items_completed: number | null;
+  n2_items_completed: number | null;
+  avg_items_completed: number | null;
+}
+
 export interface CapacityAnalysis {
   target_sp: number;
   target_issues: number;
@@ -125,6 +141,7 @@ export interface LoadDistributionEntry {
   prev_sp_completed: number;
   load_ratio: number | null;
   risk: "ok" | "heavy" | "extreme" | "absent" | "new";
+  baseline_sprints: number;
 }
 
 export interface RetroComplianceItem {
@@ -149,15 +166,29 @@ export interface HygieneFlag {
   url: string;
   kind: "unassigned" | "no_sp" | "already_done" | "refinement" | "oversized";
   detail: string;
+  assignee: string;
+}
+
+export interface EngineerProposal {
+  name: string;
+  role: "dev" | "qe";
+  target_items: number;
+  target_sp: number;
+  avg_sp: number | null;
+  load_ratio: number | null;
+  risk: string;
+  actions: string[];
 }
 
 export interface PlanningReport {
   capacity: CapacityAnalysis;
   load: LoadDistributionEntry[];
+  individualVelocity: IndividualVelocityAverage[];
   retro: RetroComplianceItem[];
   carryover: CarryoverAnalysisItem[];
   hygiene: HygieneFlag[];
   recommendations: string[];
+  engineerProposals: EngineerProposal[];
 }
 
 // ---------------------------------------------------------------------------
@@ -277,6 +308,72 @@ export function loadVelocitySummary(jsonPath: string): VelocitySummary {
   return JSON.parse(readFileSync(jsonPath, "utf-8")) as VelocitySummary;
 }
 
+export function loadVelocityHistory(
+  jsonPath: string,
+): VelocityHistory | null {
+  if (!existsSync(jsonPath)) return null;
+  return JSON.parse(readFileSync(jsonPath, "utf-8")) as VelocityHistory;
+}
+
+export function computeIndividualVelocityAverages(
+  velocityN1: VelocitySummary,
+  velocityN2: VelocitySummary | null,
+  config: SprintConfig,
+): IndividualVelocityAverage[] {
+  const n1ByName = new Map(
+    velocityN1.by_engineer.map((e) => [e.name, e]),
+  );
+  const n2ByName = velocityN2
+    ? new Map(velocityN2.by_engineer.map((e) => [e.name, e]))
+    : null;
+
+  const roleMap = new Map(config.engineers.map((e) => [e.name, e.role]));
+
+  return config.engineers
+    .map((eng) => {
+      const n1 = n1ByName.get(eng.name);
+      const n2 = n2ByName?.get(eng.name) ?? null;
+
+      const n1Sp = n1?.sp_completed ?? null;
+      const n2Sp = n2?.sp_completed ?? null;
+      const n1Items = n1?.completed ?? null;
+      const n2Items = n2?.completed ?? null;
+
+      let sprintsAvailable = 0;
+      if (n1Sp !== null) sprintsAvailable++;
+      if (n2Sp !== null) sprintsAvailable++;
+
+      let avgSp: number | null = null;
+      let avgItems: number | null = null;
+
+      if (n1Sp !== null && n2Sp !== null) {
+        avgSp = round2((n1Sp + n2Sp) / 2);
+        avgItems = round2(((n1Items ?? 0) + (n2Items ?? 0)) / 2);
+      } else if (n1Sp !== null) {
+        avgSp = n1Sp;
+        avgItems = n1Items;
+      } else if (n2Sp !== null) {
+        avgSp = n2Sp;
+        avgItems = n2Items;
+      }
+
+      return {
+        name: eng.name,
+        role: roleMap.get(eng.name) ?? ("dev" as const),
+        sprints_available: sprintsAvailable,
+        n1_sp_completed: n1Sp,
+        n2_sp_completed: n2Sp,
+        avg_sp_completed: avgSp,
+        n1_items_completed: n1Items,
+        n2_items_completed: n2Items,
+        avg_items_completed: avgItems,
+      };
+    })
+    .sort(
+      (a, b) => (b.avg_sp_completed ?? 0) - (a.avg_sp_completed ?? 0),
+    );
+}
+
 function loadConfig(configPath: string): SprintConfig {
   if (!existsSync(configPath)) {
     console.error(`${RED}Config not found: ${configPath}${RESET}`);
@@ -358,6 +455,14 @@ function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max) + "..." : s;
 }
 
+function shortSprintName(name: string, prefix: string): string {
+  if (name.startsWith(prefix)) {
+    const suffix = name.slice(prefix.length).trim();
+    return `Sprint ${suffix}`;
+  }
+  return name;
+}
+
 export function computeCapacityVsVelocity(
   issues: SprintIssue[],
   velocity: VelocitySummary,
@@ -426,6 +531,7 @@ export function computeLoadDistribution(
   config: SprintConfig,
   accountIdToName: Map<string, string>,
   displayToName: Map<string, string>,
+  individualAverages?: IndividualVelocityAverage[],
 ): LoadDistributionEntry[] {
   const targetLoad = computeEngineerLoad(
     issues,
@@ -435,30 +541,40 @@ export function computeLoadDistribution(
   );
 
   const velByEngineer = new Map(velocity.by_engineer.map((e) => [e.name, e]));
+  const avgByName = individualAverages
+    ? new Map(individualAverages.map((a) => [a.name, a]))
+    : null;
 
   const roleMap = new Map(config.engineers.map((e) => [e.name, e.role]));
 
   return targetLoad.map((t) => {
     const prev = velByEngineer.get(t.name);
-    const prevCompleted = prev?.completed ?? 0;
-    const prevSp = prev?.sp_completed ?? 0;
+    const avg = avgByName?.get(t.name);
+    const baselineSp = avg?.avg_sp_completed ?? prev?.sp_completed ?? 0;
+    const baselineCompleted =
+      avg?.avg_items_completed ?? prev?.completed ?? 0;
+    const baselineSprints = avg?.sprints_available ?? (prev ? 1 : 0);
     const totalTargetSp = t.sp_completed + t.sp_remaining;
 
     let loadRatio: number | null = null;
-    if (prevSp > 0) {
-      loadRatio = round2(totalTargetSp / prevSp);
+    if (baselineSp > 0) {
+      loadRatio = round2(totalTargetSp / baselineSp);
     }
+
+    const hasPrevData = avg
+      ? avg.sprints_available > 0
+      : prev !== undefined;
 
     let risk: "ok" | "heavy" | "extreme" | "absent" | "new";
     if (t.assigned === 0) {
       risk = "absent";
-    } else if (!prev) {
+    } else if (!hasPrevData) {
       risk = "new";
-    } else if (prevSp === 0 && totalTargetSp > 0) {
+    } else if (baselineSp === 0 && totalTargetSp > 0) {
       risk = "extreme";
     } else if (loadRatio !== null && loadRatio > 3) {
       risk = "extreme";
-    } else if (loadRatio !== null && loadRatio > 2) {
+    } else if (loadRatio !== null && loadRatio > 1.5) {
       risk = "heavy";
     } else {
       risk = "ok";
@@ -469,10 +585,11 @@ export function computeLoadDistribution(
       role: roleMap.get(t.name) ?? "dev",
       target_assigned: t.assigned,
       target_sp: totalTargetSp,
-      prev_completed: prevCompleted,
-      prev_sp_completed: prevSp,
+      prev_completed: baselineCompleted,
+      prev_sp_completed: baselineSp,
       load_ratio: loadRatio,
       risk,
+      baseline_sprints: baselineSprints,
     };
   });
 }
@@ -603,11 +720,20 @@ export function computeCarryoverAnalysis(
 export function computePlanningHygiene(
   issues: SprintIssue[],
   config: SprintConfig,
+  accountIdToName?: Map<string, string>,
+  displayToName?: Map<string, string>,
 ): HygieneFlag[] {
   const flags: HygieneFlag[] = [];
 
+  const resolveName = (i: SprintIssue): string =>
+    (accountIdToName?.get(i.assignee_id) ??
+    displayToName?.get(i.assignee_name.toLowerCase()) ??
+    i.assignee_name) ||
+    "";
+
   for (const i of issues) {
     const url = `${config.jira.base_url}/${i.key}`;
+    const assignee = resolveName(i);
 
     if (!i.assignee_id && !i.assignee_name) {
       flags.push({
@@ -616,6 +742,7 @@ export function computePlanningHygiene(
         url,
         kind: "unassigned",
         detail: `${spStr(i.story_points)} SP, ${i.priority} priority`,
+        assignee: "",
       });
     }
 
@@ -626,6 +753,7 @@ export function computePlanningHygiene(
         url,
         kind: "no_sp",
         detail: `${i.priority} priority, assigned to ${i.assignee_name || "Unassigned"}`,
+        assignee,
       });
     }
 
@@ -636,6 +764,7 @@ export function computePlanningHygiene(
         url,
         kind: "already_done",
         detail: `Status: ${i.status}, Resolution: ${i.resolution || "none"}`,
+        assignee,
       });
     }
 
@@ -649,6 +778,7 @@ export function computePlanningHygiene(
         url,
         kind: "refinement",
         detail: `Status "${i.status}" — not ready for sprint commitment`,
+        assignee,
       });
     }
 
@@ -663,6 +793,7 @@ export function computePlanningHygiene(
         url,
         kind: "oversized",
         detail: `${i.story_points} SP — should be decomposed before sprint entry`,
+        assignee,
       });
     }
   }
@@ -748,6 +879,113 @@ export function generateRecommendations(report: PlanningReport): string[] {
   return recs;
 }
 
+export function generateEngineerProposals(
+  report: PlanningReport,
+): EngineerProposal[] {
+  const hygieneByEngineer = new Map<string, HygieneFlag[]>();
+  for (const h of report.hygiene) {
+    if (!h.assignee) continue;
+    const list = hygieneByEngineer.get(h.assignee) ?? [];
+    list.push(h);
+    hygieneByEngineer.set(h.assignee, list);
+  }
+
+  const carryoverByEngineer = new Map<string, CarryoverAnalysisItem[]>();
+  for (const c of report.carryover) {
+    if (!c.assignee) continue;
+    const list = carryoverByEngineer.get(c.assignee) ?? [];
+    list.push(c);
+    carryoverByEngineer.set(c.assignee, list);
+  }
+
+  const avgByName = new Map(
+    report.individualVelocity.map((v) => [v.name, v]),
+  );
+
+  return report.load
+    .filter((l) => l.target_assigned > 0)
+    .map((l) => {
+      const actions: string[] = [];
+      const avg = avgByName.get(l.name);
+      const avgSp = avg?.avg_sp_completed ?? null;
+
+      if (
+        l.risk === "extreme" &&
+        avgSp !== null &&
+        avgSp > 0
+      ) {
+        const trimTo = Math.round(avgSp);
+        const trimBy = Math.round(l.target_sp - avgSp);
+        actions.push(
+          `Defer or reassign ~${trimBy} SP to reach sustainable load (~${trimTo} SP)`,
+        );
+      } else if (l.risk === "heavy" && avgSp !== null && avgSp > 0) {
+        const trimTo = Math.round(avgSp);
+        const trimBy = Math.round(l.target_sp - avgSp);
+        actions.push(
+          `Consider deferring ~${trimBy} SP to align with your avg output (~${trimTo} SP)`,
+        );
+      }
+
+      const hygiene = hygieneByEngineer.get(l.name) ?? [];
+      const unsized = hygiene.filter((h) => h.kind === "no_sp");
+      if (unsized.length > 0) {
+        const keys = unsized.map((h) => h.key).join(", ");
+        actions.push(
+          `Size ${unsized.length} unsized item(s): ${keys}`,
+        );
+      }
+
+      const oversized = hygiene.filter((h) => h.kind === "oversized");
+      for (const h of oversized) {
+        actions.push(`Decompose ${h.key} (${h.detail})`);
+      }
+
+      const refinement = hygiene.filter((h) => h.kind === "refinement");
+      if (refinement.length > 0) {
+        const keys = refinement.map((h) => h.key).join(", ");
+        actions.push(
+          `${refinement.length} item(s) still in refinement — confirm sprint-ready: ${keys}`,
+        );
+      }
+
+      const carryover = carryoverByEngineer.get(l.name) ?? [];
+      if (carryover.length > 0) {
+        const carryoverSp = carryover.reduce(
+          (s, c) => s + (c.story_points ?? 0),
+          0,
+        );
+        const critical = carryover.filter(
+          (c) => c.priority === "Blocker" || c.priority === "Critical",
+        );
+        if (critical.length > 0) {
+          const keys = critical.map((c) => c.key).join(", ");
+          actions.push(
+            `${critical.length} Critical/Blocker carryover item(s) — prioritize first: ${keys}`,
+          );
+        }
+        actions.push(
+          `${carryover.length} carryover items (${carryoverSp} SP) from last sprint — review which to keep vs. defer`,
+        );
+      }
+
+      if (actions.length === 0) {
+        actions.push("Load looks good — no specific actions needed");
+      }
+
+      return {
+        name: l.name,
+        role: l.role,
+        target_items: l.target_assigned,
+        target_sp: l.target_sp,
+        avg_sp: avgSp,
+        load_ratio: l.load_ratio,
+        risk: l.risk,
+        actions,
+      };
+    });
+}
+
 // ---------------------------------------------------------------------------
 // Report formatting
 // ---------------------------------------------------------------------------
@@ -756,6 +994,7 @@ export function formatReport(
   sprintName: string,
   date: string,
   velocity: VelocitySummary,
+  velocityN2: VelocitySummary | null,
   report: PlanningReport,
   config: SprintConfig,
   warnings: string[],
@@ -766,9 +1005,18 @@ export function formatReport(
   ln(`# Sprint Planning Health-Check: ${sprintName}`);
   ln();
   ln(`Analysis generated: ${date}`);
-  ln(
-    `Velocity baseline: ${velocity.sprint_name} (${spStr(velocity.completed_sp)} SP completed, ${velocity.completed_issues} of ${velocity.total_issues} issues)`,
-  );
+  if (velocityN2) {
+    const avgSp = round2(
+      (velocity.completed_sp + velocityN2.completed_sp) / 2,
+    );
+    ln(
+      `Velocity baseline: ${velocityN2.sprint_name}, ${velocity.sprint_name} (2-sprint avg: ${spStr(avgSp)} SP completed)`,
+    );
+  } else {
+    ln(
+      `Velocity baseline: ${velocity.sprint_name} (${spStr(velocity.completed_sp)} SP completed, ${velocity.completed_issues} of ${velocity.total_issues} issues)`,
+    );
+  }
   ln();
 
   // Key Takeaways placeholder
@@ -781,7 +1029,10 @@ export function formatReport(
   // Capacity vs. Velocity
   ln("## Capacity vs. Velocity");
   ln();
-  ln("| Metric | Target Sprint | Previous Sprint (Velocity) | Delta |");
+  const velocityColHeader = velocityN2
+    ? "2-Sprint Avg (Velocity)"
+    : "Previous Sprint (Velocity)";
+  ln(`| Metric | Target Sprint | ${velocityColHeader} | Delta |`);
   ln("|--------|--------------|---------------------------|-------|");
   ln(
     `| Story Points | ${spStr(report.capacity.target_sp)} | ${spStr(report.capacity.velocity_sp)} | ${report.capacity.delta_pct > 0 ? "+" : ""}${report.capacity.delta_pct}% |`,
@@ -819,10 +1070,12 @@ export function formatReport(
   ln();
 
   // Load Distribution
+  const maxBaseline = Math.max(...report.load.map((l) => l.baseline_sprints), 0);
+  const baselineLabel = maxBaseline >= 2 ? "Avg" : "Prev";
   ln("## Load Distribution");
   ln();
   ln(
-    "| Engineer | Role | Target Items | Target SP | Prev Completed | Prev SP | Load Ratio | Risk |",
+    `| Engineer | Role | Target Items | Target SP | ${baselineLabel} Completed | ${baselineLabel} SP | Load Ratio | Risk |`,
   );
   ln(
     "|----------|------|-------------|-----------|---------------|---------|-----------|------|",
@@ -844,6 +1097,58 @@ export function formatReport(
     );
   }
   ln();
+  if (velocityN2) {
+    ln(
+      `*Baseline: 2-sprint average (${velocityN2.sprint_name}, ${velocity.sprint_name})*`,
+    );
+  } else {
+    ln(`*Baseline: ${velocity.sprint_name} (1 previous sprint available)*`);
+  }
+  ln();
+
+  // Individual Velocity
+  if (report.individualVelocity.length > 0) {
+    const hasN2 = report.individualVelocity.some(
+      (v) => v.n2_sp_completed !== null,
+    );
+
+    if (hasN2) {
+      const n2Full = velocityN2?.sprint_name ?? "Sprint N-2";
+      const n1Full = velocity.sprint_name;
+      const n2Short = shortSprintName(n2Full, config.sprint_name_prefix);
+      const n1Short = shortSprintName(n1Full, config.sprint_name_prefix);
+      ln(`## Individual Velocity (2-Sprint Average)`);
+      ln();
+      ln(`Based on ${n2Full} and ${n1Full}:`);
+      ln();
+      ln(
+        `| Engineer | Role | ${n2Short} SP | ${n1Short} SP | Avg SP | ${n2Short} Items | ${n1Short} Items | Avg Items |`,
+      );
+      ln(
+        "|----------|------|------------|------------|--------|---------------|---------------|-----------|",
+      );
+      for (const v of report.individualVelocity) {
+        ln(
+          `| ${v.name} | ${v.role.toUpperCase()} | ${v.n2_sp_completed !== null ? spStr(v.n2_sp_completed) : "-"} | ${v.n1_sp_completed !== null ? spStr(v.n1_sp_completed) : "-"} | ${v.avg_sp_completed !== null ? spStr(v.avg_sp_completed) : "-"} | ${v.n2_items_completed !== null ? v.n2_items_completed : "-"} | ${v.n1_items_completed !== null ? v.n1_items_completed : "-"} | ${v.avg_items_completed !== null ? v.avg_items_completed : "-"} |`,
+        );
+      }
+    } else {
+      ln(`## Individual Velocity (1 Sprint Available)`);
+      ln();
+      ln(
+        `Based on ${velocity.sprint_name} (only 1 previous sprint available):`,
+      );
+      ln();
+      ln("| Engineer | Role | SP Completed | Items Completed |");
+      ln("|----------|------|-------------|----------------|");
+      for (const v of report.individualVelocity) {
+        ln(
+          `| ${v.name} | ${v.role.toUpperCase()} | ${v.n1_sp_completed !== null ? spStr(v.n1_sp_completed) : "-"} | ${v.n1_items_completed !== null ? v.n1_items_completed : "-"} |`,
+        );
+      }
+    }
+    ln();
+  }
 
   // Retro Compliance
   if (report.retro.length > 0) {
@@ -944,6 +1249,38 @@ export function formatReport(
     ln();
   }
 
+  // Per-Engineer Proposals
+  if (report.engineerProposals.length > 0) {
+    ln("## Per-Engineer Proposals");
+    ln();
+    for (const p of report.engineerProposals) {
+      const riskLabel =
+        p.risk === "extreme"
+          ? "EXTREME"
+          : p.risk === "heavy"
+            ? "HIGH"
+            : p.risk === "absent"
+              ? "ABSENT"
+              : p.risk === "new"
+                ? "NEW"
+                : "OK";
+      const avgStr =
+        p.avg_sp !== null ? `${spStr(p.avg_sp)} SP avg` : "no baseline";
+      const ratioStr =
+        p.load_ratio !== null ? ` | ${p.load_ratio}x` : "";
+      ln(`### ${p.name} (${p.role.toUpperCase()}) — ${riskLabel}`);
+      ln();
+      ln(
+        `${p.target_items} items / ${p.target_sp} SP target | ${avgStr}${ratioStr}`,
+      );
+      ln();
+      for (const a of p.actions) {
+        ln(`- [ ] ${a}`);
+      }
+      ln();
+    }
+  }
+
   // Warnings
   if (warnings.length > 0) {
     ln("## Data Quality Notes");
@@ -967,6 +1304,8 @@ function printPlanningContext(
   retro: RetroComplianceItem[],
   carryover: CarryoverAnalysisItem[],
   hygiene: HygieneFlag[],
+  velocity: VelocitySummary,
+  velocityN2: VelocitySummary | null,
 ) {
   const extreme = load.filter((l) => l.risk === "extreme");
   const heavy = load.filter((l) => l.risk === "heavy");
@@ -977,6 +1316,18 @@ function printPlanningContext(
   );
 
   console.log(`\n${BOLD}--- Planning Context ---${RESET}`);
+  if (velocityN2) {
+    const avgSp = round2(
+      (velocity.completed_sp + velocityN2.completed_sp) / 2,
+    );
+    console.log(
+      `  Velocity baseline: 2-sprint avg (${velocityN2.sprint_name}: ${spStr(velocityN2.completed_sp)} SP, ${velocity.sprint_name}: ${spStr(velocity.completed_sp)} SP, avg: ${spStr(avgSp)} SP)`,
+    );
+  } else {
+    console.log(
+      `  Velocity baseline: ${velocity.sprint_name} (${spStr(velocity.completed_sp)} SP)`,
+    );
+  }
   console.log(
     `  Capacity: ${spStr(capacity.effective_sp)} SP effective vs ${spStr(capacity.velocity_sp)} SP velocity (${capacity.delta_pct > 0 ? "+" : ""}${capacity.delta_pct}%) — ${capacity.status}`,
   );
@@ -988,7 +1339,7 @@ function printPlanningContext(
   );
   if (extreme.length > 0) {
     console.log(
-      `  Top overload: ${extreme[0].name} (${extreme[0].target_sp} SP target, ${extreme[0].prev_sp_completed} SP prev)`,
+      `  Top overload: ${extreme[0].name} (${extreme[0].target_sp} SP target, ${extreme[0].prev_sp_completed} SP baseline)`,
     );
   }
   console.log(
@@ -1012,7 +1363,7 @@ function parseArgs(argv: string[]): Record<string, string> {
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--help") {
       console.log(
-        "Usage: generate-sprint-planning-analysis.ts --date <YYYY-MM-DD> [--target-csv <path>] [--velocity-file <path>] [--config <path>] [--output <path>]",
+        "Usage: generate-sprint-planning-analysis.ts --date <YYYY-MM-DD> [--target-csv <path>] [--velocity-file <path>] [--velocity-history <path>] [--config <path>] [--output <path>]",
       );
       process.exit(0);
     }
@@ -1021,6 +1372,16 @@ function parseArgs(argv: string[]): Record<string, string> {
     }
   }
   return args;
+}
+
+function deriveN2SprintName(
+  sprintName: string,
+  prefix: string,
+): string | null {
+  const suffix = sprintName.slice(prefix.length).trim();
+  const num = parseInt(suffix, 10);
+  if (isNaN(num) || num <= 2) return null;
+  return `${prefix} ${num - 2}`;
 }
 
 function main() {
@@ -1039,6 +1400,9 @@ function main() {
   const velocityFile =
     args["velocity-file"] ??
     resolve(__dirname, "../data/cache/velocity-summary.json");
+  const velocityHistoryFile =
+    args["velocity-history"] ??
+    resolve(__dirname, "../data/cache/velocity-history.json");
   const config = loadConfig(configPath);
   const accountIdToName = buildAccountIdToName(config);
   const displayToName = buildDisplayToName(config);
@@ -1063,6 +1427,32 @@ function main() {
 
   const sprintName = issues[0]?.sprint_name ?? "Unknown Sprint";
 
+  // Load N-2 velocity from history
+  const history = loadVelocityHistory(velocityHistoryFile);
+  const n2SprintName = deriveN2SprintName(
+    sprintName,
+    config.sprint_name_prefix,
+  );
+  const velocityN2 =
+    n2SprintName && history ? (history.sprints[n2SprintName] ?? null) : null;
+
+  if (velocityN2) {
+    console.log(
+      `${GREEN}Using 2-sprint velocity baseline: ${velocity.sprint_name}, ${velocityN2.sprint_name}${RESET}`,
+    );
+  } else {
+    console.log(
+      `${YELLOW}Using single-sprint velocity baseline: ${velocity.sprint_name}${RESET}`,
+    );
+  }
+
+  // Compute individual velocity averages
+  const individualVelocity = computeIndividualVelocityAverages(
+    velocity,
+    velocityN2,
+    config,
+  );
+
   // Run analysis
   const capacity = computeCapacityVsVelocity(issues, velocity, config);
   const load = computeLoadDistribution(
@@ -1071,6 +1461,7 @@ function main() {
     config,
     accountIdToName,
     displayToName,
+    individualVelocity,
   );
   const retro = computeRetroCompliance(
     velocity.retro_recommendations,
@@ -1084,23 +1475,32 @@ function main() {
     accountIdToName,
     displayToName,
   );
-  const hygiene = computePlanningHygiene(issues, config);
+  const hygiene = computePlanningHygiene(
+    issues,
+    config,
+    accountIdToName,
+    displayToName,
+  );
 
   const planningReport: PlanningReport = {
     capacity,
     load,
+    individualVelocity,
     retro,
     carryover,
     hygiene,
     recommendations: [],
+    engineerProposals: [],
   };
   planningReport.recommendations = generateRecommendations(planningReport);
+  planningReport.engineerProposals = generateEngineerProposals(planningReport);
 
   // Format report
   const report = formatReport(
     sprintName,
     date,
     velocity,
+    velocityN2,
     planningReport,
     config,
     warnings,
@@ -1114,7 +1514,15 @@ function main() {
   console.log(`${GREEN}Report written to ${outputPath}${RESET}`);
 
   // Print context for agent
-  printPlanningContext(capacity, load, retro, carryover, hygiene);
+  printPlanningContext(
+    capacity,
+    load,
+    retro,
+    carryover,
+    hygiene,
+    velocity,
+    velocityN2,
+  );
 
   // Exit code
   if (warnings.length > 0) {

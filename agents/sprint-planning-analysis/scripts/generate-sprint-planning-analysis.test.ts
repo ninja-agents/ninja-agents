@@ -302,6 +302,50 @@ describe("computeCapacityVsVelocity", () => {
     expect(result.dead_items).toHaveLength(1);
     expect(result.dead_items[0].reason).toBe("Closed as Duplicate");
   });
+
+  it("uses 2-sprint average when velocityN2 provided", () => {
+    const vel = makeVelocity({ completed_sp: 100, completed_issues: 40 });
+    const velN2 = makeVelocity({
+      sprint_name: "Test Sprint 0",
+      completed_sp: 200,
+      completed_issues: 60,
+    });
+    const issues = [
+      makeIssue({ story_points: 75 }),
+      makeIssue({ key: "T-2", story_points: 75 }),
+    ];
+    const result = computeCapacityVsVelocity(issues, vel, BASE_CONFIG, velN2);
+    expect(result.velocity_sp).toBe(150);
+    expect(result.velocity_issues).toBe(50);
+    expect(result.target_sp).toBe(150);
+    expect(result.delta_pct).toBe(0);
+    expect(result.status).toBe("ok");
+  });
+
+  it("falls back to N-1 when velocityN2 is null", () => {
+    const vel = makeVelocity({ completed_sp: 100, completed_issues: 40 });
+    const issues = [makeIssue({ story_points: 100 })];
+    const result = computeCapacityVsVelocity(issues, vel, BASE_CONFIG, null);
+    expect(result.velocity_sp).toBe(100);
+    expect(result.velocity_issues).toBe(40);
+  });
+
+  it("computes correct overcommit delta with 2-sprint average", () => {
+    const vel = makeVelocity({ completed_sp: 126, completed_issues: 26 });
+    const velN2 = makeVelocity({
+      sprint_name: "Test Sprint 0",
+      completed_sp: 290,
+      completed_issues: 66,
+    });
+    const issues = Array.from({ length: 5 }, (_, i) =>
+      makeIssue({ key: `T-${i}`, story_points: 66 }),
+    );
+    const result = computeCapacityVsVelocity(issues, vel, BASE_CONFIG, velN2);
+    expect(result.velocity_sp).toBe(208);
+    expect(result.velocity_issues).toBe(46);
+    expect(result.status).toBe("overcommitted");
+    expect(result.delta_pct).toBe(59);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -690,6 +734,7 @@ describe("generateRecommendations", () => {
           prev_sp_completed: 8,
           load_ratio: 12.5,
           risk: "extreme",
+          baseline_sprints: 1,
         },
       ],
     });
@@ -717,6 +762,49 @@ describe("generateRecommendations", () => {
     });
     const recs = generateRecommendations(report);
     expect(recs.some((r) => r.includes("unassigned"))).toBe(true);
+  });
+
+  it("uses '2-sprint avg' label when baseline_sprints >= 2", () => {
+    const report = makeReport({
+      load: [
+        {
+          name: "Alice",
+          role: "dev",
+          target_assigned: 10,
+          target_sp: 100,
+          prev_completed: 8,
+          prev_sp_completed: 40,
+          load_ratio: 2.5,
+          risk: "extreme",
+          baseline_sprints: 2,
+        },
+      ],
+    });
+    const recs = generateRecommendations(report);
+    const rebalance = recs.find((r) => r.includes("Rebalance Alice"))!;
+    expect(rebalance).toContain("2-sprint avg");
+    expect(rebalance).not.toContain("last sprint");
+  });
+
+  it("uses 'last sprint' label when baseline_sprints is 1", () => {
+    const report = makeReport({
+      load: [
+        {
+          name: "Alice",
+          role: "dev",
+          target_assigned: 10,
+          target_sp: 100,
+          prev_completed: 8,
+          prev_sp_completed: 40,
+          load_ratio: 2.5,
+          risk: "extreme",
+          baseline_sprints: 1,
+        },
+      ],
+    });
+    const recs = generateRecommendations(report);
+    const rebalance = recs.find((r) => r.includes("Rebalance Alice"))!;
+    expect(rebalance).toContain("completed last sprint");
   });
 
   it("recommends addressing retro items", () => {

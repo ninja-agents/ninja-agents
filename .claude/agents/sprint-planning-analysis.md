@@ -217,6 +217,7 @@ After writing `velocity-summary.json`, also upsert the N-1 data into `agents/spr
 If `{n2_sprint_name}` is empty (N ≤ 2), skip this step entirely.
 
 Otherwise, check if `{n2_sprint_name}` is already cached in `velocity-history.json`:
+
 - If `sprints["{n2_sprint_name}"]` exists, it is already cached. Skip to Step 4.
 
 If not cached, fetch N-2 data using the same Option A / C cascade as Step 2:
@@ -267,30 +268,11 @@ If the query returns exactly 100 results, paginate using `nextPageToken` (same a
 
 ### Save to CSV
 
-Write `agents/sprint-planning-analysis/data/cache/sprint-issues.csv` with the same format as sprint-review:
+Write `agents/sprint-planning-analysis/data/cache/sprint-issues.csv` using the same CSV format as sprint-review (see sprint-review agent spec, Step 2 for column-to-JSON-path mappings). The header row is:
 
-Header: `key,summary,status,resolution,resolutiondate,issuetype,priority,assignee_id,assignee_name,story_points,created,updated,sprint_name,sprint_start,sprint_end,labels,qa_contact_id,qa_contact_name`
+`key,summary,status,resolution,resolutiondate,issuetype,priority,assignee_id,assignee_name,story_points,created,updated,sprint_name,sprint_start,sprint_end,labels,qa_contact_id,qa_contact_name`
 
-| CSV Column      | JSON Path                                            | Notes                               |
-| --------------- | ---------------------------------------------------- | ----------------------------------- |
-| key             | `node.key`                                           | e.g., "CNV-86227"                   |
-| summary         | `node.fields.summary`                                | double-quote if contains commas     |
-| status          | `node.fields.status.name`                            |                                     |
-| resolution      | `node.fields.resolution.name` or empty               | resolution may be null              |
-| resolutiondate  | `node.fields.resolutiondate` or empty                | may be null                         |
-| issuetype       | `node.fields.issuetype.name`                         |                                     |
-| priority        | `node.fields.priority.name`                          |                                     |
-| assignee_id     | `node.fields.assignee.accountId` or empty            | assignee may be null                |
-| assignee_name   | `node.fields.assignee.displayName` or empty          | assignee may be null                |
-| story_points    | `node.fields.customfield_10028` or empty             | number or null                      |
-| created         | `node.fields.created`                                | ISO-8601                            |
-| updated         | `node.fields.updated`                                | ISO-8601                            |
-| sprint_name     | `{target_sprint_name}` from Step 1                   | same for all rows                   |
-| sprint_start    | `{target_sprint_start}` from Step 1                  | same for all rows; may be empty     |
-| sprint_end      | `{target_sprint_end}` from Step 1                    | same for all rows; may be empty     |
-| labels          | `node.fields.labels` joined by ";"                   | array of strings; use empty if null |
-| qa_contact_id   | `node.fields.customfield_10470.accountId` or empty   | QA Contact may be null              |
-| qa_contact_name | `node.fields.customfield_10470.displayName` or empty | QA Contact may be null              |
+Key notes: `sprint_name`/`sprint_start`/`sprint_end` use the values from Step 1 (same for all rows). `labels` is joined by ";". Null fields (assignee, resolution, QA contact, story_points) → empty string.
 
 **CSV quoting rules:**
 
@@ -300,26 +282,14 @@ Header: `key,summary,status,resolution,resolutiondate,issuetype,priority,assigne
 
 Write the CSV using the Write tool in one call.
 
-### Validation Checkpoint
-
-After data collection, verify:
-
-- At least 1 issue was returned. If 0: display "Sprint '{target_sprint_name}' returned no issues." STOP.
-
 ## Step 5: Validate Cached Data
 
 ```bash
-wc -l agents/sprint-planning-analysis/data/cache/sprint-issues.csv
+wc -l agents/sprint-planning-analysis/data/cache/sprint-issues.csv && test -f agents/sprint-planning-analysis/data/cache/velocity-summary.json && echo "VELOCITY_OK" || echo "VELOCITY_MISSING"
 ```
 
-- Must have at least 2 lines (header + 1 data row)
-- If fewer: display "No sprint data in cache." Ask user how to proceed. Do NOT run the script.
-
-Also verify velocity-summary.json exists:
-
-```bash
-test -f agents/sprint-planning-analysis/data/cache/velocity-summary.json && echo "OK" || echo "MISSING"
-```
+- CSV must have at least 2 lines (header + 1 data row). If fewer or missing: display "No sprint data in cache." STOP.
+- velocity-summary.json must exist. If VELOCITY_MISSING: display "Velocity data missing." STOP.
 
 ## Step 6: Generate Report
 

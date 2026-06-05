@@ -308,9 +308,7 @@ export function loadVelocitySummary(jsonPath: string): VelocitySummary {
   return JSON.parse(readFileSync(jsonPath, "utf-8")) as VelocitySummary;
 }
 
-export function loadVelocityHistory(
-  jsonPath: string,
-): VelocityHistory | null {
+export function loadVelocityHistory(jsonPath: string): VelocityHistory | null {
   if (!existsSync(jsonPath)) return null;
   return JSON.parse(readFileSync(jsonPath, "utf-8")) as VelocityHistory;
 }
@@ -320,9 +318,7 @@ export function computeIndividualVelocityAverages(
   velocityN2: VelocitySummary | null,
   config: SprintConfig,
 ): IndividualVelocityAverage[] {
-  const n1ByName = new Map(
-    velocityN1.by_engineer.map((e) => [e.name, e]),
-  );
+  const n1ByName = new Map(velocityN1.by_engineer.map((e) => [e.name, e]));
   const n2ByName = velocityN2
     ? new Map(velocityN2.by_engineer.map((e) => [e.name, e]))
     : null;
@@ -369,9 +365,7 @@ export function computeIndividualVelocityAverages(
         avg_items_completed: avgItems,
       };
     })
-    .sort(
-      (a, b) => (b.avg_sp_completed ?? 0) - (a.avg_sp_completed ?? 0),
-    );
+    .sort((a, b) => (b.avg_sp_completed ?? 0) - (a.avg_sp_completed ?? 0));
 }
 
 function loadConfig(configPath: string): SprintConfig {
@@ -467,6 +461,7 @@ export function computeCapacityVsVelocity(
   issues: SprintIssue[],
   velocity: VelocitySummary,
   config: SprintConfig,
+  velocityN2?: VelocitySummary | null,
 ): CapacityAnalysis {
   const totalSp = round2(issues.reduce((s, i) => s + (i.story_points ?? 0), 0));
   const totalIssues = issues.length;
@@ -496,11 +491,16 @@ export function computeCapacityVsVelocity(
   const effectiveSp = round2(totalSp - deadSp);
   const effectiveIssues = totalIssues - deadItems.length;
 
+  const baselineSp = velocityN2
+    ? round2((velocity.completed_sp + velocityN2.completed_sp) / 2)
+    : velocity.completed_sp;
+  const baselineIssues = velocityN2
+    ? Math.round((velocity.completed_issues + velocityN2.completed_issues) / 2)
+    : velocity.completed_issues;
+
   const deltaPct =
-    velocity.completed_sp > 0
-      ? Math.round(
-          ((effectiveSp - velocity.completed_sp) / velocity.completed_sp) * 100,
-        )
+    baselineSp > 0
+      ? Math.round(((effectiveSp - baselineSp) / baselineSp) * 100)
       : 0;
 
   let status: "ok" | "warning" | "overcommitted";
@@ -515,8 +515,8 @@ export function computeCapacityVsVelocity(
   return {
     target_sp: totalSp,
     target_issues: totalIssues,
-    velocity_sp: velocity.completed_sp,
-    velocity_issues: velocity.completed_issues,
+    velocity_sp: baselineSp,
+    velocity_issues: baselineIssues,
     effective_sp: effectiveSp,
     effective_issues: effectiveIssues,
     dead_items: deadItems,
@@ -551,8 +551,7 @@ export function computeLoadDistribution(
     const prev = velByEngineer.get(t.name);
     const avg = avgByName?.get(t.name);
     const baselineSp = avg?.avg_sp_completed ?? prev?.sp_completed ?? 0;
-    const baselineCompleted =
-      avg?.avg_items_completed ?? prev?.completed ?? 0;
+    const baselineCompleted = avg?.avg_items_completed ?? prev?.completed ?? 0;
     const baselineSprints = avg?.sprints_available ?? (prev ? 1 : 0);
     const totalTargetSp = t.sp_completed + t.sp_remaining;
 
@@ -561,9 +560,7 @@ export function computeLoadDistribution(
       loadRatio = round2(totalTargetSp / baselineSp);
     }
 
-    const hasPrevData = avg
-      ? avg.sprints_available > 0
-      : prev !== undefined;
+    const hasPrevData = avg ? avg.sprints_available > 0 : prev !== undefined;
 
     let risk: "ok" | "heavy" | "extreme" | "absent" | "new";
     if (t.assigned === 0) {
@@ -727,8 +724,8 @@ export function computePlanningHygiene(
 
   const resolveName = (i: SprintIssue): string =>
     (accountIdToName?.get(i.assignee_id) ??
-    displayToName?.get(i.assignee_name.toLowerCase()) ??
-    i.assignee_name) ||
+      displayToName?.get(i.assignee_name.toLowerCase()) ??
+      i.assignee_name) ||
     "";
 
   for (const i of issues) {
@@ -816,16 +813,22 @@ export function generateRecommendations(report: PlanningReport): string[] {
 
   const extremeLoad = report.load.filter((l) => l.risk === "extreme");
   for (const eng of extremeLoad) {
+    const baselineLabel =
+      eng.baseline_sprints >= 2 ? "2-sprint avg" : "completed last sprint";
     recs.push(
-      `**Rebalance ${eng.name}'s load** — ${eng.target_sp} SP assigned vs. ${eng.prev_sp_completed} SP completed last sprint (${eng.load_ratio !== null ? eng.load_ratio + "x" : "no baseline"})`,
+      `**Rebalance ${eng.name}'s load** — ${eng.target_sp} SP assigned vs. ${eng.prev_sp_completed} SP ${baselineLabel} (${eng.load_ratio !== null ? eng.load_ratio + "x" : "no baseline"})`,
     );
   }
 
   const heavyLoad = report.load.filter((l) => l.risk === "heavy");
   if (heavyLoad.length > 0) {
     const names = heavyLoad.map((l) => l.name).join(", ");
+    const anyAveraged = heavyLoad.some((l) => l.baseline_sprints >= 2);
+    const baselineLabel = anyAveraged
+      ? "2-sprint avg output"
+      : "previous sprint output";
     recs.push(
-      `**Review load for ${names}** — assigned > 2x their previous sprint output`,
+      `**Review load for ${names}** — assigned > 2x their ${baselineLabel}`,
     );
   }
 
@@ -898,9 +901,7 @@ export function generateEngineerProposals(
     carryoverByEngineer.set(c.assignee, list);
   }
 
-  const avgByName = new Map(
-    report.individualVelocity.map((v) => [v.name, v]),
-  );
+  const avgByName = new Map(report.individualVelocity.map((v) => [v.name, v]));
 
   return report.load
     .filter((l) => l.target_assigned > 0)
@@ -909,11 +910,7 @@ export function generateEngineerProposals(
       const avg = avgByName.get(l.name);
       const avgSp = avg?.avg_sp_completed ?? null;
 
-      if (
-        l.risk === "extreme" &&
-        avgSp !== null &&
-        avgSp > 0
-      ) {
+      if (l.risk === "extreme" && avgSp !== null && avgSp > 0) {
         const trimTo = Math.round(avgSp);
         const trimBy = Math.round(l.target_sp - avgSp);
         actions.push(
@@ -931,9 +928,7 @@ export function generateEngineerProposals(
       const unsized = hygiene.filter((h) => h.kind === "no_sp");
       if (unsized.length > 0) {
         const keys = unsized.map((h) => h.key).join(", ");
-        actions.push(
-          `Size ${unsized.length} unsized item(s): ${keys}`,
-        );
+        actions.push(`Size ${unsized.length} unsized item(s): ${keys}`);
       }
 
       const oversized = hygiene.filter((h) => h.kind === "oversized");
@@ -1006,9 +1001,7 @@ export function formatReport(
   ln();
   ln(`Analysis generated: ${date}`);
   if (velocityN2) {
-    const avgSp = round2(
-      (velocity.completed_sp + velocityN2.completed_sp) / 2,
-    );
+    const avgSp = round2((velocity.completed_sp + velocityN2.completed_sp) / 2);
     ln(
       `Velocity baseline: ${velocityN2.sprint_name}, ${velocity.sprint_name} (2-sprint avg: ${spStr(avgSp)} SP completed)`,
     );
@@ -1070,7 +1063,10 @@ export function formatReport(
   ln();
 
   // Load Distribution
-  const maxBaseline = Math.max(...report.load.map((l) => l.baseline_sprints), 0);
+  const maxBaseline = Math.max(
+    ...report.load.map((l) => l.baseline_sprints),
+    0,
+  );
   const baselineLabel = maxBaseline >= 2 ? "Avg" : "Prev";
   ln("## Load Distribution");
   ln();
@@ -1266,8 +1262,7 @@ export function formatReport(
                 : "OK";
       const avgStr =
         p.avg_sp !== null ? `${spStr(p.avg_sp)} SP avg` : "no baseline";
-      const ratioStr =
-        p.load_ratio !== null ? ` | ${p.load_ratio}x` : "";
+      const ratioStr = p.load_ratio !== null ? ` | ${p.load_ratio}x` : "";
       ln(`### ${p.name} (${p.role.toUpperCase()}) — ${riskLabel}`);
       ln();
       ln(
@@ -1317,9 +1312,7 @@ function printPlanningContext(
 
   console.log(`\n${BOLD}--- Planning Context ---${RESET}`);
   if (velocityN2) {
-    const avgSp = round2(
-      (velocity.completed_sp + velocityN2.completed_sp) / 2,
-    );
+    const avgSp = round2((velocity.completed_sp + velocityN2.completed_sp) / 2);
     console.log(
       `  Velocity baseline: 2-sprint avg (${velocityN2.sprint_name}: ${spStr(velocityN2.completed_sp)} SP, ${velocity.sprint_name}: ${spStr(velocity.completed_sp)} SP, avg: ${spStr(avgSp)} SP)`,
     );
@@ -1374,10 +1367,7 @@ function parseArgs(argv: string[]): Record<string, string> {
   return args;
 }
 
-function deriveN2SprintName(
-  sprintName: string,
-  prefix: string,
-): string | null {
+function deriveN2SprintName(sprintName: string, prefix: string): string | null {
   const suffix = sprintName.slice(prefix.length).trim();
   const num = parseInt(suffix, 10);
   if (isNaN(num) || num <= 2) return null;
@@ -1454,7 +1444,12 @@ function main() {
   );
 
   // Run analysis
-  const capacity = computeCapacityVsVelocity(issues, velocity, config);
+  const capacity = computeCapacityVsVelocity(
+    issues,
+    velocity,
+    config,
+    velocityN2,
+  );
   const load = computeLoadDistribution(
     issues,
     velocity,

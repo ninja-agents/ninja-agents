@@ -373,3 +373,4 @@ Read and display `agents/sprint-planning-analysis/data/output/sprint-planning-an
 12. Always check `velocity-history.json` before querying Jira for past sprints — only fetch what isn't already cached.
 13. Never delete `velocity-history.json` — it persists across runs. Only delete `sprint-issues.csv` and `velocity-summary.json` per run.
 14. Always assess the past 2 sprints for individual velocity averages. The script derives the N-2 sprint name from the target sprint number automatically.
+15. The script generates an "Individual DM Recommendations" section with copy-paste messages for each engineer showing their SP delta (add/remove) relative to their 2-sprint average. This section is always included in the report.

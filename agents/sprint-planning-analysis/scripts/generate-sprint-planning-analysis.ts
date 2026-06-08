@@ -1276,6 +1276,42 @@ export function formatReport(
     }
   }
 
+  // Individual DM Recommendations
+  if (report.engineerProposals.length > 0) {
+    ln("## Individual DM Recommendations");
+    ln();
+    ln(
+      "Copy-paste messages for each team member with their specific SP adjustment:",
+    );
+    ln();
+    for (const p of report.engineerProposals) {
+      if (p.avg_sp === null) continue;
+      const delta = Math.round(p.target_sp - p.avg_sp);
+      const direction = delta > 0 ? "Remove" : "Add";
+      const absDelta = Math.abs(delta);
+      const targetSp = Math.round(p.avg_sp);
+      const roleLabel = p.role === "qe" ? "QA coverage" : "work";
+
+      ln("---");
+      ln();
+      ln(`**${p.name}** — ${direction} ~${absDelta} SP`);
+      if (delta > 0) {
+        ln(
+          `> Hey ${p.name.split(" ")[0]}, looking at sprint planning — you're currently loaded with ${p.target_items} items / ${p.target_sp} SP, but your 2-sprint average is ${targetSp} SP. I'd recommend trimming ~${absDelta} SP to get closer to your capacity. Target: ~${targetSp} SP of ${roleLabel}.`,
+        );
+      } else if (delta < 0) {
+        ln(
+          `> Hey ${p.name.split(" ")[0]}, you're planned for ${p.target_sp} SP / ${p.target_items} items, under your 2-sprint average of ${targetSp} SP. You have headroom to pick up ~${absDelta} SP if capacity allows. Your call — just flagging the room.`,
+        );
+      } else {
+        ln(
+          `> Hey ${p.name.split(" ")[0]}, your ${p.target_sp} SP / ${p.target_items} items matches your 2-sprint average of ${targetSp} SP. Load looks right.`,
+        );
+      }
+      ln();
+    }
+  }
+
   // Warnings
   if (warnings.length > 0) {
     ln("## Data Quality Notes");

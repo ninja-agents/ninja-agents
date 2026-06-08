@@ -40,6 +40,7 @@ A markdown report saved to `agents/sprint-planning-analysis/data/output/sprint-p
 - **Carryover from Previous Sprint** — items carried over with priority and status (script-generated)
 - **Planning Hygiene** — unassigned, unestimated, already-done, oversized items (script-generated)
 - **Recommendations** — actionable items for the planning session (script-generated)
+- **Individual DM Recommendations** — copy-paste messages per engineer with SP add/remove amounts (script-generated)
 
 ## Critical Rules
 

@@ -472,13 +472,7 @@ export function filterInProgressJira(
   tickets: JiraItem[],
   sprintPattern?: RegExp,
 ): JiraItem[] {
-  const excludedStatuses = new Set([
-    "Done",
-    "Closed",
-    "Resolved",
-    "Verified",
-    "New",
-  ]);
+  const excludedStatuses = new Set(["Done", "Closed", "Resolved", "Verified"]);
   const devStatuses = new Set([
     "ASSIGNED",
     "In Progress",

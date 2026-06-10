@@ -359,10 +359,15 @@ describe("filterCompletedJira", () => {
 // ---------------------------------------------------------------------------
 
 describe("filterInProgressJira", () => {
-  it("excludes Done/Closed/Resolved/Verified/New statuses", () => {
-    const statuses = ["Done", "Closed", "Resolved", "Verified", "New"];
+  it("excludes Done/Closed/Resolved/Verified statuses", () => {
+    const statuses = ["Done", "Closed", "Resolved", "Verified"];
     const tickets = statuses.map((s) => makeJira({ status: s }));
     expect(filterInProgressJira(tickets)).toHaveLength(0);
+  });
+
+  it("includes New status (not-started sprint items)", () => {
+    const tickets = [makeJira({ status: "New" })];
+    expect(filterInProgressJira(tickets)).toHaveLength(1);
   });
 
   it("includes In Progress status", () => {
@@ -547,7 +552,7 @@ describe("determineProduct", () => {
         ocpbugsRe,
         ticketIdRe,
       ),
-    ).toBe("Console Plugins");
+    ).toBe("Networking Console Plugins");
   });
 
   it.skipIf(!config)("maps PR by repo", () => {

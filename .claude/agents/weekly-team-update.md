@@ -159,7 +159,18 @@ Header: `key,summary,status,resolution,resolutiondate,issuetype,priority,assigne
 | `qa_contact_name` | customfield_10470.displayName or empty |                                      |
 | `sprint_name`     | active sprint name or empty            | see extraction rule below            |
 
-**Sprint name extraction**: `customfield_10020` returns an array of sprint objects. Find the sprint with `state: "active"` and use its `name` field. If no active sprint exists, use empty string. Example: `"MIG-NET-Frontend Sprint 5"`.
+**Sprint name extraction** (CRITICAL — tickets with empty sprint_name get filtered out of the report):
+
+`customfield_10020` returns an array of sprint objects like:
+```json
+[{"id": 67465, "name": "MIG-NET-Frontend Sprint 3", "state": "active", "boardId": 11806, ...}]
+```
+
+1. Find the object with `"state": "active"` and use its `name` field
+2. If no active sprint exists, check for `"state": "future"` and use that
+3. Only use empty string if the array is null/empty or contains only closed sprints
+
+Every ticket returned by the Jira query MUST have `sprint_name` populated if `customfield_10020` contains a non-closed sprint. Do NOT leave it empty when sprint data exists in the response.
 
 Save ALL tickets from the query — do NOT filter by team membership. The Python script handles team matching via config.
 
@@ -176,6 +187,7 @@ wc -l agents/weekly-team-update/data/cache/jira-tickets.csv
 
 - github-prs.csv must have >= 10 data rows (not counting header)
 - jira-tickets.csv must have >= 1 data row
+- Sprint name spot-check: run `grep -c ',$' agents/weekly-team-update/data/cache/jira-tickets.csv` to count rows with empty sprint_name (trailing comma). If > 50% of rows have empty sprint_name, re-examine the Jira responses — `customfield_10020` likely has sprint data that wasn't extracted.
 
 If either fails: display the issue, ask user how to proceed. Do NOT run the script with empty data.
 

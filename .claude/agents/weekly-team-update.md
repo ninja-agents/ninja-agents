@@ -162,6 +162,7 @@ Header: `key,summary,status,resolution,resolutiondate,issuetype,priority,assigne
 **Sprint name extraction** (CRITICAL — tickets with empty sprint_name get filtered out of the report):
 
 `customfield_10020` returns an array of sprint objects like:
+
 ```json
 [{"id": 67465, "name": "MIG-NET-Frontend Sprint 3", "state": "active", "boardId": 11806, ...}]
 ```

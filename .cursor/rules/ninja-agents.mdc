@@ -9,7 +9,16 @@ AI agents for engineering teams. Each agent is self-contained under `agents/`. F
 
 ## Workflows
 
-Invoke by name (`@weekly-team-update`) or describe what you need. Each rule in `.cursor/rules/` points to its full spec.
+Invoke by name or describe what you need. Each rule in `.cursor/rules/` points to its full spec.
+
+| Workflow | Description |
+| -------- | ----------- |
+| `@weekly-team-update` | Weekly team report for leadership |
+| `@sprint-review` | Sprint retrospective analysis |
+| `@sprint-planning-analysis` | Sprint planning health-check |
+| `@repo-contextification` | Audit repo docs and AI-readiness |
+| `@jira-qe-story` | Generate QE story from dev Jira story |
+| `@jira-sprint-tickets-updater` | Transition sprint tickets based on linked PR status |
 
 ## Key Rules
 

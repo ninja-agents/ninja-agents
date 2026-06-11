@@ -7,5 +7,6 @@
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["agents/*/scripts/**/*.ts"]
+  "include": ["agents/*/scripts/**/*.ts"],
+  "references": [{ "path": "agents/jira-sprint-tickets-updater" }]
 }

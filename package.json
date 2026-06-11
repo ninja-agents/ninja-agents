@@ -20,7 +20,10 @@
     "sprint-planning-analysis:test": "vitest run --dir agents/sprint-planning-analysis",
     "jira-qe-story:preview": "tsx agents/jira-qe-story/scripts/format-qe-preview.ts",
     "jira-qe-story:create": "tsx agents/jira-qe-story/scripts/create-jira-issue.ts",
-    "jira-qe-story:test": "vitest run --dir agents/jira-qe-story"
+    "jira-qe-story:test": "vitest run --dir agents/jira-qe-story",
+    "jira-sprint-tickets-updater:generate": "tsx agents/jira-sprint-tickets-updater/scripts/generate-ticket-updates.ts",
+    "jira-sprint-tickets-updater:validate": "tsx agents/jira-sprint-tickets-updater/scripts/validate-output.ts",
+    "jira-sprint-tickets-updater:test": "vitest run --dir agents/jira-sprint-tickets-updater"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

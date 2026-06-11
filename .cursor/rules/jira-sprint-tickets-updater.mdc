@@ -1,0 +1,14 @@
+---
+description: "Transition Jira sprint tickets based on linked GitHub PR status. Use when the user asks to update sprint tickets, transition tickets, or sync ticket status from PRs."
+alwaysApply: false
+---
+
+# Jira Sprint Tickets Updater
+
+Read `.claude/agents/jira-sprint-tickets-updater.md` and follow the complete workflow described there.
+
+The agent spec contains all steps, MCP tool call examples, CSV schemas, validation checkpoints, style guides, and rules. It is the single source of truth for this workflow.
+
+Ignore the YAML frontmatter fields `model` and `memory` — those are Claude Code-specific and have no effect in Cursor.
+
+For best results, use Claude Opus or an equivalent model in Cursor settings.

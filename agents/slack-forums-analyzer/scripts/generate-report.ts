@@ -32,11 +32,37 @@ interface Thread {
   channel: string;
 }
 
+interface ThreadJson {
+  channel: string;
+  channelId: string;
+  threadTs: string;
+  date: string;
+  text: string;
+  replyCount: number;
+  category: string;
+  jiraTickets: string[];
+  githubUrls: string[];
+  slackUrl: string;
+}
+
+interface ReportJson {
+  generated: string;
+  channels: string[];
+  period: number;
+  totalMessages: number;
+  threads: ThreadJson[];
+  uncategorizedThreads: ThreadJson[];
+  allJiraTickets: string[];
+  allGithubUrls: string[];
+}
+
 function parseArgs(argv: string[]): Record<string, string> {
   const args: Record<string, string> = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--help") {
-      console.log("Usage: generate-report.ts --config <path> --output <path>");
+      console.log(
+        "Usage: generate-report.ts --config <path> --output <path> [--format json|md]",
+      );
       process.exit(0);
     }
     if (argv[i].startsWith("--") && i + 1 < argv.length) {
@@ -190,32 +216,22 @@ function categorize(
   return { categories, uncategorized };
 }
 
-function extractJiraTickets(messages: Message[]): string[] {
-  const ticketPattern = /\b(OCPBUGS-\d+|CNV-\d+|RHEL-\d+|MTV-\d+)\b/g;
-  const tickets = new Set<string>();
-  for (const msg of messages) {
-    const matches = msg.text.match(ticketPattern);
-    if (matches) {
-      matches.forEach((t) => tickets.add(t));
-    }
-  }
-  return [...tickets].sort();
+function extractJiraTickets(text: string): string[] {
+  const ticketPattern =
+    /\b(OCPBUGS-\d+|CNV-\d+|RHEL-\d+|MTV-\d+|CONSOLE-\d+)\b/g;
+  const matches = text.match(ticketPattern);
+  return matches ? [...new Set(matches)] : [];
 }
 
-function extractGitHubUrls(messages: Message[]): Map<string, string> {
+function extractGitHubUrls(text: string): string[] {
   const ghPattern =
     /<?(https:\/\/github\.com\/[^\s|>]+(?:\/pull\/\d+|\/issues\/\d+))[|>]?/g;
-  const urls = new Map<string, string>();
-  for (const msg of messages) {
-    const matches = msg.text.matchAll(ghPattern);
-    for (const match of matches) {
-      const url = match[1] ?? match[0];
-      if (!urls.has(url)) {
-        urls.set(url, msg.date);
-      }
-    }
+  const urls: string[] = [];
+  const matches = text.matchAll(ghPattern);
+  for (const match of matches) {
+    urls.push(match[1] ?? match[0]);
   }
-  return urls;
+  return [...new Set(urls)];
 }
 
 function formatPreview(text: string, maxLen: number): string {
@@ -274,6 +290,67 @@ function consolidateE2eStreaks(threads: Thread[]): Thread[] {
   ].sort((a, b) => b.replyCount - a.replyCount);
 }
 
+function buildSlackUrl(channelId: string, threadTs: string): string {
+  const tsNoDot = threadTs.replace(".", "");
+  return `https://redhat.enterprise.slack.com/archives/${channelId}/p${tsNoDot}`;
+}
+
+function threadToJson(thread: Thread, category: string): ThreadJson {
+  return {
+    channel: thread.channel,
+    channelId: thread.parent.channel_id,
+    threadTs: thread.parent.thread_ts,
+    date: thread.parent.date,
+    text: thread.parent.text,
+    replyCount: thread.replyCount,
+    category,
+    jiraTickets: extractJiraTickets(thread.parent.text),
+    githubUrls: extractGitHubUrls(thread.parent.text),
+    slackUrl: buildSlackUrl(thread.parent.channel_id, thread.parent.thread_ts),
+  };
+}
+
+function generateJsonReport(
+  config: Config,
+  categories: CategoryResult[],
+  uncategorized: Message[],
+  allMessages: Message[],
+): ReportJson {
+  const allJira = new Set<string>();
+  const allGh = new Set<string>();
+  for (const msg of allMessages) {
+    extractJiraTickets(msg.text).forEach((t) => allJira.add(t));
+    extractGitHubUrls(msg.text).forEach((u) => allGh.add(u));
+  }
+
+  const threads: ThreadJson[] = [];
+  for (const cat of categories) {
+    let catThreads = cat.threads;
+    if (cat.name === "e2e-and-ci") {
+      catThreads = consolidateE2eStreaks(catThreads);
+    }
+    for (const t of catThreads) {
+      threads.push(threadToJson(t, cat.name));
+    }
+  }
+
+  const uncatThreads = groupIntoThreads(uncategorized);
+  const uncategorizedJson = uncatThreads.map((t) =>
+    threadToJson(t, "uncategorized"),
+  );
+
+  return {
+    generated: new Date().toISOString(),
+    channels: config.channels.map((c) => c.name),
+    period: config.lookback_days,
+    totalMessages: allMessages.length,
+    threads,
+    uncategorizedThreads: uncategorizedJson,
+    allJiraTickets: [...allJira].sort(),
+    allGithubUrls: [...allGh],
+  };
+}
+
 function generateExecutiveSummary(
   categories: CategoryResult[],
   jiraTickets: string[],
@@ -282,11 +359,6 @@ function generateExecutiveSummary(
   const lines: string[] = [];
   lines.push("## Executive Summary");
   lines.push("");
-
-  const bugsCategory = categories.find((c) => c.name === "bugs-and-issues");
-  const nmstateCategory = categories.find((c) => c.name === "nmstate");
-  const networkCategory = categories.find((c) => c.name === "network-ui");
-  const e2eCategory = categories.find((c) => c.name === "e2e-and-ci");
 
   const hotThreads = allMessages
     .filter((m) => m.reply_count >= 20)
@@ -298,33 +370,12 @@ function generateExecutiveSummary(
   );
   lines.push("");
 
-  if (e2eCategory && e2eCategory.messageCount > 0) {
-    const failCount = e2eCategory.threads.filter((t) =>
-      /(:failed:|nightly|failure)/i.test(t.parent.text),
-    ).length;
-    if (failCount > 0) {
+  for (const cat of categories) {
+    if (cat.messageCount > 0) {
       lines.push(
-        `- **CI Health:** ${failCount} e2e failure threads detected in #kubernetes-nmstate`,
+        `- **${cat.name}:** ${cat.messageCount} messages, ${cat.threads.length} threads`,
       );
     }
-  }
-
-  if (bugsCategory && bugsCategory.messageCount > 0) {
-    lines.push(
-      `- **Bugs/Issues:** ${bugsCategory.messageCount} messages across ${bugsCategory.threads.length} threads`,
-    );
-  }
-
-  if (nmstateCategory && nmstateCategory.messageCount > 0) {
-    lines.push(
-      `- **NMState:** ${nmstateCategory.messageCount} messages, ${nmstateCategory.threads.length} threads — active development and support discussions`,
-    );
-  }
-
-  if (networkCategory && networkCategory.messageCount > 0) {
-    lines.push(
-      `- **Network UI:** ${networkCategory.messageCount} messages, ${networkCategory.threads.length} threads — customer-facing networking issues`,
-    );
   }
 
   if (hotThreads.length > 0) {
@@ -343,7 +394,7 @@ function generateExecutiveSummary(
   return lines;
 }
 
-function generateReport(
+function generateMarkdownReport(
   config: Config,
   categories: CategoryResult[],
   uncategorized: Message[],
@@ -365,7 +416,12 @@ function generateReport(
   );
   lines.push("");
 
-  const jiraTickets = extractJiraTickets(allMessages);
+  const allJira = new Set<string>();
+  for (const msg of allMessages) {
+    extractJiraTickets(msg.text).forEach((t) => allJira.add(t));
+  }
+  const jiraTickets = [...allJira].sort();
+
   lines.push(...generateExecutiveSummary(categories, jiraTickets, allMessages));
 
   const weeks = weeklyDistribution(allMessages);
@@ -388,16 +444,19 @@ function generateReport(
     lines.push("");
   }
 
-  const ghUrls = extractGitHubUrls(allMessages);
-  if (ghUrls.size > 0) {
+  const allGh = new Set<string>();
+  for (const msg of allMessages) {
+    extractGitHubUrls(msg.text).forEach((u) => allGh.add(u));
+  }
+  if (allGh.size > 0) {
     lines.push("## GitHub PRs & Issues Mentioned");
     lines.push("");
-    for (const [url, date] of ghUrls) {
+    for (const url of allGh) {
       const shortUrl = url
         .replace("https://github.com/", "")
         .replace("/pull/", "#")
         .replace("/issues/", "#");
-      lines.push(`- [${shortUrl}](${url}) (${date})`);
+      lines.push(`- [${shortUrl}](${url})`);
     }
     lines.push("");
   }
@@ -488,6 +547,7 @@ async function main() {
     args.config ?? resolve(import.meta.dirname, "../data/config.json");
   const outputPath =
     args.output ?? resolve(import.meta.dirname, "../data/output/report.md");
+  const format = args.format ?? "md";
 
   const config = loadConfig(configPath);
   const messages = await fetchMessages(config.channels, config.lookback_days);
@@ -514,9 +574,26 @@ async function main() {
     }
   }
 
-  const report = generateReport(config, categories, uncategorized, messages);
-  writeFileSync(outputPath, report);
-  console.log(`Report written to ${outputPath}`);
+  if (format === "json") {
+    const jsonReport = generateJsonReport(
+      config,
+      categories,
+      uncategorized,
+      messages,
+    );
+    const jsonPath = outputPath.replace(/\.md$/, ".json");
+    writeFileSync(jsonPath, JSON.stringify(jsonReport, null, 2));
+    console.log(`JSON report written to ${jsonPath}`);
+  } else {
+    const report = generateMarkdownReport(
+      config,
+      categories,
+      uncategorized,
+      messages,
+    );
+    writeFileSync(outputPath, report);
+    console.log(`Report written to ${outputPath}`);
+  }
 
   if (warnings.length > 0) {
     console.warn(`\n${warnings.length} warning(s):`);

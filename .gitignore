@@ -15,6 +15,7 @@ agents/*/data/cache/*
 
 # Agent output (generated reports)
 agents/*/data/output/*.md
+agents/*/data/output/*.json
 
 # Node
 node_modules/

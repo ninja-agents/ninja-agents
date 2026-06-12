@@ -1,0 +1,48 @@
+{
+  "name": "Slack Forums Analyzer",
+  "channels": [
+    { "id": "C0EXAMPLE1", "name": "your-channel" },
+    { "id": "C0EXAMPLE2", "name": "another-channel" }
+  ],
+  "keywords": {
+    "bugs-and-issues": [
+      "OCPBUGS-",
+      "bug",
+      "regression",
+      "broken",
+      "crash",
+      "not working",
+      "flaky",
+      "vulnerability",
+      "CVE-"
+    ],
+    "feature-requests": [
+      "feature request",
+      "enhancement",
+      "RFE",
+      "would be nice",
+      "should support",
+      "proposal",
+      "new feature",
+      "use case"
+    ],
+    "e2e-and-ci": [
+      "e2e",
+      "nightly",
+      "prow",
+      "periodic-",
+      "test failure",
+      "test failing",
+      ":failed:",
+      "green CI"
+    ],
+    "customer-questions": ["IHAC", "customer", "support case"]
+  },
+  "lookback_days": 30,
+  "category_priority": [
+    "bugs-and-issues",
+    "feature-requests",
+    "e2e-and-ci",
+    "customer-questions"
+  ]
+}

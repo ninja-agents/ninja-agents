@@ -8,5 +8,8 @@
     "skipLibCheck": true
   },
   "include": ["agents/*/scripts/**/*.ts"],
-  "references": [{ "path": "agents/jira-sprint-tickets-updater" }]
+  "references": [
+    { "path": "agents/jira-sprint-tickets-updater" },
+    { "path": "agents/slack-forums-analyzer" }
+  ]
 }

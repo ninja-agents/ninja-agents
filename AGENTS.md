@@ -16,6 +16,7 @@ The repo follows a "data collector + deterministic script" pattern: the AI agent
 | [repo-contextification](agents/repo-contextification/)             | Audit repo docs and AI-readiness, interactively scaffold missing files            | [README](agents/repo-contextification/README.md)       |
 | [jira-qe-story](agents/jira-qe-story/)                             | Generate QE story from dev Jira story with acceptance criteria and test scenarios | [README](agents/jira-qe-story/README.md)               |
 | [jira-sprint-tickets-updater](agents/jira-sprint-tickets-updater/) | Transition Jira sprint tickets based on linked GitHub PR status                   | [README](agents/jira-sprint-tickets-updater/README.md) |
+| [slack-forums-analyzer](agents/slack-forums-analyzer/)             | Analyze Slack forum channels to identify UI-related topics and trends             | [README](agents/slack-forums-analyzer/README.md)       |
 
 ## IDE Support
 

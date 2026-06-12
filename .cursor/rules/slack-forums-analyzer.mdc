@@ -1,0 +1,14 @@
+---
+description: "Analyze Slack forum channels for UI-related topics. Use when the user asks for slack analysis, UI topics, or forum trends."
+alwaysApply: false
+---
+
+# Slack Forums Analyzer
+
+Read `.claude/agents/slack-forums-analyzer.md` and follow the complete workflow described there.
+
+The agent spec contains all steps, CSV schemas, validation checkpoints, style guides, and rules. It is the single source of truth for this workflow.
+
+Ignore the YAML frontmatter fields `model` and `memory` — those are Claude Code-specific and have no effect in Cursor.
+
+For best results, use Claude Opus or an equivalent model in Cursor settings.

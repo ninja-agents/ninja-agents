@@ -23,7 +23,13 @@
     "jira-qe-story:test": "vitest run --dir agents/jira-qe-story",
     "jira-sprint-tickets-updater:generate": "tsx agents/jira-sprint-tickets-updater/scripts/generate-ticket-updates.ts",
     "jira-sprint-tickets-updater:validate": "tsx agents/jira-sprint-tickets-updater/scripts/validate-output.ts",
-    "jira-sprint-tickets-updater:test": "vitest run --dir agents/jira-sprint-tickets-updater"
+    "jira-sprint-tickets-updater:test": "vitest run --dir agents/jira-sprint-tickets-updater",
+    "slack-forums-analyzer:generate": "tsx agents/slack-forums-analyzer/scripts/generate-report.ts",
+    "slack-forums-analyzer:validate": "tsx agents/slack-forums-analyzer/scripts/validate-output.ts",
+    "slack-forums-analyzer:test": "vitest run --dir agents/slack-forums-analyzer"
+  },
+  "dependencies": {
+    "@slack/web-api": "^7.17.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -1,0 +1,80 @@
+{
+  "jira": {
+    "cloud_id": "redhat.atlassian.net",
+    "board_id": 11806
+  },
+  "sprint": {
+    "name_pattern": "Test Sprint"
+  },
+  "github_link_fields": ["remote_links", "description"],
+  "protected_statuses": [
+    "MODIFIED",
+    "Dev Complete",
+    "ON_QA",
+    "Testing",
+    "Verified",
+    "Release Pending",
+    "Closed"
+  ],
+  "engineers": [],
+  "projects": {
+    "CNV": {
+      "workflows": {
+        "standard": {
+          "issue_types": ["Story", "Task", "Sub-task", "Epic", "Feature Request"],
+          "transition_rules": [
+            {
+              "from": "In Progress",
+              "to": "Dev Complete",
+              "condition": "all_links_resolved",
+              "transition_id": "51",
+              "description": "All linked PRs merged / issues closed"
+            }
+          ]
+        },
+        "bugzilla": {
+          "issue_types": ["Bug", "Vulnerability"],
+          "transition_rules": [
+            {
+              "from": "ASSIGNED",
+              "to": "POST",
+              "condition": "has_active_link",
+              "transition_id": "31",
+              "description": "PR opened or issue created"
+            },
+            {
+              "from": "POST",
+              "to": "MODIFIED",
+              "condition": "all_links_resolved",
+              "transition_id": "91",
+              "description": "All linked PRs merged / issues closed"
+            }
+          ]
+        }
+      }
+    },
+    "OCPBUGS": {
+      "workflows": {
+        "bugzilla": {
+          "issue_types": ["Bug", "Vulnerability"],
+          "transition_rules": [
+            {
+              "from": "ASSIGNED",
+              "to": "POST",
+              "condition": "has_active_link",
+              "transition_id": "31",
+              "description": "PR opened or issue created"
+            },
+            {
+              "from": "POST",
+              "to": "MODIFIED",
+              "condition": "all_links_resolved",
+              "transition_id": "91",
+              "description": "All linked PRs merged / issues closed"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

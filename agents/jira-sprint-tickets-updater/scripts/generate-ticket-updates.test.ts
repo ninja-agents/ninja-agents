@@ -9,7 +9,7 @@ function runScript(csvContent: string, sprint = "Test"): string {
     import.meta.dirname,
     "../data/output/test-output.md",
   );
-  const configPath = resolve(import.meta.dirname, "../data/config.json");
+  const configPath = resolve(import.meta.dirname, "../data/test-config.json");
   const csvPath = resolve(cacheDir, "jira-tickets.csv");
   writeFileSync(csvPath, csvContent);
   execFileSync(
@@ -34,7 +34,7 @@ function runScript(csvContent: string, sprint = "Test"): string {
 describe("generate-ticket-updates", () => {
   describe("config loading", () => {
     it("loads a valid config file with project-based structure", () => {
-      const configPath = resolve(import.meta.dirname, "../data/config.json");
+      const configPath = resolve(import.meta.dirname, "../data/test-config.json");
       const raw = readFileSync(configPath, "utf-8");
       const config = JSON.parse(raw) as {
         jira: { cloud_id: string; board_id: number };
@@ -46,7 +46,7 @@ describe("generate-ticket-updates", () => {
     });
 
     it("every transition rule has required fields", () => {
-      const configPath = resolve(import.meta.dirname, "../data/config.json");
+      const configPath = resolve(import.meta.dirname, "../data/test-config.json");
       const raw = readFileSync(configPath, "utf-8");
       const config = JSON.parse(raw) as {
         projects: Record<

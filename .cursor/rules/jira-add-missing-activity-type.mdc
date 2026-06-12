@@ -1,0 +1,14 @@
+---
+description: "Add missing Activity Type to completed Jira tickets. Use when the user asks to fill activity type, classify tickets, or set activity type on Jira issues."
+alwaysApply: false
+---
+
+# Jira Add Missing Activity Type
+
+Read `.claude/agents/jira-add-missing-activity-type.md` and follow the complete workflow described there.
+
+The agent spec contains all steps, MCP tool call examples, CSV schemas, validation checkpoints, style guides, and rules. It is the single source of truth for this workflow.
+
+Ignore the YAML frontmatter fields `model` and `memory` — those are Claude Code-specific and have no effect in Cursor.
+
+For best results, use Claude Opus or an equivalent model in Cursor settings.

@@ -1,0 +1,109 @@
+{
+  "jira": {
+    "cloud_id": "redhat.atlassian.net",
+    "base_url": "https://redhat.atlassian.net",
+    "user_email": "",
+    "jql": "filter=91323 and statusCategory = Done and \"Activity Type[Dropdown]\" is EMPTY",
+    "activity_type_field": "customfield_10464"
+  },
+  "classification_rules": [
+    {
+      "activity_type": {
+        "value": "Security & Compliance",
+        "id": "10609"
+      },
+      "match": {
+        "labels": ["SecurityTracking", "security", "compliance", "cve"],
+        "keywords": ["CVE", "security", "vulnerability", "compliance", "FIPS"]
+      }
+    },
+    {
+      "activity_type": {
+        "value": "Incidents & Support",
+        "id": "10607"
+      },
+      "match": {
+        "labels": [
+          "customer-escalation",
+          "Escalation",
+          "incident",
+          "support",
+          "Triaged"
+        ],
+        "keywords": [
+          "incident",
+          "customer",
+          "escalation",
+          "support case",
+          "CEE"
+        ]
+      }
+    },
+    {
+      "activity_type": {
+        "value": "Associate Wellness & Development",
+        "id": "10604"
+      },
+      "match": {
+        "labels": ["training", "onboarding", "learning", "documentation"],
+        "keywords": [
+          "training",
+          "onboarding",
+          "learning",
+          "hackathon",
+          "enablement"
+        ]
+      }
+    },
+    {
+      "activity_type": {
+        "value": "Future Sustainability",
+        "id": "10606"
+      },
+      "match": {
+        "labels": [
+          "tech-debt",
+          "refactor",
+          "infrastructure",
+          "ci-cd",
+          "automation"
+        ],
+        "keywords": [
+          "tech debt",
+          "refactor",
+          "infrastructure",
+          "CI/CD",
+          "automation",
+          "upgrade",
+          "migration",
+          "deprecat",
+          "dev-helper",
+          "agent",
+          "skill"
+        ]
+      }
+    },
+    {
+      "activity_type": {
+        "value": "Quality / Stability / Reliability",
+        "id": "10608"
+      },
+      "match": {
+        "issue_types": ["Bug"],
+        "labels": ["flaky", "regression", "test", "stability"],
+        "keywords": [
+          "flaky",
+          "regression",
+          "test",
+          "stability",
+          "reliability",
+          "fix"
+        ]
+      }
+    }
+  ],
+  "default_activity_type": {
+    "value": "Product / Portfolio Work",
+    "id": "10610"
+  }
+}

@@ -22,6 +22,7 @@ interface Config {
   jira: { cloud_id: string; board_id: number };
   sprint: { name_pattern: string };
   github_link_fields: string[];
+  protected_statuses: string[];
   projects: Record<string, ProjectConfig>;
 }
 
@@ -40,11 +41,13 @@ interface TicketRow {
 interface Transition {
   key: string;
   summary: string;
+  assignee: string;
   from_status: string;
   to_status: string;
   transition_id: string;
   reason: string;
   github_url: string;
+  link_count: number;
 }
 
 function parseArgs(argv: string[]): Record<string, string> {
@@ -52,7 +55,7 @@ function parseArgs(argv: string[]): Record<string, string> {
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--help") {
       console.log(
-        "Usage: generate-ticket-updates.ts --config <path> --cache <dir> --output <path>",
+        "Usage: generate-ticket-updates.ts --config <path> --cache <dir> --output <path> [--sprint <name>]",
       );
       process.exit(0);
     }
@@ -79,9 +82,15 @@ function parseCsv(content: string): TicketRow[] {
     const values: string[] = [];
     let current = "";
     let inQuotes = false;
-    for (const char of line) {
+    for (let ci = 0; ci < line.length; ci++) {
+      const char = line[ci];
       if (char === '"') {
-        inQuotes = !inQuotes;
+        if (inQuotes && line[ci + 1] === '"') {
+          current += '"';
+          ci++;
+        } else {
+          inQuotes = !inQuotes;
+        }
       } else if (char === "," && !inQuotes) {
         values.push(current);
         current = "";
@@ -119,6 +128,10 @@ function findMatchingRules(
   return [];
 }
 
+function escapeMarkdownCell(text: string): string {
+  return text.replace(/\|/g, "\\|");
+}
+
 function isResolved(state: string): boolean {
   return state === "merged" || state === "closed";
 }
@@ -127,30 +140,66 @@ function isActive(state: string): boolean {
   return state === "open";
 }
 
-function evaluateCondition(condition: string, states: string[]): boolean {
+function evaluateCondition(
+  condition: string,
+  states: string[],
+  urls: string[],
+): boolean {
   switch (condition) {
     case "all_links_resolved":
       return states.length > 0 && states.every(isResolved);
     case "has_active_link":
       return states.some(isActive);
+    case "has_open_pr":
+      return urls.some(
+        (url, i) => url.includes("/pull/") && states[i] === "open",
+      );
     default:
       return false;
   }
 }
 
+interface SkippedTicket {
+  ticket: TicketRow;
+  reason: string;
+}
+
 function buildTransitions(
   tickets: TicketRow[],
   config: Config,
-): { transitions: Transition[]; skipped: TicketRow[] } {
+): { transitions: Transition[]; skipped: SkippedTicket[] } {
   const transitions: Transition[] = [];
-  const skipped: TicketRow[] = [];
+  const skipped: SkippedTicket[] = [];
+
+  const protectedStatuses = new Set(config.protected_statuses ?? []);
 
   for (const ticket of tickets) {
+    if (protectedStatuses.has(ticket.status)) {
+      skipped.push({
+        ticket,
+        reason: `protected status "${ticket.status}" — cannot be transitioned`,
+      });
+      continue;
+    }
+
     const projectKey = extractProjectKey(ticket.key);
     const rules = findMatchingRules(config, projectKey, ticket.issuetype);
 
     if (rules.length === 0) {
-      skipped.push(ticket);
+      const project = config.projects[projectKey];
+      const reason = !project
+        ? `project "${projectKey}" not in config`
+        : `no workflow for issue type "${ticket.issuetype}"`;
+      skipped.push({ ticket, reason });
+      continue;
+    }
+
+    const statusMatch = rules.some((r) => r.from === ticket.status);
+    if (!statusMatch) {
+      skipped.push({
+        ticket,
+        reason: `status "${ticket.status}" not in rules`,
+      });
       continue;
     }
 
@@ -162,7 +211,15 @@ function buildTransitions(
       : [];
 
     if (urls.length === 0) {
-      skipped.push(ticket);
+      skipped.push({ ticket, reason: "no linked GitHub PR/issue" });
+      continue;
+    }
+
+    if (states.length === 0 || states.length !== urls.length) {
+      skipped.push({
+        ticket,
+        reason: `GitHub state data incomplete (${String(urls.length)} URLs, ${String(states.length)} states)`,
+      });
       continue;
     }
 
@@ -170,16 +227,18 @@ function buildTransitions(
     for (const rule of rules) {
       if (
         ticket.status === rule.from &&
-        evaluateCondition(rule.condition, states)
+        evaluateCondition(rule.condition, states, urls)
       ) {
         transitions.push({
           key: ticket.key,
           summary: ticket.summary,
+          assignee: ticket.assignee,
           from_status: ticket.status,
           to_status: rule.to,
           transition_id: rule.transition_id,
           reason: rule.description,
           github_url: urls[0],
+          link_count: urls.length,
         });
         matched = true;
         break;
@@ -187,15 +246,31 @@ function buildTransitions(
     }
 
     if (!matched) {
-      skipped.push(ticket);
+      skipped.push({
+        ticket,
+        reason: `condition not met (links: ${states.join(", ") || "none"})`,
+      });
     }
   }
 
   return { transitions, skipped };
 }
 
-function formatOutput(transitions: Transition[], skipped: TicketRow[]): string {
-  const lines: string[] = ["# Proposed Ticket Transitions", ""];
+function formatOutput(
+  transitions: Transition[],
+  skipped: SkippedTicket[],
+  sprintName?: string,
+): string {
+  const header = sprintName
+    ? `# Proposed Ticket Transitions — ${sprintName}`
+    : "# Proposed Ticket Transitions";
+  const lines: string[] = [header, ""];
+
+  const total = transitions.length + skipped.length;
+  lines.push(
+    `${String(total)} tickets analyzed. **${String(transitions.length)}** to transition, **${String(skipped.length)}** skipped.`,
+    "",
+  );
 
   if (transitions.length === 0) {
     lines.push(
@@ -204,34 +279,44 @@ function formatOutput(transitions: Transition[], skipped: TicketRow[]): string {
     lines.push("");
   } else {
     lines.push(
-      `**${String(transitions.length)} ticket(s) to transition:**`,
-      "",
+      "| Ticket | Assignee | Current Status | Target Status | Reason | Link |",
     );
-    lines.push("| Ticket | Current Status | Target Status | Reason | Link |");
-    lines.push("| ------ | -------------- | ------------- | ------ | ---- |");
+    lines.push(
+      "| ------ | -------- | -------------- | ------------- | ------ | ---- |",
+    );
     for (const t of transitions) {
-      const link = t.github_url ? `[link](${t.github_url})` : "—";
+      const linkLabel =
+        t.link_count > 1
+          ? `[${String(t.link_count)} links](${t.github_url})`
+          : `[link](${t.github_url})`;
+      const link = t.github_url ? linkLabel : "—";
+      const assignee = escapeMarkdownCell(t.assignee || "—");
+      const reason = escapeMarkdownCell(t.reason);
       lines.push(
-        `| ${t.key} | ${t.from_status} | ${t.to_status} | ${t.reason} | ${link} |`,
+        `| ${t.key} | ${assignee} | ${t.from_status} | ${t.to_status} | ${reason} | ${link} |`,
       );
     }
     lines.push("");
   }
 
   if (skipped.length > 0) {
-    lines.push(`**${String(skipped.length)} ticket(s) skipped:**`, "");
+    const groups = new Map<string, string[]>();
     for (const s of skipped) {
-      const hasLinks = s.github_urls && s.github_urls.length > 0;
-      const projectKey = extractProjectKey(s.key);
-      let reason: string;
-      if (!hasLinks) {
-        reason = "no linked GitHub PR/issue";
-      } else if (!projectKey) {
-        reason = "unknown project";
+      const existing = groups.get(s.reason) ?? [];
+      existing.push(`${s.ticket.key} (${s.ticket.status})`);
+      groups.set(s.reason, existing);
+    }
+    lines.push("### Skipped", "");
+    for (const [reason, tickets] of groups) {
+      if (tickets.length <= 3) {
+        for (const t of tickets) {
+          lines.push(`- ${t}: ${reason}`);
+        }
       } else {
-        reason = "no matching rule";
+        lines.push(
+          `- **${reason}** (${String(tickets.length)}): ${tickets.join(", ")}`,
+        );
       }
-      lines.push(`- ${s.key}: ${s.status} (${reason})`);
     }
     lines.push("");
   }
@@ -263,7 +348,8 @@ function main() {
   }
 
   const { transitions, skipped } = buildTransitions(tickets, config);
-  const output = formatOutput(transitions, skipped);
+  const sprintName = args.sprint;
+  const output = formatOutput(transitions, skipped, sprintName);
 
   writeFileSync(outputPath, output);
   console.log(`Output written to ${outputPath}`);

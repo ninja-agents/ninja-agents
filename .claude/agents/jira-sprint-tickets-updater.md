@@ -44,6 +44,7 @@ Read `agents/jira-sprint-tickets-updater/data/config.json` to get:
 - `jira.board_id` — board ID for sprint lookup
 - `sprint.name_pattern` — prefix to identify the target sprint (e.g., `"MIG-NET-Frontend Sprint"`)
 - `github_link_fields[]` — where to look for GitHub URLs (`"remote_links"`, `"description"`)
+- `engineers[]` — array of `{ name, jira_account_id }` for sprint discovery
 - `projects` — map of project keys → workflows. Each workflow has:
   - `issue_types[]` — which issue types this workflow applies to
   - `transition_rules[]` — array of `{ from, to, condition, transition_id, description }`
@@ -53,10 +54,36 @@ The config has **two workflow types**:
 - **standard** (CNV, MTV, CONSOLE, MTA Story/Task/Epic): In Progress → Dev Complete when all links resolved
 - **bugzilla** (OCPBUGS, MTA Bug): ASSIGNED → POST (active link), POST → MODIFIED (all resolved)
 
-Calculate:
+### Find the Active Sprint
 
-- Target sprint: find the active sprint on the board matching `sprint.name_pattern`
-- Collect all project keys from the `projects` map for the JQL query
+Query ONE issue to discover the current sprint name for this board:
+
+```
+mcp__atlassian__searchJiraIssuesUsingJql:
+  cloudId: "redhat.atlassian.net"
+  jql: 'sprint in openSprints() AND assignee = "{first_engineer_account_id}" ORDER BY updated DESC'
+  maxResults: 1
+  fields: ["summary", "customfield_10020"]
+  responseContentFormat: "markdown"
+```
+
+Use the first engineer's `jira_account_id` from the `engineers` array in config.
+
+From the response, extract `fields.customfield_10020` — it is an array of sprint objects. Find the one where:
+
+- `state` = `"active"` AND
+- `name` starts with `sprint.name_pattern` (e.g., `"MIG-NET-Frontend Sprint"`)
+
+Record from that sprint object:
+
+- `{sprint_name}` = its `name` (e.g., "MIG-NET-Frontend Sprint 5")
+- `{sprint_id}` = its `id`
+- `{sprint_start}` = its `startDate`
+- `{sprint_end}` = its `endDate`
+
+A "no match" occurs if either: (a) the JQL returns zero issues, OR (b) issues are returned but no sprint object in `customfield_10020` has `state = "active"` AND `name` matching the pattern. In either case, log `[1/7] No matching sprint for {engineer_name}, trying next...` and try the next engineer from the config array. Iterate through ALL engineers. If none work, display: "No active sprint found matching pattern '{name_pattern}'. Verify the sprint name pattern and engineers in config." STOP.
+
+Collect all project keys from the `projects` map for the JQL query.
 
 Clear old cache:
 
@@ -73,9 +100,9 @@ Fetch all tickets in the target sprint.
 ```
 mcp__atlassian__searchJiraIssuesUsingJql:
   cloudId: "redhat.atlassian.net"
-  jql: 'sprint = "{sprint_id}" AND project in ({project_keys}) ORDER BY key ASC'
+  jql: 'sprint = {sprint_id} AND project in ({project_keys}) ORDER BY key ASC'
   maxResults: 100
-  fields: ["summary", "status", "assignee", "resolution", "issuetype", "priority", "updated", "created", "customfield_10020", "customfield_10028"]
+  fields: ["summary", "status", "assignee", "resolution", "issuetype", "priority", "updated", "created", "description", "customfield_10020", "customfield_10028"]
   responseContentFormat: "markdown"
 ```
 
@@ -86,7 +113,7 @@ If the query returns exactly 100 results, paginate using `nextPageToken`:
 ```
 mcp__atlassian__searchJiraIssuesUsingJql:
   cloudId: "redhat.atlassian.net"
-  jql: 'sprint = "{sprint_id}" AND project in ({project_keys}) ORDER BY key ASC'
+  jql: 'sprint = {sprint_id} AND project in ({project_keys}) ORDER BY key ASC'
   maxResults: 100
   nextPageToken: "{token from previous response}"
 ```
@@ -108,9 +135,15 @@ If validation fails, display what's missing and STOP.
 
 This step has two dependent batches. Batch 1 fetches GitHub links from Jira. Batch 2 checks their status on GitHub.
 
+### Filter to Actionable Tickets
+
+Before fetching links, filter tickets to only those in actionable statuses — statuses that appear as a `from` field in any transition rule. For the current config these are: `In Progress`, `ASSIGNED`, `POST`. Skip tickets in other statuses (New, To Do, Closed, Dev Complete, etc.) — they cannot match any rule.
+
+Display: `[3/7] {actionable_count} of {total_count} tickets in actionable statuses.`
+
 ### Batch 1: Fetch GitHub Links from Jira
 
-For each ticket, fetch its remote links to find GitHub URLs. Launch ALL of these in a single parallel tool call — one call per ticket:
+For each **actionable** ticket, fetch its remote links to find GitHub URLs. Launch ALL of these in a single parallel tool call — one call per ticket:
 
 ```
 mcp__atlassian__getJiraIssueRemoteIssueLinks:
@@ -118,7 +151,7 @@ mcp__atlassian__getJiraIssueRemoteIssueLinks:
   issueIdOrKey: "{ticket_key}"
 ```
 
-Also check the ticket description for GitHub URLs.
+Also check the ticket description for GitHub URLs. Note: descriptions may be in ADF (Atlassian Document Format) JSON — search the raw string for URL patterns regardless of format. Ignore remote links that don't match the GitHub PR/issue patterns (e.g., CVE links, security advisories).
 
 **After Batch 1 returns, STOP and validate:**
 
@@ -182,6 +215,8 @@ Save results to `agents/jira-sprint-tickets-updater/data/cache/` using these exa
 
 ### jira-tickets.csv
 
+Only include **actionable** tickets (those filtered in Step 3) — not all sprint tickets. Tickets in non-actionable statuses (New, To Do, Closed, etc.) are excluded from the CSV entirely.
+
 Header: `key,summary,status,assignee,issuetype,priority,resolution,github_urls,github_states`
 
 | Field           | Source                        | Notes                                            |
@@ -209,7 +244,7 @@ Write current ISO-8601 timestamp.
 Run the processing script to match tickets against transition rules and generate proposed changes:
 
 ```bash
-npx tsx agents/jira-sprint-tickets-updater/scripts/generate-ticket-updates.ts --config agents/jira-sprint-tickets-updater/data/config.json --cache agents/jira-sprint-tickets-updater/data/cache --output agents/jira-sprint-tickets-updater/data/output/proposed-transitions.md
+npx tsx agents/jira-sprint-tickets-updater/scripts/generate-ticket-updates.ts --config agents/jira-sprint-tickets-updater/data/config.json --cache agents/jira-sprint-tickets-updater/data/cache --output agents/jira-sprint-tickets-updater/data/output/proposed-transitions.md --sprint "{sprint_name}"
 ```
 
 Handle exit codes:
@@ -257,9 +292,11 @@ mcp__atlassian__getTransitionsForJiraIssue:
   issueIdOrKey: "{ticket_key}"
 ```
 
-Find the transition that matches the target status. The `transition_id` from config is a hint — verify it matches the target status name. If not found by ID, search by target status name.
+Find the transition that matches the target status using this lookup order:
 
-If the target transition is not available for a ticket (wrong workflow state), skip it and log a warning.
+1. **By ID**: Find the transition where `transition.id` matches the rule's `transition_id`. Verify its `transition.to.name` matches the rule's `to` status name.
+2. **Fallback by name**: If no ID match, find the transition where `transition.to.name` matches the rule's `to` status name (case-sensitive). Use that transition's `id`.
+3. **Not found**: If neither matches, skip this ticket and log: `[6/7] Warning: No transition to "{to_status}" available for {key}. Skipping.`
 
 Then apply the transition:
 
@@ -330,4 +367,8 @@ Write a brief summary of what was updated. Display directly to the user.
 8. If a transition is not available for a ticket (e.g., wrong workflow state), skip it and log a warning — do not STOP.
 9. Process transitions sequentially to avoid rate limits and provide clear progress.
 10. Preserve the proposed transitions file in output after applying so the user can review what was done.
-11. A ticket with multiple linked GitHub items: use the aggregate state. `all_links_resolved` requires ALL to be resolved. `has_active_link` requires at least ONE to be active.
+11. A ticket with multiple linked GitHub items: use the aggregate state. Three conditions are available:
+    - `all_links_resolved` — ALL links must be resolved (PR merged or issue closed)
+    - `has_active_link` — at least ONE link is active (PR open or issue open)
+    - `has_open_pr` — at least ONE open PR exists (ignores issues). Use this for projects like MTA where GitHub issues are mirrored to Jira and don't indicate development activity.
+12. **NEVER move tickets backward.** Tickets in `protected_statuses` (MODIFIED, Dev Complete, ON_QA, Testing, Verified, Release Pending, Closed) are skipped regardless of transition rules. These statuses represent work that has progressed past the agent's scope. The script enforces this as a hard guard independent of config rules.

@@ -21,10 +21,40 @@ function main() {
 
   if (content.trim().length === 0) {
     errors.push("Output file is empty");
+    reportAndExit(errors, warnings, verbose);
+    return;
   }
 
   if (!content.includes("# Proposed Ticket Transitions")) {
     errors.push("Missing required heading: '# Proposed Ticket Transitions'");
+  }
+
+  const summaryMatch = content.match(
+    /(\d+) tickets analyzed\. \*\*(\d+)\*\* to transition, \*\*(\d+)\*\* skipped/,
+  );
+  if (!summaryMatch) {
+    errors.push(
+      "Missing summary line: 'N tickets analyzed. **M** to transition, **K** skipped.'",
+    );
+  } else {
+    const total = parseInt(summaryMatch[1], 10);
+    const toTransition = parseInt(summaryMatch[2], 10);
+    const skippedCount = parseInt(summaryMatch[3], 10);
+    if (total !== toTransition + skippedCount) {
+      errors.push(
+        `Summary count mismatch: ${String(total)} total != ${String(toTransition)} + ${String(skippedCount)}`,
+      );
+    }
+  }
+
+  const tableRows = content.match(/^\| [A-Z][\w-]+-\d+ \|/gm);
+  if (tableRows) {
+    for (const row of tableRows) {
+      const pipeCount = (row.match(/\|/g) ?? []).length;
+      if (pipeCount < 2) {
+        warnings.push(`Table row may be malformed: ${row.substring(0, 60)}`);
+      }
+    }
   }
 
   const ticketPattern = /[A-Z]+-\d+/g;
@@ -33,15 +63,32 @@ function main() {
     warnings.push("No ticket keys found in output");
   }
 
-  const bareUrlPattern = /(?<!\()(https?:\/\/[^\s)]+)(?!\))/g;
-  const tableSection = content.split("skipped")[0] ?? content;
-  const bareUrls = tableSection.match(bareUrlPattern);
+  const bareUrlPattern = /(?<!\[)[^(](https:\/\/github\.com\/[^\s)]+)(?!\))/g;
+  const bareUrls = content.match(bareUrlPattern);
   if (bareUrls && bareUrls.length > 0) {
     warnings.push(
-      `Found ${String(bareUrls.length)} bare URL(s) — use markdown hyperlinks`,
+      `Found ${String(bareUrls.length)} possible bare URL(s) — use markdown hyperlinks`,
     );
   }
 
+  if (
+    content.includes("No transitions to apply") &&
+    tableRows &&
+    tableRows.length > 0
+  ) {
+    errors.push(
+      "Contradiction: says 'no transitions' but table rows with ticket keys found",
+    );
+  }
+
+  reportAndExit(errors, warnings, verbose);
+}
+
+function reportAndExit(
+  errors: string[],
+  warnings: string[],
+  verbose: boolean,
+): void {
   if (errors.length > 0) {
     console.error(`\n${String(errors.length)} error(s) found:`);
     errors.forEach((e) => console.error(`  ✗ ${e}`));

@@ -1,15 +1,13 @@
 ---
-description: Project context for Ninja Agents — a shared AI agent playground with team automation workflows
+description: Project context for Ninja Agents — AI agent playground with team automation workflows
 alwaysApply: true
 ---
 
 # Ninja Agents
 
-AI agents for engineering teams. Each agent is self-contained under `agents/`. Full workflow specs live in `.claude/agents/{name}.md`.
+AI agents for engineering teams. Self-contained under `agents/`, specs in `.claude/agents/{name}.md`.
 
 ## Workflows
-
-Invoke by name or describe what you need. Each rule in `.cursor/rules/` points to its full spec.
 
 | Workflow | Description |
 | -------- | ----------- |
@@ -23,10 +21,8 @@ Invoke by name or describe what you need. Each rule in `.cursor/rules/` points t
 ## Key Rules
 
 - GitLab queries MUST include `scope: "all"` or results may be empty
-- Only `resolution = "Done"` counts as a completed Jira deliverable
+- Only `resolution = "Done"` counts as completed Jira deliverable
 - CSV fields with commas must be double-quoted; report links use markdown hyperlinks
 - Never commit tokens or secrets — env vars only (`GITHUB_PAT`, `GITLAB_PAT`)
 
-## Full Context
-
-See [../../AGENTS.md](../../AGENTS.md) for conventions, patterns, and review guidelines. See [../../CONTRIBUTING.md](../../CONTRIBUTING.md) for contribution workflow. See `agents/_template/README.md` for new agent structure.
+Full context: [AGENTS.md](../../AGENTS.md) (conventions, review), [CONTRIBUTING.md](../../CONTRIBUTING.md) (workflow).

@@ -21,7 +21,13 @@
     "CNV": {
       "workflows": {
         "standard": {
-          "issue_types": ["Story", "Task", "Sub-task", "Epic", "Feature Request"],
+          "issue_types": [
+            "Story",
+            "Task",
+            "Sub-task",
+            "Epic",
+            "Feature Request"
+          ],
           "transition_rules": [
             {
               "from": "In Progress",

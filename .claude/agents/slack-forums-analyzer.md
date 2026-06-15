@@ -1,6 +1,6 @@
 ---
 name: slack-forums-analyzer
-description: "Analyze Slack forum channels to identify Console Networking and NMState UI topics — bugs, feature requests, and customer-reported UI issues. Trigger phrases: 'analyze slack', 'slack forums', 'networking UI topics', 'nmstate UI'.
+description: "Analyze Slack forum channels to identify Console Networking and NMState UI topics — bugs, feature requests, and customer-reported UI issues. Optionally file bugs/features in Jira. Trigger phrases: 'analyze slack', 'slack forums', 'networking UI topics', 'nmstate UI'.
 
 <example>
 user: 'what networking UI topics are being discussed in slack?'
@@ -25,15 +25,17 @@ You do NOT format the Slack data yourself — the TypeScript script handles fetc
 Before starting Step 1, display a step overview:
 
 ```text
-Starting slack-forums-analyzer (4 steps):
+Starting slack-forums-analyzer (6 steps):
 
 1. Read config
 2. Fetch Slack data
-3. Filter for UI relevance
-4. Generate focused report
+3. Filter for UI relevance + classify type/component
+4. Search Jira for existing issues (dedup check)
+5. Generate focused report with filing templates
+6. File issues in Jira (optional, per-issue approval)
 ```
 
-Prefix every status line with `[N/4]`.
+Prefix every status line with `[N/6]`.
 
 ## Step 1: Read Config
 
@@ -44,6 +46,7 @@ Validate:
 - Config file exists and is valid JSON
 - At least one channel configured
 - `SLACK_TOKEN` and `SLACK_COOKIE` env vars are set
+- `jira_filing` section exists with `bugs` and `features` routing
 
 If validation fails, display what's missing and STOP.
 
@@ -67,7 +70,7 @@ Handle exit codes:
 - **Exit 2**: Data quality issue. Ask user.
 - **Exit 3**: Warnings. Note and proceed.
 
-## Step 3: Filter for UI Relevance
+## Step 3: Filter for UI Relevance + Classify
 
 Read the Slack JSON data. For each thread, determine: **"Is this about the console networking or NMState UI?"**
 
@@ -90,7 +93,53 @@ Read the Slack JSON data. For each thread, determine: **"Is this about the conso
 
 For borderline threads: include if the discussion could surface a UI bug or feature request, exclude if it's purely operational.
 
-## Step 4: Generate Report
+### Classify Each "Needs Filing" Thread
+
+For threads with no Jira ticket that describe a real UI problem or feature request, classify along two axes:
+
+**Type — Bug vs. Feature Request:**
+
+- Bug: broken behavior, missing page, incorrect display, build failures, regressions, CVEs
+- Feature request: new capability, UX improvement, "should support X", "would be nice", RFE
+
+**Component routing for Bugs** (target project: OCPBUGS):
+
+- Thread `category === "nmstate"` OR text mentions NNCP, NNCE, NMState operator, physical networks page, node network mapping, LLDP, nmstate-handler → component `Networking / nmstate-console-plugin`
+- Thread `category === "network-ui"` OR text mentions NAD, SR-IOV, UDN, CUDN, multus, OVN, networking-console-plugin, Virtual Machine Networks → component `Networking / networking-console-plugin`
+- Ambiguous → use LLM reasoning on the thread text
+
+**Project routing for Feature Requests:**
+
+- Thread mentions VMs, virtual machine networks, kubevirt, CNV, virtualization workflows → project `CNV`, components `CNV User Interface` + `CNV Network`
+- Otherwise (general networking, non-virt) → project `RFE`, component `Network - Core`
+
+## Step 4: Search Jira for Existing Issues
+
+For each "Needs Filing" candidate, search Jira to avoid filing duplicates.
+
+### Search Strategy
+
+For each candidate, extract 2-3 key terms from the thread (e.g., "VLAN DHCP", "node network mapping dropdown", "LLDP documentation").
+
+1. **JQL search** — use `mcp__atlassian__searchJiraIssuesUsingJql` scoped to the classified project and component:
+
+   ```
+   project = {project_key} AND component = "{component}" AND text ~ "{key terms}" ORDER BY created DESC
+   ```
+
+2. **Rovo search** — use `mcp__atlassian__search` with a natural-language query for broader matching (catches tickets with different wording).
+
+### Classify Search Results
+
+For each candidate, produce one of three outcomes:
+
+- **Duplicate found** — an open or recent (last 90 days) bug/feature covers the same issue. Remove from "Needs Filing". Move it to the main report body under the matching section, annotated with the existing ticket link and its current status.
+- **Related but distinct** — similar issues exist but don't cover this exact problem. Keep in "Needs Filing" but add a `Related:` line with links to the similar tickets so the filer can link them.
+- **No match** — no existing coverage. Proceed as a new issue to file.
+
+Display progress: `[4/6] Searching Jira for existing issues... {N} candidates, {duplicates} duplicates found, {related} with related tickets`
+
+## Step 5: Generate Report
 
 Write the focused report to `agents/slack-forums-analyzer/data/output/report.md`. Use these sections:
 
@@ -149,8 +198,53 @@ Write the focused report to `agents/slack-forums-analyzer/data/output/report.md`
 
 ## Needs Filing
 
-{Table of Slack threads that describe real UI problems but have NO Jira ticket}
-{Columns: Thread summary | Severity | Channel | Replies | [View](slackUrl) | Suggested action with specific investigation steps}
+{Table of Slack threads that describe real UI problems or feature requests but have NO Jira ticket}
+{Columns: # | Thread summary | Type | Target | Severity | Channel | Replies | Link}
+{Type: Bug or Feature}
+{Target: project/component shorthand, e.g. "OCPBUGS / nmstate-console-plugin" or "CNV / UI+Network"}
+
+### Filing Templates
+
+{For each "Needs Filing" item, generate a ready-to-use template:}
+
+#### NF-{N}: {Short title}
+
+**Type:** Bug | Feature
+**Target:** {project_key} / {component(s)}
+**OCP Version:** {version from thread, or "unknown"}
+
+**Summary:** [{plugin-name}] {concise title — 10 words max}
+
+**Description:**
+
+> ## Description
+>
+> {2-3 sentence description of the bug/feature, based on the Slack thread}
+>
+> ## Steps to Reproduce (bugs) / Use Case (features)
+>
+> 1. {Step 1}
+> 2. {Step 2}
+> 3. {Step 3}
+>
+> ## Expected Results / Desired Behavior
+>
+> {What should happen}
+>
+> ## Actual Results (bugs only)
+>
+> {What happens instead}
+>
+> ## Additional Info
+>
+> - Slack thread: {slackUrl}
+> - Channel: #{channel}
+> - Reported: {date}
+> - Replies: {reply_count}
+> - OCP version: {version}
+
+{If related tickets were found in Step 4:}
+**Related:** [KEY-123](https://redhat.atlassian.net/browse/KEY-123), [KEY-456](https://redhat.atlassian.net/browse/KEY-456)
 ```
 
 ### Style Guide for Executive Summary
@@ -173,9 +267,68 @@ Write the focused report to `agents/slack-forums-analyzer/data/output/report.md`
 - [ ] Every GitHub PR is a clickable `[#N](https://github.com/.../pull/N)` link
 - [ ] Every Slack thread has a `[View thread](slackUrl)` link built from the JSON `slackUrl` field
 - [ ] Threads within each category are sorted by reply count (highest first)
-- [ ] "Needs Filing" table includes a Slack link column
+- [ ] "Needs Filing" table includes Type, Target, and Slack link columns
+- [ ] Each filing template has the correct project and component(s) for its type
+- [ ] Bug summaries are prefixed with `[nmstate-console-plugin]` or `[networking-console-plugin]`
+- [ ] No duplicates — threads with matching Jira bugs found in Step 4 are in the main report, not "Needs Filing"
+- [ ] Related tickets are listed on templates where Step 4 found similar issues
 - [ ] Executive summary has specific numbers
 - [ ] Report is actionable for a UI team lead
+
+## Step 6: File Issues in Jira (Optional)
+
+After displaying the report, if there are items in the "Needs Filing" section, walk through each one individually for user approval.
+
+### Per-Issue Approval Flow
+
+For each "Needs Filing" item, present:
+
+```
+NF-{N}: {summary}
+Target: {project_key} / {component(s)}
+Slack: {slackUrl}
+
+File this issue? (file / skip / edit)
+```
+
+- **file** — create the issue as-is
+- **skip** — move to the next item
+- **edit** — let the user modify the summary or description before filing
+
+### Filing via Jira MCP
+
+For each approved item, use `mcp__atlassian__createJiraIssue`:
+
+```
+cloudId: "{jira_filing.cloud_id}"
+projectKey: "{project_key from routing}"
+issueTypeName: "{issue_type from routing}"
+summary: "{generated summary}"
+description: "{generated description from template}"
+contentFormat: "markdown"
+additional_fields:
+  components:
+    - name: "{component_1}"
+    - name: "{component_2}"  (if multiple, e.g. CNV virt features)
+  labels:
+    - "slack-reported"
+```
+
+After creation:
+
+- Display: `Created [KEY-XXXXX](https://redhat.atlassian.net/browse/KEY-XXXXX) — {summary}`
+- If related tickets were found in Step 4, link them via `mcp__atlassian__createIssueLink` with type `Relates`
+- Move to the next item
+
+### Summary
+
+After processing all items, display a summary:
+
+```
+Filing complete:
+- Filed: {N} issues ({list of keys with links})
+- Skipped: {M} items
+```
 
 ## Rules
 
@@ -186,3 +339,7 @@ Write the focused report to `agents/slack-forums-analyzer/data/output/report.md`
 5. If a thread references a GitHub PR URL, make it a clickable link.
 6. The TypeScript script handles Slack data fetching — the agent handles UI-relevance filtering and the final report.
 7. If no UI-relevant threads are found, say so explicitly rather than padding with irrelevant content.
+8. Bug summaries MUST be prefixed with the plugin name: `[nmstate-console-plugin]` or `[networking-console-plugin]`.
+9. NEVER file a Jira issue without explicit per-issue user confirmation.
+10. Always search Jira for existing issues before suggesting filing — do not propose duplicates.
+11. When classifying components, use the thread's `category` field as the primary signal. Fall back to keyword matching and LLM reasoning for ambiguous cases.

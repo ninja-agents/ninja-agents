@@ -44,5 +44,29 @@
     "feature-requests",
     "e2e-and-ci",
     "customer-questions"
-  ]
+  ],
+  "jira_filing": {
+    "cloud_id": "your-site.atlassian.net",
+    "bugs": {
+      "project_key": "OCPBUGS",
+      "issue_type": "Bug",
+      "components": {
+        "nmstate": "Networking / nmstate-console-plugin",
+        "networking": "Networking / networking-console-plugin"
+      }
+    },
+    "features": {
+      "virt": {
+        "project_key": "CNV",
+        "issue_type": "Feature",
+        "components": ["CNV User Interface", "CNV Network"]
+      },
+      "networking": {
+        "project_key": "RFE",
+        "issue_type": "Feature",
+        "component": "Network - Core"
+      }
+    },
+    "labels": ["slack-reported"]
+  }
 }

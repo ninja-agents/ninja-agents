@@ -2,7 +2,6 @@
 name: slack-channels-analyzer
 description: Analyze Slack channels for Console Networking and NMState UI topics, cross-referenced with GitHub PRs and Jira tickets
 user-invocable: true
-disable-model-invocation: true
 ---
 
 Analyze Slack channels to identify Console Networking and NMState UI topics — bugs, feature requests, customer-reported UI issues — cross-referenced with GitHub PRs and Jira tickets.

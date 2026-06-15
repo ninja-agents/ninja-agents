@@ -10,7 +10,7 @@
   "include": ["agents/*/scripts/**/*.ts"],
   "references": [
     { "path": "agents/jira-sprint-tickets-updater" },
-    { "path": "agents/slack-forums-analyzer" },
+    { "path": "agents/slack-channels-analyzer" },
     { "path": "agents/jira-add-missing-activity-type" }
   ]
 }

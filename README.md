@@ -42,7 +42,7 @@ See [docs/mcp-setup.md](docs/mcp-setup.md) for the full token setup guide and tr
 | [repo-contextification](agents/repo-contextification/)                   | `/repo-contextification`          | `@repo-contextification`          | Audit repo docs and AI-readiness, scaffold missing files        |
 | [jira-qe-story](agents/jira-qe-story/)                                   | `/jira-qe-story`                  | `@jira-qe-story`                  | Generate QE story from dev Jira story, create in Jira with link |
 | [jira-sprint-tickets-updater](agents/jira-sprint-tickets-updater/)       | `/jira-sprint-tickets-updater`    | `@jira-sprint-tickets-updater`    | Transition sprint tickets based on linked GitHub PR status      |
-| [slack-forums-analyzer](agents/slack-forums-analyzer/)                   | `/slack-forums-analyzer`          | `@slack-forums-analyzer`          | Analyze Slack forums for UI-related topics and trends           |
+| [slack-channels-analyzer](agents/slack-channels-analyzer/)               | `/slack-channels-analyzer`        | `@slack-channels-analyzer`        | Analyze Slack channels for UI-related topics and trends         |
 | [jira-add-missing-activity-type](agents/jira-add-missing-activity-type/) | `/jira-add-missing-activity-type` | `@jira-add-missing-activity-type` | Add missing Activity Type to completed Jira tickets             |
 | _(scaffold a new agent)_                                                 | `/create-agent`                   | copy `agents/_template/`          | Scaffold a new agent with best-practice structure and specs     |
 

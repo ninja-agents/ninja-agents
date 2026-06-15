@@ -1,11 +1,11 @@
 ---
-description: "Analyze Slack forum channels for UI-related topics. Use when the user asks for slack analysis, UI topics, or forum trends."
+description: "Analyze Slack channels for UI-related topics. Use when the user asks for slack analysis, UI topics, or forum trends."
 alwaysApply: false
 ---
 
-# Slack Forums Analyzer
+# Slack Channels Analyzer
 
-Read `.claude/agents/slack-forums-analyzer.md` and follow the complete workflow described there.
+Read `.claude/agents/slack-channels-analyzer.md` and follow the complete workflow described there.
 
 The agent spec contains all steps, CSV schemas, validation checkpoints, style guides, and rules. It is the single source of truth for this workflow.
 

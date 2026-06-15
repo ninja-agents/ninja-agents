@@ -1,6 +1,6 @@
-# Slack Forums Analyzer
+# Slack Channels Analyzer
 
-Analyze Slack forum channels to identify UI-related topics, categorize threads by keyword, and surface trends with actionable recommendations.
+Analyze Slack channels to identify UI-related topics, categorize threads by keyword, and surface trends with actionable recommendations.
 
 ## Prerequisites
 
@@ -18,24 +18,24 @@ export SLACK_COOKIE=xoxd-...
 ### Claude Code
 
 ```bash
-/slack-forums-analyzer
+/slack-channels-analyzer
 ```
 
 ### Cursor
 
-In Cursor chat, mention `@slack-forums-analyzer` or describe what you need — the rule activates automatically and walks through the full workflow.
+In Cursor chat, mention `@slack-channels-analyzer` or describe what you need — the rule activates automatically and walks through the full workflow.
 
 ### Manual
 
 ```bash
 # Fetch messages from Slack and generate the categorized report
-npm run slack-forums-analyzer:generate -- --config agents/slack-forums-analyzer/data/config.json --output agents/slack-forums-analyzer/data/output/report.md
+npm run slack-channels-analyzer:generate -- --config agents/slack-channels-analyzer/data/config.json --output agents/slack-channels-analyzer/data/output/report.md
 
 # Validate output
-npm run slack-forums-analyzer:validate -- agents/slack-forums-analyzer/data/output/report.md --verbose
+npm run slack-channels-analyzer:validate -- agents/slack-channels-analyzer/data/output/report.md --verbose
 
 # Run tests
-npm run slack-forums-analyzer:test
+npm run slack-channels-analyzer:test
 ```
 
 ## How It Works
@@ -63,7 +63,7 @@ Edit `data/config.json` to customize:
 ## File Layout
 
 ```
-agents/slack-forums-analyzer/
+agents/slack-channels-analyzer/
 ├── README.md
 ├── tsconfig.json
 ├── scripts/

@@ -24,9 +24,9 @@
     "jira-sprint-tickets-updater:generate": "tsx agents/jira-sprint-tickets-updater/scripts/generate-ticket-updates.ts",
     "jira-sprint-tickets-updater:validate": "tsx agents/jira-sprint-tickets-updater/scripts/validate-output.ts",
     "jira-sprint-tickets-updater:test": "vitest run --dir agents/jira-sprint-tickets-updater",
-    "slack-forums-analyzer:generate": "tsx agents/slack-forums-analyzer/scripts/generate-report.ts",
-    "slack-forums-analyzer:validate": "tsx agents/slack-forums-analyzer/scripts/validate-output.ts",
-    "slack-forums-analyzer:test": "vitest run --dir agents/slack-forums-analyzer",
+    "slack-channels-analyzer:generate": "tsx agents/slack-channels-analyzer/scripts/generate-report.ts",
+    "slack-channels-analyzer:validate": "tsx agents/slack-channels-analyzer/scripts/validate-output.ts",
+    "slack-channels-analyzer:test": "vitest run --dir agents/slack-channels-analyzer",
     "jira-add-missing-activity-type:classify": "tsx agents/jira-add-missing-activity-type/scripts/classify-tickets.ts",
     "jira-add-missing-activity-type:apply": "tsx agents/jira-add-missing-activity-type/scripts/apply-activity-types.ts",
     "jira-add-missing-activity-type:test": "vitest run --dir agents/jira-add-missing-activity-type"

@@ -1,21 +1,21 @@
 ---
-name: slack-forums-analyzer
-description: Analyze Slack forums for Console Networking and NMState UI topics, cross-referenced with GitHub PRs and Jira tickets
+name: slack-channels-analyzer
+description: Analyze Slack channels for Console Networking and NMState UI topics, cross-referenced with GitHub PRs and Jira tickets
 user-invocable: true
 disable-model-invocation: true
 ---
 
-Analyze Slack forum channels to identify Console Networking and NMState UI topics — bugs, feature requests, customer-reported UI issues — cross-referenced with GitHub PRs and Jira tickets.
+Analyze Slack channels to identify Console Networking and NMState UI topics — bugs, feature requests, customer-reported UI issues — cross-referenced with GitHub PRs and Jira tickets.
 
 ## Usage
 
 ```bash
-/slack-forums-analyzer
+/slack-channels-analyzer
 ```
 
 ## What This Does
 
-Launches the `slack-forums-analyzer` agent which:
+Launches the `slack-channels-analyzer` agent which:
 
 1. Reads channel config and validates Slack credentials
 2. Fetches messages from configured Slack channels via `@slack/web-api`
@@ -34,7 +34,7 @@ A markdown report with:
 - UI-relevant Slack threads grouped by: bugs, feature requests, customer issues
 - Open GitHub issues
 
-Saved to `agents/slack-forums-analyzer/data/output/report.md`.
+Saved to `agents/slack-channels-analyzer/data/output/report.md`.
 
 ## Critical Rules
 

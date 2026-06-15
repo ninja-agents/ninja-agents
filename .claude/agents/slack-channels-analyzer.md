@@ -25,17 +25,18 @@ You do NOT format the Slack data yourself — the TypeScript script handles fetc
 Before starting Step 1, display a step overview:
 
 ```text
-Starting slack-channels-analyzer (6 steps):
+Starting slack-channels-analyzer (7 steps):
 
 1. Read config
 2. Fetch Slack data
 3. Filter for UI relevance + classify type/component
 4. Search Jira for existing issues (dedup check)
-5. Generate focused report with filing templates
-6. File issues in Jira (optional, per-issue approval)
+5. Local code research (enrich filing templates)
+6. Generate focused report with filing templates
+7. File issues in Jira (optional, per-issue approval)
 ```
 
-Prefix every status line with `[N/6]`.
+Prefix every status line with `[N/7]`.
 
 ## Step 1: Read Config
 
@@ -137,9 +138,67 @@ For each candidate, produce one of three outcomes:
 - **Related but distinct** — similar issues exist but don't cover this exact problem. Keep in "Needs Filing" but add a `Related:` line with links to the similar tickets so the filer can link them.
 - **No match** — no existing coverage. Proceed as a new issue to file.
 
-Display progress: `[4/6] Searching Jira for existing issues... {N} candidates, {duplicates} duplicates found, {related} with related tickets`
+Display progress: `[4/7] Searching Jira for existing issues... {N} candidates, {duplicates} duplicates found, {related} with related tickets`
 
-## Step 5: Generate Report
+## Step 5: Local Code Research
+
+For each "Needs Filing" candidate that survived the Jira dedup check, research the local plugin repo to enrich the filing template with code-level context.
+
+### Determine the repo
+
+Based on the component routing from Step 3:
+
+- `Networking / networking-console-plugin` → search `../networking-console-plugin`
+- `Networking / nmstate-console-plugin` → search `../nmstate-console-plugin`
+
+If the sibling repo directory does not exist, skip this step for that candidate and note it in the template.
+
+### View module mapping
+
+Use this table to narrow the search to the right source directory:
+
+| UI Feature | Repo | View Path |
+|---|---|---|
+| NAD / Virtual Machine Networks | networking-console-plugin | `src/views/nads/` |
+| UDN / CUDN | networking-console-plugin | `src/views/udns/` |
+| NetworkPolicy / MultiNetworkPolicy | networking-console-plugin | `src/views/networkpolicies/` |
+| Services | networking-console-plugin | `src/views/services/` |
+| Routes | networking-console-plugin | `src/views/routes/` |
+| Ingresses | networking-console-plugin | `src/views/ingresses/` |
+| NNCP wizard | nmstate-console-plugin | `src/views/policies/` |
+| Physical Networks page | nmstate-console-plugin | `src/views/physical-networks/` |
+| Node Network State | nmstate-console-plugin | `src/views/states/` |
+| Node Network Configuration | nmstate-console-plugin | `src/views/nodenetworkconfiguration/` |
+
+### Research strategy
+
+For each candidate:
+
+1. **Identify the view module** — match the thread topic to the table above. If ambiguous, `grep -rl "{keyword}" ../{ repo}/src/views/` to locate the relevant module.
+
+2. **Read key files** — within the matched `src/views/{module}/` directory:
+   - The form component (e.g., `form/XxxForm.tsx`) — for bugs about creation/editing workflows
+   - The list component (e.g., `list/XxxList.tsx`) — for bugs about missing items or dropdowns
+   - The manifest file (`manifest.ts`) — for bugs about missing pages or navigation entries
+
+3. **Check recent changes** — run `git -C ../{repo} log --oneline -10 --since="60 days ago" -- src/views/{module}/` to see if the area had recent modifications that could be related.
+
+4. **Check feature flags** — search `grep -r "FLAG_\|useFlag\|detectFeatures" ../{repo}/src/views/{module}/` for any feature flags that gate the affected UI.
+
+### Output
+
+For each candidate, collect:
+
+- **Repo**: `openshift/{repo-name}`
+- **Affected module**: `src/views/{module}/`
+- **Key files**: list of 1-3 files most relevant to the bug (form, list, or manifest)
+- **GitHub link**: `https://github.com/openshift/{repo-name}/tree/main/src/views/{module}`
+- **Recent changes**: 1-2 line summary of recent git activity, or "No recent changes in this area"
+- **Feature flags**: relevant flags if any, or "None"
+
+Display progress: `[5/7] Researching local codebase for affected components... {N} candidates`
+
+## Step 6: Generate Report
 
 Write the focused report to `agents/slack-channels-analyzer/data/output/report.md`. Use these sections:
 
@@ -242,6 +301,14 @@ Write the focused report to `agents/slack-channels-analyzer/data/output/report.m
 > - Reported: {date}
 > - Replies: {reply_count}
 > - OCP version: {version}
+>
+> ## Code Context
+>
+> - Repo: [openshift/{repo-name}](https://github.com/openshift/{repo-name})
+> - Affected module: [`src/views/{module}/`](https://github.com/openshift/{repo-name}/tree/main/src/views/{module})
+> - Key files: `{FormComponent}.tsx`, `{ListComponent}.tsx`
+> - Recent changes: {1-2 line summary from git log, or "No recent changes in this area"}
+> - Feature flags: {relevant flags, or "None"}
 
 {If related tickets were found in Step 4:}
 **Related:** [KEY-123](https://redhat.atlassian.net/browse/KEY-123), [KEY-456](https://redhat.atlassian.net/browse/KEY-456)
@@ -272,10 +339,11 @@ Write the focused report to `agents/slack-channels-analyzer/data/output/report.m
 - [ ] Bug summaries are prefixed with `[nmstate-console-plugin]` or `[networking-console-plugin]`
 - [ ] No duplicates — threads with matching Jira bugs found in Step 4 are in the main report, not "Needs Filing"
 - [ ] Related tickets are listed on templates where Step 4 found similar issues
+- [ ] Each "Needs Filing" template includes a Code Context section with repo, module path, and GitHub link
 - [ ] Executive summary has specific numbers
 - [ ] Report is actionable for a UI team lead
 
-## Step 6: File Issues in Jira (Optional)
+## Step 7: File Issues in Jira (Optional)
 
 After displaying the report, if there are items in the "Needs Filing" section, walk through each one individually for user approval.
 

@@ -103,40 +103,54 @@ Write the focused report to `agents/slack-forums-analyzer/data/output/report.md`
 **Channels:** {channel list}
 **Period:** Last {N} days
 
+### At a Glance
+
+{Table with counts: Needs filing | Open bugs | In progress | Resolved | Tracking}
+
 ## Executive Summary
 
-{3-5 bullets: most significant UI-relevant findings, with specific numbers}
-{1-2 actionable recommendations}
+{Group by urgency tier:}
+{**Act now:** — items with no Jira ticket + high engagement, or open bugs needing triage}
+{**Track:** — items with Jira tickets, in progress or awaiting UI work}
+{**Info:** — resolved items, routine PRs, monitoring items}
 
 ## UI-Relevant Slack Threads
 
 {Sort threads within each category by reply count, highest first.}
+{Each thread MUST have a severity: HIGH (>20 replies or customer-facing), MEDIUM (5-20 replies), LOW (<5 replies or routine)}
 
 ### Bugs & Issues
 
-{For each thread, include ALL of these on a single entry:}
+{For each thread, include ALL of the following:}
 {- Date, channel, reply count}
 {- [View thread](slackUrl) — clickable link to the Slack conversation}
-{- 2-3 sentence summary of the issue}
+{- **`STATUS` Bold title** — status tag + ~5 word summary. Tags: `OPEN` (no one working on it), `IN PROGRESS` (PR open or actively discussed), `RESOLVED` (fix merged/verified), `TRACKING` (roadmap item being monitored), `MONITORING` (watching, no action yet)}
+{- 3-5 sentence triage context covering:}
+{ 1. What the problem/request is (specific symptoms, affected UI component)}
+{ 2. Who is affected (customer, field engineer, internal team) and the impact}
+{ 3. What has been tried or discussed so far (workarounds, root cause theories)}
+{ 4. Current status — is someone working on it? Is it blocked? What's the next step?}
+{ 5. Suggested triage action — file a bug, assign to someone, needs investigation, etc.}
 {- If the thread references a Jira ticket: [KEY](https://redhat.atlassian.net/browse/KEY)}
 {- If the thread references a GitHub PR: [#N](https://github.com/.../pull/N)}
+{- OCP versions affected, if mentioned}
 
 ### Feature Requests & UX Gaps
 
-{Same format as Bugs — date, channel, replies, [View thread], summary, linked tickets/PRs}
+{Same format — include triage context with: what feature is missing, who needs it, customer use case if any, relevant Jira epics or roadmap items}
 
 ### NMState-Specific UI Threads
 
-{Same format — date, channel, replies, [View thread], summary, linked tickets/PRs}
+{Same format — include triage context}
 
 ### Customer-Reported UI Problems
 
-{Same format — date, channel, replies, [View thread], summary, linked tickets/PRs}
+{Same format — include triage context with: customer impact, reproduction steps if available, workaround if any}
 
 ## Needs Filing
 
 {Table of Slack threads that describe real UI problems but have NO Jira ticket}
-{Columns: Thread summary | Channel | Replies | [View](slackUrl) | Suggested action}
+{Columns: Thread summary | Severity | Channel | Replies | [View](slackUrl) | Suggested action with specific investigation steps}
 ```
 
 ### Style Guide for Executive Summary

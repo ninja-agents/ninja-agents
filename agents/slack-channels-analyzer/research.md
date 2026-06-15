@@ -126,6 +126,151 @@
 - [CNV-88481](https://redhat.atlassian.net/browse/CNV-88481) — Windows 11 golden image validation checkup UI
 - [CNV-89455](https://redhat.atlassian.net/browse/CNV-89455) — Update self-validation golden image from Win 11 to Win Server 2022
 - [CNV-82742](https://redhat.atlassian.net/browse/CNV-82742) — Planned for 4.23/5.0 (UI changes needed)
+
+## Iteration 11 (Run 1/5)
+
+**Date:** 2026-06-15
+**Changes since last run:** Added Step 5 (local code research) with view module mapping table. Added Step 4 backport analysis with version coverage map. Added Code Context section to filing templates. Added Backport Suggestions section to report. Updated step count from 6 to 7.
+**Results:** 311 messages fetched (4 channels), 152 threads, 27 UI-relevant threads (18% filter rate), 2 Needs Filing candidates, 1 Backport Suggestion (OCPBUGS-87013 → 4.21).
+**Issues found:**
+
+1. **False positive: custom logos thread included** — Thread #6 (43 replies, #forum-ocp-console) about custom logos breaking NetObserv is a console-operator issue, not networking-console-plugin. Included because it mentions `networking-console-plugin` as a pre-registered plugin, but the bug is in the console operator's logo validation.
+2. **NF-1 component routing may be wrong** — "Node network mapping dropdown missing" was routed to nmstate-console-plugin, but the "Create Virtual Machine Network" wizard might live in networking-console-plugin's NAD creation flow. The view module mapping table doesn't have an explicit entry for "Virtual Machine Networks / Create VM Network wizard" — it's unclear whether this is in `nads/` (networking-console-plugin) or `physical-networks/` (nmstate-console-plugin).
+3. **Missing threads from Jira search** — The agent didn't surface OCPBUGS-87865 (nmstate-console-plugin TLS cert expiry), OCPBUGS-85606 (React error #31 MultiNetworkPolicy), OCPBUGS-86249 (Services edit pod selector blank page), OCPBUGS-86519 (nmstate nginx memory leak), OCPBUGS-83752 (NNCP single interface next button disabled). These are open bugs in the component but weren't discussed in Slack — the agent only processes Slack threads, not standalone Jira search results.
+4. **Rovo search noise** — Jira Rovo search returned Google Summer of Code confluence pages as top results. JQL was more effective.
+5. **Severity criteria already in spec but agent didn't cite them** — The spec defines HIGH (>20 replies or customer-facing), MEDIUM (5-20 replies), LOW (<5 replies) at line 228, but the agent's suggestion #5 claims they're missing.
+6. **Code Context quality varies** — NF-1 Code Context pointed to `src/views/physical-networks/` with generic file names, NF-2 pointed to `src/views/nads/` correctly. Code research was surface-level — no git log output or feature flag results included.
+
+**Next:**
+- Add explicit entry for "Virtual Machine Networks / Create VM Network wizard" to the view module mapping table (clarify which repo owns it) ✅ Done
+- Add instruction to EXCLUDE threads that mention networking-console-plugin only incidentally ✅ Done
+- Add standalone Jira bug surfacing — "Open Bugs (no Slack activity)" section ✅ Done
+- Strengthen Code Context instructions — require actual command output ✅ Done
+
+## Iteration 12 (Run 2/5)
+
+**Date:** 2026-06-15
+**Changes since last run:** (a) Added EXCLUDE rule for incidental plugin mentions. (b) Added "Virtual Machine Networks / Create VM Network wizard" to view module mapping table → networking-console-plugin src/views/nads/. (c) Strengthened Code Context to require actual git log and grep output. (d) Added "Standalone Jira Bug Scan" for open bugs not discussed in Slack.
+**Results:** 311 messages, 152 threads, 15 UI-relevant (down from 27 — tighter filter), 2 Needs Filing, 14 open bugs (no Slack activity), 0 Backport Suggestions.
+**Improvements confirmed:**
+
+1. ✅ **False positive eliminated** — custom logos thread (43 replies) correctly excluded by the incidental-mention rule
+2. ✅ **Component routing fixed** — both NF-1 and NF-2 correctly target networking-console-plugin (not nmstate-console-plugin)
+3. ✅ **Code Context has real output** — filing templates include actual git log commits (`1bf4df7`, `77e630d`) and real feature flags (`FLAG_NET_ATTACH_DEF`, `FLAG_KUBEVIRT`)
+4. ✅ **Open Bugs section works** — 14 open bugs surfaced (7 per component), including Critical CVE OCPBUGS-87092 and Major LLDP crash OCPBUGS-87822
+5. ✅ **Report structure much improved** — clear sections, clickable links, severity tags, triage context
+
+**Issues found:**
+
+1. **Thread #3 (VMs lose connection during upgrades) included but shouldn't be** — this is a backend networking issue during OCP upgrades, not a console UI bug. The thread was included as "Customer-Reported UI Problems" but the agent's own triage notes say "not a UI bug" — contradictory inclusion.
+2. **Thread #CNV-87617 too vague** — "A user asks for an update on CNV-87617" with no description of what the bug is. The filing template should require at least a 1-sentence summary of the Jira issue, not just "update requested."
+3. **CNV-88481 and CNV-89455 are kubevirt-plugin issues, not networking** — these are about the self-validation checkup golden image UI, which lives in kubevirt-plugin, not networking-console-plugin or nmstate-console-plugin. They should be excluded unless the feature request specifically involves the networking plugin.
+4. **Backport analysis didn't fire** — OCPBUGS-87013 is Verified and covers 4.21.z, so no gap was detected. But the earlier Slack thread (Run 1) noted QA couldn't verify because no image existed — the backport analysis should have flagged the ART build gap.
+5. **No "networking-console-plugin registration" thread** — the 10-reply thread about how networking-console-plugin gets registered (OpenShift 5.0 / netobserv) was not included. It's borderline but informative for the team.
+6. **Report could use a "Recent PRs" section** — the previous manual run included a merged PRs table from GitHub. The agent spec doesn't require it but it adds useful context.
+
+**Next:**
+- Tighten Customer-Reported UI Problems to exclude purely backend networking issues (upgrades, OVN) ✅ Done
+- Exclude CNV UI issues targeting kubevirt-plugin ✅ Done
+- Add instruction for 1-sentence Jira summary when referencing trackers ✅ Done
+
+## Iteration 13 (Run 3/5)
+
+**Date:** 2026-06-15
+**Changes since last run:** (a) Added EXCLUDE rules for backend OCP upgrade connectivity issues and kubevirt-plugin features. (b) Added instruction to include 1-sentence Jira summary via getJiraIssue when thread only references a key.
+**Results:** 311 messages, 152 threads, 14 UI-relevant (down from 15 — tighter filter). 2 Needs Filing, 13 open bugs (no Slack), 0 Backport Suggestions.
+**Improvements confirmed:**
+
+1. ✅ **CNV-87617 excluded** — fetched Jira summary ("Stats collection causes lock contention during live migration") → not networking UI → correctly filtered
+2. ✅ **CNV-88481/89455 excluded** — kubevirt-plugin feature, not networking plugin
+3. ✅ **VM connectivity loss during upgrades excluded** — backend networking issue, not UI
+4. ✅ **Jira summaries enriched** — OCPBUGS-49690 now shows "networking-console-plugin pods should run on control plane nodes" instead of just "update on KEY"
+5. ✅ **NF-2 Code Context improved** — includes hypothesis about FLAG_KUBEVIRT explaining environment-specific behavior: "if FLAG_KUBEVIRT is not detected, the Virtual Machine Networks page is hidden entirely"
+6. ✅ **Report very clean** — 14 threads, well-organized, all links clickable, severity consistent
+
+**Issues found:**
+
+1. **Thread #12 (RBAC security audit) still included as INFO** — borderline. It's backend RBAC, not UI, but shared in #kubernetes-nmstate. The agent correctly tagged it `INFO` and noted "No UI action required unless RBAC changes affect plugin permissions." This is acceptable as-is.
+2. **Thread #9 (nightly e2e failures) is CI infrastructure** — 74 replies about COPR repo missing for epel-9-aarch64. This is CI, not UI. The EXCLUDE rule says "CI infrastructure with no UI test component" — the agent included it because it affects merge velocity which indirectly impacts the plugin. Borderline but reasonable given the 74-reply engagement.
+3. **Open Bugs section lists OCPBUGS-82108 (i18n strings)** — very minor UI polish issue. Could be filtered by priority to keep the section focused on impactful bugs.
+4. **UDN docs thread (#14 in previous run, now absent?)** — the 60-reply UDN docs thread appears to be categorized under NMState-Specific but it's actually about OCP Virt docs. The category is debatable but the content is correct.
+5. **No "Recent PRs" section** — the agent doesn't produce it because it's not in the spec. This would be a nice addition.
+
+**Assessment:** The report quality is now very good. The filter is tight, false positives are eliminated, and the Code Context is actionable. Two minor improvements remain: (1) add a "Recent PRs" section, (2) consider filtering the Open Bugs section by priority (exclude Undefined/Low).
+
+**Next:**
+- Add "Recent PRs" section to the report template ✅ Done
+
+## Iteration 14 (Run 4/5)
+
+**Date:** 2026-06-15
+**Changes since last run:** Added "Recent networking-console-plugin PRs" section to report template with Merged PRs and Open PRs tables.
+**Results:** 312 messages, ~100 threads categorized, 14 UI-relevant. 3 Needs Filing (2 bugs + 1 feature), 13 open bugs (no Slack), 12 merged PRs, 3 open PRs. 0 Backport Suggestions.
+**Improvements confirmed:**
+
+1. ✅ **Recent PRs section generated** — 12 merged PRs with Jira links, 3 open PRs. Well-formatted tables with correct GitHub and Jira links.
+2. ✅ **All previous EXCLUDE rules held** — CNV kubevirt-plugin features excluded, incidental mentions excluded, upgrade connectivity excluded.
+3. ✅ **Report is comprehensive** — covers Slack threads, Jira bugs, GitHub PRs, and filing templates with Code Context.
+
+**Issues found:**
+
+1. **NF-3 is a dedup miss** — the OVS bridge + CUDN + EgressIP feature request (29 replies) was classified as "Needs Filing" despite CONSOLE-5348, CNV-89500, CONSOLE-5349, and HPUX-1719 already covering this exact request. The Jira dedup in Step 4 failed because: (a) the JQL search for feature requests targets CNV project but the existing tickets are in CONSOLE project, and (b) Rovo search was skipped to avoid noise. **Fix: the Rovo search should NOT be skipped — it caught CONSOLE-5348 in Run 1. Instead, add instruction to always run Rovo search as secondary, and filter out Confluence noise (only consider results with type "issue").**
+2. **Code Context was shallow** — the agent reported "No sibling repos available" despite `../networking-console-plugin` and `../nmstate-console-plugin` existing at `/home/rlavi/Projects/`. The agent may have used a relative path from a different working directory, or failed to check the absolute path. **Fix: add explicit absolute path instruction to Step 5.**
+3. **GitHub MCP sort issue** — `mcp__github__list_pull_requests` with `sort: updated` returned old PRs. The agent worked around with `gh` CLI. The spec should document this workaround.
+
+**Next:**
+- Fix Rovo search: always run it, filter to type=issue only ✅ Done
+- Add absolute path guidance to Step 5 for sibling repos ✅ Done
+- Document `gh` CLI fallback for PR fetching ✅ Done
+
+## Iteration 15 (Run 5/5 — Final)
+
+**Date:** 2026-06-15
+**Changes since last run:** (a) Made Rovo search mandatory with type=issue filter. (b) Added absolute path fallback for sibling repos in Step 5. (c) Added `gh` CLI fallback for PR fetching.
+**Results:** 312 messages, 12 UI-relevant threads. 2 Needs Filing, 13 open bugs (no Slack), 10 merged PRs, 3 open PRs, 0 Backport Suggestions.
+**All 3 Run 4 fixes confirmed:**
+
+1. ✅ **OVS bridge dedup FIXED** — Rovo search found CONSOLE-5348, CNV-89500, CONSOLE-5349, HPUX-1719. Thread moved from "Needs Filing" to "Feature Requests" as TRACKING. This was the primary dedup miss from Run 4.
+2. ✅ **Code Context uses real output** — sibling repo found via absolute path `/home/rlavi/Projects/networking-console-plugin`. Filing templates include actual `git log` output and feature flag grep results.
+3. ✅ **PR fetching via MCP tool worked** — returned current data with most recent PR merged 2026-06-15.
+
+**Remaining minor issues (acceptable):**
+
+1. Rovo search Confluence noise — filtered correctly by type=issue but wastes API quota. Not fixable without server-side filtering.
+2. nmstate-console-plugin sibling repo not tested this run (no NMState NF candidates).
+3. Open Bugs section includes low-priority ART/i18n tickets — could add priority filtering for focus.
+
+## Summary of All Iterations (11-15)
+
+### Fixes Applied Across 5 Runs
+
+| Run | Issues Found | Fixes Applied |
+|---|---|---|
+| 1 | False positive (custom logos), wrong component routing, shallow Code Context, no standalone Jira scan | +EXCLUDE incidental mentions, +view module table entry, +require actual command output, +standalone Jira bug scan |
+| 2 | Backend upgrade thread included, CNV kubevirt-plugin features included, vague Jira references | +EXCLUDE backend upgrades, +EXCLUDE kubevirt-plugin features, +require 1-sentence Jira summary |
+| 3 | No Recent PRs section | +Recent PRs section in report template |
+| 4 | OVS feature request dedup miss, shallow Code Context (no sibling repo), GitHub MCP sort issue | +mandatory Rovo search with type=issue filter, +absolute path for sibling repos, +gh CLI fallback |
+| 5 | Clean run — all fixes confirmed | None needed |
+
+### Report Quality Progression
+
+| Metric | Run 1 | Run 2 | Run 3 | Run 4 | Run 5 |
+|---|---|---|---|---|---|
+| UI-relevant threads | 27 | 15 | 14 | 14 | 12 |
+| False positives | 3 | 1 | 0 | 1 (dedup miss) | 0 |
+| Needs Filing accuracy | 2/2 | 2/2 | 2/2 | 2/3 (1 was duplicate) | 2/2 |
+| Code Context quality | Guessed | Partial | Good | Missed (no repo) | Real output |
+| Recent PRs | ❌ | ❌ | ❌ | ✅ 12+3 | ✅ 10+3 |
+| Open Bugs (no Slack) | ❌ | ✅ 14 | ✅ 13 | ✅ 13 | ✅ 13 |
+
+### Final Agent Spec Quality Assessment
+
+The agent spec is now mature. Key strengths:
+- **Tight UI-relevance filter** — 7 EXCLUDE rules eliminate backend networking, CI, kubevirt-plugin, and incidental mentions
+- **Reliable Jira dedup** — JQL + mandatory Rovo search (filtered to issues) catches tickets across projects
+- **Rich filing templates** — Code Context with actual git log, feature flags, and GitHub links
+- **Comprehensive report** — Slack threads + Jira bugs + GitHub PRs + filing templates in a single actionable document
+- **Backport analysis** — version coverage map with gap detection (not triggered in these runs but implemented)
 - [CNV-87617](https://redhat.atlassian.net/browse/CNV-87617) — Bug update requested
 - [CNV-86150](https://redhat.atlassian.net/browse/CNV-86150) — CVE-2026-7374 fix version unclear
 

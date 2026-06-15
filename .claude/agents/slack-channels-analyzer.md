@@ -91,6 +91,9 @@ Read the Slack JSON data. For each thread, determine: **"Is this about the conso
 - Is a general customer support question about virt features unrelated to networking UI
 - Is about security audit findings on RBAC/ClusterRoles (backend, not UI)
 - Is about live migration, storage, CPU hotplug, or other non-networking virt features
+- Mentions `networking-console-plugin` or `nmstate-console-plugin` only **incidentally** (e.g., as a pre-registered plugin listed alongside others, or in a console operator validation error) — the bug must be **in** the networking/NMState plugin, not merely **mentioning** it
+- Is a backend networking issue during OCP upgrades (e.g., VM connectivity loss during network operator restarts) with no console UI component
+- Is a CNV UI feature request that targets `kubevirt-plugin` rather than `networking-console-plugin` or `nmstate-console-plugin` (e.g., self-validation checkup, VM templates, Windows EULA)
 
 For borderline threads: include if the discussion could surface a UI bug or feature request, exclude if it's purely operational.
 
@@ -128,17 +131,55 @@ For each candidate, extract 2-3 key terms from the thread (e.g., "VLAN DHCP", "n
    project = {project_key} AND component = "{component}" AND text ~ "{key terms}" ORDER BY created DESC
    ```
 
-2. **Rovo search** — use `mcp__atlassian__search` with a natural-language query for broader matching (catches tickets with different wording).
+2. **Rovo search** — ALWAYS run `mcp__atlassian__search` with a natural-language query for broader matching. This catches tickets filed in unexpected projects (e.g., CONSOLE instead of OCPBUGS, or RFE instead of CNV). Filter results: only consider items with `type === "issue"` — ignore Confluence pages, which are noise.
 
 ### Classify Search Results
 
-For each candidate, produce one of three outcomes:
+For each candidate, produce one of four outcomes:
 
-- **Duplicate found** — an open or recent (last 90 days) bug/feature covers the same issue. Remove from "Needs Filing". Move it to the main report body under the matching section, annotated with the existing ticket link and its current status.
+- **Duplicate found** — an open or recent (last 90 days) bug/feature covers the same issue. Remove from "Needs Filing". Move it to the main report body under the matching section, annotated with the existing ticket link, its current status, and version coverage (see "Backport Analysis" below).
+- **Duplicate found — backport needed** — a tracker exists but only covers a different OCP version than the one reported in the Slack thread. Move to the main report AND add a backport suggestion to the "Backport Suggestions" section.
 - **Related but distinct** — similar issues exist but don't cover this exact problem. Keep in "Needs Filing" but add a `Related:` line with links to the similar tickets so the filer can link them.
 - **No match** — no existing coverage. Proceed as a new issue to file.
 
-Display progress: `[4/7] Searching Jira for existing issues... {N} candidates, {duplicates} duplicates found, {related} with related tickets`
+### Backport Analysis (for "Duplicate found" outcomes)
+
+When a duplicate is found, perform a backport analysis:
+
+1. **Fetch tracker details** — use `mcp__atlassian__getJiraIssue` to get the tracker's status, priority, assignee, and target/fix versions.
+
+2. **Search for existing backports** — JQL search for related version-specific tickets:
+
+   ```
+   project = OCPBUGS AND component = "{component}" AND summary ~ "{key terms from original}" AND summary ~ "[release-" ORDER BY created DESC
+   ```
+
+   Also check if the original tracker's summary contains a version tag like `[4.22]` or `[release-4.21]`.
+
+3. **Build a version coverage map** — list which OCP versions have a tracker:
+   - The original ticket's target version (from the summary tag or `fixVersions` field)
+   - Any backport tickets found in the search (extract version from `[release-X.Y]` or `[X.Y]` prefix)
+   - Example: `Versions covered: main, 4.22, 4.21`
+
+4. **Compare with the Slack thread** — if the Slack thread mentions an OCP version that has no tracker:
+   - Flag the outcome as **"Duplicate found — backport needed"**
+   - Add an entry to the "Backport Suggestions" section of the report
+
+### Standalone Jira Bug Scan
+
+In addition to the per-candidate dedup search, perform a broad scan for recent open bugs in both plugin components that may not have been discussed in Slack:
+
+```
+project = OCPBUGS AND component = "Networking / networking-console-plugin" AND status in (New, ASSIGNED, POST) AND created >= -90d ORDER BY created DESC
+```
+
+```
+project = OCPBUGS AND component = "Networking / nmstate-console-plugin" AND status in (New, ASSIGNED, POST) AND created >= -90d ORDER BY created DESC
+```
+
+Include any open bugs found in the report under a separate **"Open Bugs (no Slack activity)"** subsection within "Bugs & Issues". For each, show the Jira key, summary, status, priority, and assignee. This ensures the report captures bugs filed directly in Jira without Slack discussion.
+
+Display progress: `[4/7] Searching Jira for existing issues... {N} candidates, {duplicates} duplicates found, {backports} backports needed, {related} with related tickets`
 
 ## Step 5: Local Code Research
 
@@ -146,12 +187,12 @@ For each "Needs Filing" candidate that survived the Jira dedup check, research t
 
 ### Determine the repo
 
-Based on the component routing from Step 3:
+Based on the component routing from Step 3, check for the sibling repo using both relative and absolute paths:
 
-- `Networking / networking-console-plugin` → search `../networking-console-plugin`
-- `Networking / nmstate-console-plugin` → search `../nmstate-console-plugin`
+- `Networking / networking-console-plugin` → search `../networking-console-plugin` (or `/home/rlavi/Projects/networking-console-plugin`)
+- `Networking / nmstate-console-plugin` → search `../nmstate-console-plugin` (or `/home/rlavi/Projects/nmstate-console-plugin`)
 
-If the sibling repo directory does not exist, skip this step for that candidate and note it in the template.
+Run `ls ../networking-console-plugin/src/views/ 2>/dev/null || ls /home/rlavi/Projects/networking-console-plugin/src/views/` to verify the repo exists. If neither path works, skip this step for that candidate and note it in the template.
 
 ### View module mapping
 
@@ -159,7 +200,8 @@ Use this table to narrow the search to the right source directory:
 
 | UI Feature | Repo | View Path |
 |---|---|---|
-| NAD / Virtual Machine Networks | networking-console-plugin | `src/views/nads/` |
+| NAD creation form | networking-console-plugin | `src/views/nads/` |
+| Virtual Machine Networks / Create VM Network wizard | networking-console-plugin | `src/views/nads/` (creates NADs under the hood) |
 | UDN / CUDN | networking-console-plugin | `src/views/udns/` |
 | NetworkPolicy / MultiNetworkPolicy | networking-console-plugin | `src/views/networkpolicies/` |
 | Services | networking-console-plugin | `src/views/services/` |
@@ -187,14 +229,14 @@ For each candidate:
 
 ### Output
 
-For each candidate, collect:
+For each candidate, collect actual command output — do not guess file names or flag names:
 
 - **Repo**: `openshift/{repo-name}`
-- **Affected module**: `src/views/{module}/`
-- **Key files**: list of 1-3 files most relevant to the bug (form, list, or manifest)
+- **Affected module**: `src/views/{module}/` (confirmed via `ls` or `grep`)
+- **Key files**: list of 1-3 files most relevant to the bug — run `find ../{repo}/src/views/{module} -name "*.tsx" -maxdepth 3` and select the form, list, or manifest files
 - **GitHub link**: `https://github.com/openshift/{repo-name}/tree/main/src/views/{module}`
-- **Recent changes**: 1-2 line summary of recent git activity, or "No recent changes in this area"
-- **Feature flags**: relevant flags if any, or "None"
+- **Recent changes**: paste the actual `git log` output (1-3 lines), or "No recent changes in this area"
+- **Feature flags**: paste the actual `grep` output, or "None found"
 
 Display progress: `[5/7] Researching local codebase for affected components... {N} candidates`
 
@@ -239,7 +281,11 @@ Write the focused report to `agents/slack-channels-analyzer/data/output/report.m
 { 3. What has been tried or discussed so far (workarounds, root cause theories)}
 { 4. Current status — is someone working on it? Is it blocked? What's the next step?}
 { 5. Suggested triage action — file a bug, assign to someone, needs investigation, etc.}
-{- If the thread references a Jira ticket: [KEY](https://redhat.atlassian.net/browse/KEY)}
+{- If the thread references a Jira ticket: [KEY](https://redhat.atlassian.net/browse/KEY) — always include a 1-sentence summary of what the Jira issue is about, not just the key. Use `mcp__atlassian__getJiraIssue` if the thread only says "update on KEY" without context.}
+{- If the thread has an existing Jira tracker (from Step 4 dedup):}
+{  - Tracker: `{STATUS}` | Priority: {priority} | Assignee: {assignee}}
+{  - Version coverage: {list of OCP versions with trackers/backports, e.g. "main, 4.22, 4.21"}}
+{  - If backport needed: **Backport needed for {version}** — no tracker exists for the version reported in this thread}
 {- If the thread references a GitHub PR: [#N](https://github.com/.../pull/N)}
 {- OCP versions affected, if mentioned}
 
@@ -254,6 +300,25 @@ Write the focused report to `agents/slack-channels-analyzer/data/output/report.m
 ### Customer-Reported UI Problems
 
 {Same format — include triage context with: customer impact, reproduction steps if available, workaround if any}
+
+## Recent networking-console-plugin PRs
+
+{Fetch the 15 most recently updated PRs from `openshift/networking-console-plugin`. Try `mcp__github__list_pull_requests` first (state: all, sort: updated, perPage: 15). If the MCP tool returns stale results (PRs older than 30 days at the top), fall back to `gh pr list --repo openshift/networking-console-plugin --state all --limit 15 --json number,title,state,mergedAt,url,labels`.}
+{Split into two tables:}
+
+### Merged PRs (last 30 days)
+
+| PR | Title | Jira | Merged |
+|---|---|---|---|
+{For each merged PR with merged_at in the last 30 days:}
+{[#N](pr_url) | title | [KEY](jira_url) or — | merged_at date}
+
+### Open PRs
+
+| PR | Title | Jira |
+|---|---|---|
+{For each open PR:}
+{[#N](pr_url) | title | [KEY](jira_url) or —}
 
 ## Needs Filing
 
@@ -312,6 +377,21 @@ Write the focused report to `agents/slack-channels-analyzer/data/output/report.m
 
 {If related tickets were found in Step 4:}
 **Related:** [KEY-123](https://redhat.atlassian.net/browse/KEY-123), [KEY-456](https://redhat.atlassian.net/browse/KEY-456)
+
+## Backport Suggestions
+
+{Only include this section if Step 4 identified trackers that need backports.}
+{Table of existing trackers where the Slack thread reports the issue on a version without coverage.}
+{Columns: # | Existing tracker | Tracker status | Versions covered | Slack-reported version | Suggested action}
+
+{For each entry, include:}
+{- [KEY](https://redhat.atlassian.net/browse/KEY) with current status}
+{- Which OCP versions already have trackers (e.g., "main, 4.22")}
+{- Which version the Slack thread reports the issue on (e.g., "4.21")}
+{- Suggested action: "File backport to 4.21" or "Verify fix is cherry-picked to 4.21"}
+{- [View thread](slackUrl) — link to the Slack conversation that surfaced the gap}
+
+{If no backports are needed, omit this section entirely.}
 ```
 
 ### Style Guide for Executive Summary
@@ -340,6 +420,8 @@ Write the focused report to `agents/slack-channels-analyzer/data/output/report.m
 - [ ] No duplicates — threads with matching Jira bugs found in Step 4 are in the main report, not "Needs Filing"
 - [ ] Related tickets are listed on templates where Step 4 found similar issues
 - [ ] Each "Needs Filing" template includes a Code Context section with repo, module path, and GitHub link
+- [ ] Threads with existing trackers show tracker status, priority, and version coverage
+- [ ] Backport suggestions are listed when the Slack-reported version lacks a tracker
 - [ ] Executive summary has specific numbers
 - [ ] Report is actionable for a UI team lead
 

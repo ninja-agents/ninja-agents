@@ -262,36 +262,46 @@ Wait for the user's response:
 
 **NEVER proceed to Step 7 without explicit user approval. This is non-negotiable.**
 
+### Save Approved Estimates
+
+After the user approves (all or a selected subset), save the approved estimates to `agents/jira-story-points/data/cache/estimated-tickets.json`:
+
+```json
+[
+  {
+    "key": "CNV-90112",
+    "estimated_sp": 2,
+    "confidence": "High",
+    "reasoning": "Clone of CNV-81262 (2 SP) — identical scope, NNCP display mismatch fix.",
+    "similar_tickets": ["CNV-81262 (2)", "CNV-83349 (2)", "CNV-84035 (2)"]
+  }
+]
+```
+
 ## Step 7: Apply Estimates
 
-For each approved ticket, do two things in sequence:
+Run the apply script. This uses the Jira REST API with Basic Auth (`JIRA_API_TOKEN` env var) — not the Rovo MCP, which cannot write to these issues.
 
-### 7a. Add Jira Comment
-
-```
-mcp__atlassian__addCommentToJiraIssue:
-  cloudId: "redhat.atlassian.net"
-  issueIdOrKey: "{ticket_key}"
-  commentBody: "{comment_prefix}\n\n{reasoning paragraph}\n\nSimilar tickets: {list of similar ticket keys with SP values}"
-  contentFormat: "markdown"
+```bash
+npx tsx agents/jira-story-points/scripts/apply-story-points.ts --config agents/jira-story-points/data/config.json --estimates agents/jira-story-points/data/cache/estimated-tickets.json
 ```
 
-### 7b. Set Story Points
+The script processes each ticket sequentially:
 
-```
-mcp__atlassian__editJiraIssue:
-  cloudId: "redhat.atlassian.net"
-  issueIdOrKey: "{ticket_key}"
-  fields: { "customfield_10028": {suggested_sp} }
-```
+1. Adds a Jira comment with the estimation reasoning
+2. Sets the story points field
+3. Appends to `agents/jira-story-points/data/output/estimation-history.json`
 
-Process tickets sequentially to avoid rate limits.
+Handle exit codes:
 
-Display per-ticket progress: `[7/7] Set {key} → {SP} SP ✓`
+- **Exit 0**: All tickets updated successfully.
+- **Exit 1**: Error (missing config, estimates file, or token). Display the message. STOP.
+- **Exit 2**: Data quality problem (empty estimates). Display. Ask user to retry.
+- **Exit 3**: Partial — some tickets failed. Display the script output and note failures.
 
 ### Write Summary
 
-After all tickets are processed, display a summary.
+After the script completes, display its output to the user.
 
 **Format rules:**
 

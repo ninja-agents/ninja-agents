@@ -14,6 +14,7 @@ import {
   checkClaudeMdContextLinks,
   checkCoderabbitAgentsReference,
   checkCoderabbitFeatureModuleCoverage,
+  checkDocumentedCiFilenames,
 } from "./validate-output.js";
 import { LINE_LIMITS } from "./lib.js";
 
@@ -678,5 +679,73 @@ describe("checkArchitectureDedup", () => {
     );
     const warnings = checkArchitectureDedup(tempDir);
     expect(warnings.some((w) => w.includes("dependency flow"))).toBe(true);
+  });
+});
+
+describe("checkDocumentedCiFilenames", () => {
+  it("returns no warnings when .github/workflows does not exist", () => {
+    expect(checkDocumentedCiFilenames(tempDir)).toEqual([]);
+  });
+
+  it("returns no warnings when ARCHITECTURE.md has no CI section", () => {
+    mkdirSync(join(tempDir, ".github", "workflows"), { recursive: true });
+    writeFileSync(
+      join(tempDir, ".github", "workflows", "ci.yml"),
+      "name: CI\n",
+    );
+    writeFileSync(
+      join(tempDir, "ARCHITECTURE.md"),
+      "# Architecture\n\nOverview.\n",
+    );
+    expect(checkDocumentedCiFilenames(tempDir)).toEqual([]);
+  });
+
+  it("returns no warnings when documented CI filenames match actual files", () => {
+    mkdirSync(join(tempDir, ".github", "workflows"), { recursive: true });
+    writeFileSync(
+      join(tempDir, ".github", "workflows", "ci-repo.yml"),
+      "name: CI\n",
+    );
+    writeFileSync(
+      join(tempDir, ".github", "workflows", "ci-e2e-tests.yml"),
+      "name: E2E\n",
+    );
+    writeFileSync(
+      join(tempDir, "ARCHITECTURE.md"),
+      "# Architecture\n\n## CI/CD\n\n- **`ci-repo.yml`** -- Repo CI.\n- **`ci-e2e-tests.yml`** -- E2E tests.\n",
+    );
+    expect(checkDocumentedCiFilenames(tempDir)).toEqual([]);
+  });
+
+  it("warns when a documented CI filename does not exist", () => {
+    mkdirSync(join(tempDir, ".github", "workflows"), { recursive: true });
+    writeFileSync(
+      join(tempDir, ".github", "workflows", "ci-repo.yml"),
+      "name: CI\n",
+    );
+    writeFileSync(
+      join(tempDir, "ARCHITECTURE.md"),
+      "# Architecture\n\n## CI/CD\n\n- **`ci-repo.yml`** -- Repo CI.\n- **`ci-global.yml`** -- Global CI.\n",
+    );
+    const warnings = checkDocumentedCiFilenames(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("ci-global.yml");
+    expect(warnings[0]).toContain("does not exist");
+  });
+
+  it("checks AGENTS.md too", () => {
+    mkdirSync(join(tempDir, ".github", "workflows"), { recursive: true });
+    writeFileSync(
+      join(tempDir, ".github", "workflows", "build.yaml"),
+      "name: Build\n",
+    );
+    writeFileSync(
+      join(tempDir, "AGENTS.md"),
+      "# Agents\n\n## CI\n\nUse `deploy.yaml` for deployment.\n",
+    );
+    const warnings = checkDocumentedCiFilenames(tempDir);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("AGENTS.md");
+    expect(warnings[0]).toContain("deploy.yaml");
   });
 });

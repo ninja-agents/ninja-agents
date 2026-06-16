@@ -342,6 +342,44 @@ export function checkArchitectureSubdirLink(repoPath: string): string[] {
   ];
 }
 
+export function checkDocumentedCiFilenames(repoPath: string): string[] {
+  const warnings: string[] = [];
+  const workflowsDir = join(repoPath, ".github", "workflows");
+  if (!existsSync(workflowsDir)) return [];
+
+  const actualWorkflows = new Set(
+    readdirSync(workflowsDir).filter(
+      (f) => f.endsWith(".yml") || f.endsWith(".yaml"),
+    ),
+  );
+
+  const docsToCheck = ["ARCHITECTURE.md", "AGENTS.md"];
+  const ciFilePattern = /`([a-zA-Z0-9._-]+\.ya?ml)`/g;
+
+  for (const docFile of docsToCheck) {
+    const docPath = join(repoPath, docFile);
+    if (!existsSync(docPath)) continue;
+
+    const content = readFileSync(docPath, "utf-8");
+    const sections = extractSections(content);
+    const ciSections = sections.filter((s) => isCiSection(s.heading));
+    if (ciSections.length === 0) continue;
+
+    const ciText = ciSections.map((s) => s.body).join("\n");
+    let match: RegExpExecArray | null;
+    while ((match = ciFilePattern.exec(ciText)) !== null) {
+      const filename = match[1];
+      if (!actualWorkflows.has(filename)) {
+        warnings.push(
+          `${docFile} references CI workflow \`${filename}\` but .github/workflows/${filename} does not exist`,
+        );
+      }
+    }
+  }
+
+  return warnings;
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help === true) {
@@ -421,6 +459,7 @@ function main() {
   warnings.push(...checkClaudeMdContextLinks(repoPath));
   warnings.push(...checkCoderabbitAgentsReference(repoPath));
   warnings.push(...checkCoderabbitFeatureModuleCoverage(repoPath));
+  warnings.push(...checkDocumentedCiFilenames(repoPath));
 
   if (errors.length > 0) {
     console.error(`\n${errors.length} error(s) found:`);

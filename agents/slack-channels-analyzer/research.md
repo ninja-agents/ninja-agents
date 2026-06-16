@@ -142,6 +142,7 @@
 6. **Code Context quality varies** — NF-1 Code Context pointed to `src/views/physical-networks/` with generic file names, NF-2 pointed to `src/views/nads/` correctly. Code research was surface-level — no git log output or feature flag results included.
 
 **Next:**
+
 - Add explicit entry for "Virtual Machine Networks / Create VM Network wizard" to the view module mapping table (clarify which repo owns it) ✅ Done
 - Add instruction to EXCLUDE threads that mention networking-console-plugin only incidentally ✅ Done
 - Add standalone Jira bug surfacing — "Open Bugs (no Slack activity)" section ✅ Done
@@ -170,6 +171,7 @@
 6. **Report could use a "Recent PRs" section** — the previous manual run included a merged PRs table from GitHub. The agent spec doesn't require it but it adds useful context.
 
 **Next:**
+
 - Tighten Customer-Reported UI Problems to exclude purely backend networking issues (upgrades, OVN) ✅ Done
 - Exclude CNV UI issues targeting kubevirt-plugin ✅ Done
 - Add instruction for 1-sentence Jira summary when referencing trackers ✅ Done
@@ -199,6 +201,7 @@
 **Assessment:** The report quality is now very good. The filter is tight, false positives are eliminated, and the Code Context is actionable. Two minor improvements remain: (1) add a "Recent PRs" section, (2) consider filtering the Open Bugs section by priority (exclude Undefined/Low).
 
 **Next:**
+
 - Add "Recent PRs" section to the report template ✅ Done
 
 ## Iteration 14 (Run 4/5)
@@ -219,6 +222,7 @@
 3. **GitHub MCP sort issue** — `mcp__github__list_pull_requests` with `sort: updated` returned old PRs. The agent worked around with `gh` CLI. The spec should document this workaround.
 
 **Next:**
+
 - Fix Rovo search: always run it, filter to type=issue only ✅ Done
 - Add absolute path guidance to Step 5 for sibling repos ✅ Done
 - Document `gh` CLI fallback for PR fetching ✅ Done
@@ -244,28 +248,29 @@
 
 ### Fixes Applied Across 5 Runs
 
-| Run | Issues Found | Fixes Applied |
-|---|---|---|
-| 1 | False positive (custom logos), wrong component routing, shallow Code Context, no standalone Jira scan | +EXCLUDE incidental mentions, +view module table entry, +require actual command output, +standalone Jira bug scan |
-| 2 | Backend upgrade thread included, CNV kubevirt-plugin features included, vague Jira references | +EXCLUDE backend upgrades, +EXCLUDE kubevirt-plugin features, +require 1-sentence Jira summary |
-| 3 | No Recent PRs section | +Recent PRs section in report template |
-| 4 | OVS feature request dedup miss, shallow Code Context (no sibling repo), GitHub MCP sort issue | +mandatory Rovo search with type=issue filter, +absolute path for sibling repos, +gh CLI fallback |
-| 5 | Clean run — all fixes confirmed | None needed |
+| Run | Issues Found                                                                                          | Fixes Applied                                                                                                     |
+| --- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 1   | False positive (custom logos), wrong component routing, shallow Code Context, no standalone Jira scan | +EXCLUDE incidental mentions, +view module table entry, +require actual command output, +standalone Jira bug scan |
+| 2   | Backend upgrade thread included, CNV kubevirt-plugin features included, vague Jira references         | +EXCLUDE backend upgrades, +EXCLUDE kubevirt-plugin features, +require 1-sentence Jira summary                    |
+| 3   | No Recent PRs section                                                                                 | +Recent PRs section in report template                                                                            |
+| 4   | OVS feature request dedup miss, shallow Code Context (no sibling repo), GitHub MCP sort issue         | +mandatory Rovo search with type=issue filter, +absolute path for sibling repos, +gh CLI fallback                 |
+| 5   | Clean run — all fixes confirmed                                                                       | None needed                                                                                                       |
 
 ### Report Quality Progression
 
-| Metric | Run 1 | Run 2 | Run 3 | Run 4 | Run 5 |
-|---|---|---|---|---|---|
-| UI-relevant threads | 27 | 15 | 14 | 14 | 12 |
-| False positives | 3 | 1 | 0 | 1 (dedup miss) | 0 |
-| Needs Filing accuracy | 2/2 | 2/2 | 2/2 | 2/3 (1 was duplicate) | 2/2 |
-| Code Context quality | Guessed | Partial | Good | Missed (no repo) | Real output |
-| Recent PRs | ❌ | ❌ | ❌ | ✅ 12+3 | ✅ 10+3 |
-| Open Bugs (no Slack) | ❌ | ✅ 14 | ✅ 13 | ✅ 13 | ✅ 13 |
+| Metric                | Run 1   | Run 2   | Run 3 | Run 4                 | Run 5       |
+| --------------------- | ------- | ------- | ----- | --------------------- | ----------- |
+| UI-relevant threads   | 27      | 15      | 14    | 14                    | 12          |
+| False positives       | 3       | 1       | 0     | 1 (dedup miss)        | 0           |
+| Needs Filing accuracy | 2/2     | 2/2     | 2/2   | 2/3 (1 was duplicate) | 2/2         |
+| Code Context quality  | Guessed | Partial | Good  | Missed (no repo)      | Real output |
+| Recent PRs            | ❌      | ❌      | ❌    | ✅ 12+3               | ✅ 10+3     |
+| Open Bugs (no Slack)  | ❌      | ✅ 14   | ✅ 13 | ✅ 13                 | ✅ 13       |
 
 ### Final Agent Spec Quality Assessment
 
 The agent spec is now mature. Key strengths:
+
 - **Tight UI-relevance filter** — 7 EXCLUDE rules eliminate backend networking, CI, kubevirt-plugin, and incidental mentions
 - **Reliable Jira dedup** — JQL + mandatory Rovo search (filtered to issues) catches tickets across projects
 - **Rich filing templates** — Code Context with actual git log, feature flags, and GitHub links

@@ -25,18 +25,19 @@ You do NOT format the Slack data yourself — the TypeScript script handles fetc
 Before starting Step 1, display a step overview:
 
 ```text
-Starting slack-channels-analyzer (7 steps):
+Starting slack-channels-analyzer (8 steps):
 
 1. Read config
 2. Fetch Slack data
 3. Filter for UI relevance + classify type/component
 4. Search Jira for existing issues (dedup check)
 5. Local code research (enrich filing templates)
-6. Generate focused report with filing templates
-7. File issues in Jira (optional, per-issue approval)
+6. Verify "Needs Filing" candidates (skeptical re-check)
+7. Generate focused report with filing templates
+8. File issues in Jira (optional, per-issue approval)
 ```
 
-Prefix every status line with `[N/7]`.
+Prefix every status line with `[N/8]`.
 
 ## Step 1: Read Config
 
@@ -179,7 +180,7 @@ project = OCPBUGS AND component = "Networking / nmstate-console-plugin" AND stat
 
 Include any open bugs found in the report under a separate **"Open Bugs (no Slack activity)"** subsection within "Bugs & Issues". For each, show the Jira key, summary, status, priority, and assignee. This ensures the report captures bugs filed directly in Jira without Slack discussion.
 
-Display progress: `[4/7] Searching Jira for existing issues... {N} candidates, {duplicates} duplicates found, {backports} backports needed, {related} with related tickets`
+Display progress: `[4/8] Searching Jira for existing issues... {N} candidates, {duplicates} duplicates found, {backports} backports needed, {related} with related tickets`
 
 ## Step 5: Local Code Research
 
@@ -238,9 +239,27 @@ For each candidate, collect actual command output — do not guess file names or
 - **Recent changes**: paste the actual `git log` output (1-3 lines), or "No recent changes in this area"
 - **Feature flags**: paste the actual `grep` output, or "None found"
 
-Display progress: `[5/7] Researching local codebase for affected components... {N} candidates`
+Display progress: `[5/8] Researching local codebase for affected components... {N} candidates`
 
-## Step 6: Generate Report
+## Step 6: Verify "Needs Filing" Candidates
+
+Before generating the report, re-examine each "Needs Filing" candidate with a skeptical lens. For each candidate, answer three questions:
+
+1. **Is the root cause in the UI code?** — Would fixing this require changes to `networking-console-plugin` or `nmstate-console-plugin` source? If the fix belongs in OVN, the API server, an operator, or backend networking, it is NOT a UI bug.
+
+2. **Is the UI generating incorrect output?** — If the thread compares "created via console" vs "created via YAML", check whether the two approaches use the same networking backend. The console's "Virtual Machine Networks" creates localnet/OVN-based NADs, while manual NADs often use Linux bridge — these are intentionally different technologies with different behavior. A difference in behavior is not a UI bug unless the console generates an invalid or malformed spec.
+
+3. **Could a reasonable user mistake backend behavior for a UI bug?** — If yes, the thread is still valuable context but should appear in the main report body as an "Info" item (not "Needs Filing") with a note explaining the distinction.
+
+### Outcomes per candidate:
+
+- **Confirmed UI bug** — keep in "Needs Filing"
+- **Backend issue surfaced via UI** — remove from "Needs Filing", optionally note in report body under the relevant section as an Info/Monitoring item
+- **Unclear** — keep in "Needs Filing" but add a caveat note to the filing template: "Root cause may be in the backend — investigate before assigning to UI team"
+
+Display progress: `[6/8] Verifying Needs Filing candidates... {N} candidates, {removed} reclassified as backend issues`
+
+## Step 7: Generate Report
 
 Write the focused report to `agents/slack-channels-analyzer/data/output/report.md`. Use these sections:
 
@@ -425,7 +444,7 @@ Write the focused report to `agents/slack-channels-analyzer/data/output/report.m
 - [ ] Executive summary has specific numbers
 - [ ] Report is actionable for a UI team lead
 
-## Step 7: File Issues in Jira (Optional)
+## Step 8: File Issues in Jira (Optional)
 
 After displaying the report, if there are items in the "Needs Filing" section, walk through each one individually for user approval.
 
@@ -468,6 +487,16 @@ After creation:
 
 - Display: `Created [KEY-XXXXX](https://redhat.atlassian.net/browse/KEY-XXXXX) — {summary}`
 - If related tickets were found in Step 4, link them via `mcp__atlassian__createIssueLink` with type `Relates`
+- Suggest a Slack reply for the user to post to the original thread (the agent MUST NOT post to Slack — Rule 1):
+
+```
+Suggested Slack reply for {slackUrl}:
+───
+:jira: Filed {KEY} — {summary}
+https://redhat.atlassian.net/browse/{KEY}
+───
+```
+
 - Move to the next item
 
 ### Summary
@@ -478,6 +507,9 @@ After processing all items, display a summary:
 Filing complete:
 - Filed: {N} issues ({list of keys with links})
 - Skipped: {M} items
+
+Suggested Slack replies:
+- Thread: {slackUrl} → "Filed {KEY} — {summary}"
 ```
 
 ## Rules

@@ -199,19 +199,19 @@ Run `ls ../networking-console-plugin/src/views/ 2>/dev/null || ls /home/rlavi/Pr
 
 Use this table to narrow the search to the right source directory:
 
-| UI Feature | Repo | View Path |
-|---|---|---|
-| NAD creation form | networking-console-plugin | `src/views/nads/` |
+| UI Feature                                          | Repo                      | View Path                                       |
+| --------------------------------------------------- | ------------------------- | ----------------------------------------------- |
+| NAD creation form                                   | networking-console-plugin | `src/views/nads/`                               |
 | Virtual Machine Networks / Create VM Network wizard | networking-console-plugin | `src/views/nads/` (creates NADs under the hood) |
-| UDN / CUDN | networking-console-plugin | `src/views/udns/` |
-| NetworkPolicy / MultiNetworkPolicy | networking-console-plugin | `src/views/networkpolicies/` |
-| Services | networking-console-plugin | `src/views/services/` |
-| Routes | networking-console-plugin | `src/views/routes/` |
-| Ingresses | networking-console-plugin | `src/views/ingresses/` |
-| NNCP wizard | nmstate-console-plugin | `src/views/policies/` |
-| Physical Networks page | nmstate-console-plugin | `src/views/physical-networks/` |
-| Node Network State | nmstate-console-plugin | `src/views/states/` |
-| Node Network Configuration | nmstate-console-plugin | `src/views/nodenetworkconfiguration/` |
+| UDN / CUDN                                          | networking-console-plugin | `src/views/udns/`                               |
+| NetworkPolicy / MultiNetworkPolicy                  | networking-console-plugin | `src/views/networkpolicies/`                    |
+| Services                                            | networking-console-plugin | `src/views/services/`                           |
+| Routes                                              | networking-console-plugin | `src/views/routes/`                             |
+| Ingresses                                           | networking-console-plugin | `src/views/ingresses/`                          |
+| NNCP wizard                                         | nmstate-console-plugin    | `src/views/policies/`                           |
+| Physical Networks page                              | nmstate-console-plugin    | `src/views/physical-networks/`                  |
+| Node Network State                                  | nmstate-console-plugin    | `src/views/states/`                             |
+| Node Network Configuration                          | nmstate-console-plugin    | `src/views/nodenetworkconfiguration/`           |
 
 ### Research strategy
 
@@ -302,9 +302,9 @@ Write the focused report to `agents/slack-channels-analyzer/data/output/report.m
 { 5. Suggested triage action — file a bug, assign to someone, needs investigation, etc.}
 {- If the thread references a Jira ticket: [KEY](https://redhat.atlassian.net/browse/KEY) — always include a 1-sentence summary of what the Jira issue is about, not just the key. Use `mcp__atlassian__getJiraIssue` if the thread only says "update on KEY" without context.}
 {- If the thread has an existing Jira tracker (from Step 4 dedup):}
-{  - Tracker: `{STATUS}` | Priority: {priority} | Assignee: {assignee}}
-{  - Version coverage: {list of OCP versions with trackers/backports, e.g. "main, 4.22, 4.21"}}
-{  - If backport needed: **Backport needed for {version}** — no tracker exists for the version reported in this thread}
+{ - Tracker: `{STATUS}` | Priority: {priority} | Assignee: {assignee}}
+{ - Version coverage: {list of OCP versions with trackers/backports, e.g. "main, 4.22, 4.21"}}
+{ - If backport needed: **Backport needed for {version}** — no tracker exists for the version reported in this thread}
 {- If the thread references a GitHub PR: [#N](https://github.com/.../pull/N)}
 {- OCP versions affected, if mentioned}
 
@@ -327,15 +327,17 @@ Write the focused report to `agents/slack-channels-analyzer/data/output/report.m
 
 ### Merged PRs (last 30 days)
 
-| PR | Title | Jira | Merged |
-|---|---|---|---|
+| PR  | Title | Jira | Merged |
+| --- | ----- | ---- | ------ |
+
 {For each merged PR with merged_at in the last 30 days:}
 {[#N](pr_url) | title | [KEY](jira_url) or — | merged_at date}
 
 ### Open PRs
 
-| PR | Title | Jira |
-|---|---|---|
+| PR  | Title | Jira |
+| --- | ----- | ---- |
+
 {For each open PR:}
 {[#N](pr_url) | title | [KEY](jira_url) or —}
 

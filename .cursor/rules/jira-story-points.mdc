@@ -1,0 +1,14 @@
+---
+description: "Estimate story points for unpointed Jira tickets using historical team data. Use when the user asks for SP estimation, story point suggestions, or ticket sizing."
+alwaysApply: false
+---
+
+# Story Point Estimation
+
+Read `.claude/agents/jira-story-points.md` and follow the complete workflow described there.
+
+The agent spec contains all steps, MCP tool call examples, JSON cache schema, estimation style guide, and rules. It is the single source of truth for this workflow.
+
+Ignore the YAML frontmatter fields `model` and `memory` — those are Claude Code-specific and have no effect in Cursor.
+
+For best results, use Claude Opus or an equivalent model in Cursor settings.

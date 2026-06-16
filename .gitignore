@@ -8,6 +8,7 @@ agents/jira-qe-story/data/qe-config.json
 agents/jira-sprint-tickets-updater/data/config.json
 agents/slack-channels-analyzer/data/config.json
 agents/jira-add-missing-activity-type/data/config.json
+agents/jira-story-points/data/config.json
 
 # Agent cache (contents only, keep .gitkeep)
 agents/*/data/cache/*

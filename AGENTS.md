@@ -18,6 +18,7 @@ The repo follows a "data collector + deterministic script" pattern: the AI agent
 | [jira-sprint-tickets-updater](agents/jira-sprint-tickets-updater/)       | Transition Jira sprint tickets based on linked GitHub PR status                   | [README](agents/jira-sprint-tickets-updater/README.md)    |
 | [slack-channels-analyzer](agents/slack-channels-analyzer/)               | Analyze Slack channels to identify UI-related topics and trends                   | [README](agents/slack-channels-analyzer/README.md)        |
 | [jira-add-missing-activity-type](agents/jira-add-missing-activity-type/) | Add missing Activity Type to completed Jira tickets via classification rules      | [README](agents/jira-add-missing-activity-type/README.md) |
+| [jira-story-points](agents/jira-story-points/)                           | Estimate story points for unpointed Jira tickets using historical team data       | [README](agents/jira-story-points/README.md)              |
 
 ## IDE Support
 

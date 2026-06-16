@@ -11,6 +11,7 @@
   "references": [
     { "path": "agents/jira-sprint-tickets-updater" },
     { "path": "agents/slack-channels-analyzer" },
-    { "path": "agents/jira-add-missing-activity-type" }
+    { "path": "agents/jira-add-missing-activity-type" },
+    { "path": "agents/jira-story-points" }
   ]
 }

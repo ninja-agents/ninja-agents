@@ -19,6 +19,7 @@ AI agents for engineering teams. Self-contained under `agents/`, specs in `.clau
 | `@jira-sprint-tickets-updater` | Transition sprint tickets based on linked PR status |
 | `@slack-channels-analyzer` | Analyze Slack channels for UI-related topics and trends |
 | `@jira-add-missing-activity-type` | Add missing Activity Type to completed Jira tickets |
+| `@jira-story-points` | Estimate story points using historical team data |
 
 ## Key Rules
 

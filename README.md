@@ -44,6 +44,7 @@ See [docs/mcp-setup.md](docs/mcp-setup.md) for the full token setup guide and tr
 | [jira-sprint-tickets-updater](agents/jira-sprint-tickets-updater/)       | `/jira-sprint-tickets-updater`    | `@jira-sprint-tickets-updater`    | Transition sprint tickets based on linked GitHub PR status      |
 | [slack-channels-analyzer](agents/slack-channels-analyzer/)               | `/slack-channels-analyzer`        | `@slack-channels-analyzer`        | Analyze Slack channels for UI-related topics and trends         |
 | [jira-add-missing-activity-type](agents/jira-add-missing-activity-type/) | `/jira-add-missing-activity-type` | `@jira-add-missing-activity-type` | Add missing Activity Type to completed Jira tickets             |
+| [jira-story-points](agents/jira-story-points/)                           | `/jira-story-points`              | `@jira-story-points`              | Estimate story points using historical team data                |
 | _(scaffold a new agent)_                                                 | `/create-agent`                   | copy `agents/_template/`          | Scaffold a new agent with best-practice structure and specs     |
 
 Each agent has its own README with setup and usage instructions.

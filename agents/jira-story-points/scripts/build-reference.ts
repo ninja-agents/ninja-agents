@@ -7,9 +7,17 @@ interface SizingEntry {
   description: string;
 }
 
+interface Project {
+  key: string;
+  name: string;
+  description?: string;
+  repos?: string[];
+}
+
 interface Config {
   jira: { max_reference_tickets: number };
   sizing_guide: Record<string, SizingEntry>;
+  projects?: Project[];
 }
 
 interface ReferenceTicket {
@@ -64,6 +72,9 @@ function loadTickets(cachePath: string): ReferenceTicket[] {
     console.error("Reference tickets file is empty or not an array");
     process.exit(2);
   }
+  for (const t of data) {
+    if (t.story_points < 2) t.story_points = 2;
+  }
   return data;
 }
 
@@ -85,6 +96,20 @@ function buildReference(tickets: ReferenceTicket[], config: Config): string {
   }
   lines.push("");
 
+  if (config.projects && config.projects.length > 0) {
+    lines.push("## Products");
+    lines.push("");
+    lines.push("| Project | Description | Repos |");
+    lines.push("|---------|-------------|-------|");
+    for (const p of config.projects) {
+      const repos = p.repos?.join(", ") ?? "-";
+      lines.push(
+        `| ${p.key} — ${p.name} | ${p.description ?? "-"} | ${repos} |`,
+      );
+    }
+    lines.push("");
+  }
+
   const spGroups: Record<string, ReferenceTicket[]> = {};
   for (const t of tickets) {
     const sp = String(t.story_points);
@@ -97,10 +122,14 @@ function buildReference(tickets: ReferenceTicket[], config: Config): string {
   lines.push("| SP | Count | % |");
   lines.push("|----|-------|---|");
   const total = tickets.length;
-  for (const sp of ["2", "5", "8", "13", "21"]) {
-    const count = spGroups[sp]?.length ?? 0;
+  const allSpValues = Object.keys(spGroups)
+    .map(Number)
+    .sort((a, b) => a - b);
+  for (const sp of allSpValues) {
+    const count = spGroups[String(sp)]?.length ?? 0;
     const pct = total > 0 ? ((count / total) * 100).toFixed(1) : "0";
-    lines.push(`| ${sp} | ${String(count)} | ${pct}% |`);
+    const note = ![2, 5, 8, 13, 21].includes(sp) ? " *(legacy)*" : "";
+    lines.push(`| ${String(sp)} | ${String(count)} | ${pct}%${note} |`);
   }
   lines.push("");
 

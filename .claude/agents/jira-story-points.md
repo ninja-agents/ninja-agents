@@ -169,7 +169,7 @@ Fetch unpointed tickets from the backlog:
 mcp__atlassian__searchJiraIssuesUsingJql:
   cloudId: "redhat.atlassian.net"
   jql: '{backlog_jql from config}'
-  maxResults: 20
+  maxResults: 10
   fields: ["summary", "description", "issuetype", "priority", "labels", "components", "status", "customfield_10028"]
   responseContentFormat: "markdown"
 ```
@@ -182,19 +182,24 @@ Display: `[4/7] Found {count} unpointed ticket(s) to estimate.`
 
 Read the reference summary from `agents/jira-story-points/data/cache/reference-summary.md`.
 
+For each target ticket — whether single or batch — read the full description before estimating. Do not abbreviate reasoning for batch efficiency. But do not over-analyze simple tickets either: if a Vulnerability or small Bug clearly matches a strong pattern, keep the reasoning concise.
+
 For each target ticket, reason about story points by:
 
-1. **Comparing** the ticket's summary, description, issue type, labels, and components against the reference data
-2. **Identifying** the `top_similar_tickets` most similar historical tickets (by summary content, issue type, labels overlap, component match)
-3. **Considering** the sizing guide — map the ticket's apparent complexity, risk, and uncertainty to the right SP bucket
-4. **Suggesting** a single SP value from the Fibonacci scale (2, 5, 8, 13, 21)
+1. **Checking for clones/backports first** — if the ticket is a clone or backport of a completed ticket in the reference data, use the parent ticket's SP as the baseline. Only deviate if the clone's scope is clearly and explicitly different.
+2. **Using product context** — the reference summary includes a Products table with what each project builds and which repos it touches. Use this to judge scope (e.g., a CONSOLE Story about "EgressIP form page" involves networking-console-plugin with NADs/UDNs — that's a complex plugin domain).
+3. **Comparing** the ticket's summary, description, issue type, labels, and components against the reference data
+4. **Identifying** the `top_similar_tickets` most similar historical tickets (by summary content, issue type, labels overlap, component match)
+5. **Considering** the sizing guide — map the ticket's apparent complexity, risk, and uncertainty to the right SP bucket
+6. **Counting** scope indicators for Stories: number of acceptance criteria, files/components touched, cross-plugin scope, K8s integration, form complexity
+7. **Suggesting** a single SP value from the Fibonacci scale (2, 5, 8, 13, 21)
 
 For each ticket, produce:
 
 - **Suggested SP**: the recommended value
 - **Reasoning**: 2-3 sentences explaining why this SP fits — reference similar tickets by key
 - **Similar tickets**: list of similar reference ticket keys with their SP values
-- **Confidence**: High / Medium / Low — based on how many similar tickets exist and how close the match is
+- **Confidence**: High / Medium / Low — based on how many similar tickets exist and how close the match is. If the ticket description is less than 2 sentences and the ticket is a Story or Bug (not Vulnerability), set confidence to Medium and note the estimate may be inaccurate due to sparse description.
 
 ### Style Guide for Estimation Reasoning
 
@@ -229,6 +234,17 @@ Display a table of proposed estimates:
 ```
 
 Then for each ticket, display the full reasoning paragraph.
+
+If estimating multiple tickets (batch mode), end with a summary table grouping tickets by SP value:
+
+```markdown
+| SP        | Count | Tickets                                  |
+| --------- | ----- | ---------------------------------------- |
+| 2 (XS)    | 4     | MTV-5797, MTV-5796, CNV-90112, CNV-89769 |
+| 5 (S)     | 3     | MTA-7063, MTA-7057, MTA-7056             |
+| 8 (M)     | 2     | MTV-5779, CONSOLE-5353                   |
+| **Total** | **9** | **Avg: 4.2 SP**                          |
+```
 
 After displaying the preview, ask the user:
 
@@ -305,7 +321,7 @@ After all tickets are processed, display a summary.
 
 1. **NEVER update a ticket without explicit user approval.** The preview and confirmation in Step 6 is non-negotiable.
 2. **NEVER overwrite existing story points.** If a ticket already has SP set, skip it and display a message.
-3. **Only suggest values from the Fibonacci scale: 2, 5, 8, 13, 21.** Never suggest 1, 3, or other values.
+3. **Only suggest values from the Fibonacci scale: 2, 5, 8, 13, 21.** Never suggest 1, 3, or other values. If a reference ticket has a legacy SP value below 2 (e.g., 0.42, 1), treat it as 2 SP. The `build-reference.ts` script normalizes these automatically.
 4. Never hardcode JQL, field IDs, or project keys — read from `agents/jira-story-points/data/config.json`.
 5. Jira `cloudId` is always `"redhat.atlassian.net"`.
 6. Story point custom field: `customfield_10028`. Set it as a number, not a string.

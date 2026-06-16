@@ -40,5 +40,12 @@
     "top_similar_tickets": 5,
     "comment_prefix": "*AI Story Point Estimation*"
   },
-  "projects": [{ "key": "PROJ", "name": "Your Project" }]
+  "projects": [
+    {
+      "key": "PROJ",
+      "name": "Your Project",
+      "description": "What this project builds — UI patterns, key features, domain",
+      "repos": ["org/repo-name"]
+    }
+  ]
 }

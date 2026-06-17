@@ -151,6 +151,26 @@ function buildReference(tickets: ReferenceTicket[], config: Config): string {
   }
   lines.push("");
 
+  lines.push("## By Project");
+  lines.push("");
+  const projGroups: Record<string, { total: number; spSum: number }> = {};
+  for (const t of tickets) {
+    const proj = t.key.replace(/-\d+$/, "");
+    if (!projGroups[proj]) projGroups[proj] = { total: 0, spSum: 0 };
+    projGroups[proj].total++;
+    projGroups[proj].spSum += t.story_points;
+  }
+  lines.push("| Project | Count | Avg SP |");
+  lines.push("|---------|-------|--------|");
+  for (const [proj, stats] of Object.entries(projGroups).sort(
+    (a, b) => b[1].total - a[1].total,
+  )) {
+    const avg =
+      stats.total > 0 ? (stats.spSum / stats.total).toFixed(1) : "N/A";
+    lines.push(`| ${proj} | ${String(stats.total)} | ${avg} |`);
+  }
+  lines.push("");
+
   lines.push("## Reference Tickets");
   lines.push("");
   lines.push("| Key | Type | SP | Summary | Labels | Components |");

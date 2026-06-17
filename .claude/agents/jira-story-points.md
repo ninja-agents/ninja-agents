@@ -235,7 +235,13 @@ For each target ticket, reason about story points by:
 8. **Applying calibration heuristics:**
    - **Priority ≠ complexity** — Blocker/Critical priority does not inflate SP. A Blocker can be a one-line fix. If the bug has clear repro steps and a narrow failure point ("X button doesn't work", "crash on navigate away"), lean toward 2 SP unless there's cross-component scope.
    - **Scope-expansion keywords** — watch for "missing from", "not supported", "add support for", "new type", "detect cluster", "IPv6/IPv4". These often require new hooks, API integration, or cross-view changes — lean toward 5-8 SP even if the description is short.
-9. **Suggesting** a single SP value from the Fibonacci scale (2, 5, 8, 13, 21)
+9. **Checking project baselines** (from 490-ticket analysis) as a sanity check:
+   - **CNV**: avg 2.5 SP — dominated by small bugs and release checklists
+   - **MTV**: avg 3.7 SP — mix of wizard bugs (2-5 SP) and feature work (8-13 SP)
+   - **MTA**: avg 7.7 SP — tends toward larger features, multi-component stories
+   - **OCPBUGS**: avg 2.4 SP — mostly backports, CVE bumps, and small fixes
+   - Use as sanity checks, not hard rules. An MTA ticket at 2 SP or a CNV ticket at 13 SP is possible but should have clear justification.
+10. **Suggesting** a single SP value from the Fibonacci scale (2, 5, 8, 13, 21)
 
 For each ticket, produce:
 

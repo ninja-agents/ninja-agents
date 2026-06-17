@@ -16,6 +16,7 @@ interface Config {
     transition_statuses: string[];
     valid_from_statuses: string[];
     bot_account_ids: string[];
+    team_account_ids: string[];
   };
 }
 
@@ -221,39 +222,53 @@ function csvEscape(value: string): string {
   return value;
 }
 
+function renderMatchTable(matches: VerifierMatch[], baseUrl: string): string[] {
+  const lines: string[] = [];
+  lines.push("| Ticket | Summary | QA Contact | Evidence | Source | Conf |");
+  lines.push("| ------ | ------- | ---------- | -------- | ------ | ---- |");
+  for (const m of matches) {
+    const link = `[${m.key}](${baseUrl}/browse/${m.key})`;
+    lines.push(
+      `| ${link} | ${csvEscape(m.summary)} | ${m.qa_contact_name} | ${m.evidence} | ${m.source} | ${m.confidence.toFixed(2)} |`,
+    );
+  }
+  return lines;
+}
+
 function generatePreview(
-  matched: VerifierMatch[],
+  teamMatched: VerifierMatch[],
+  externalMatched: VerifierMatch[],
   unmatched: TicketData[],
   baseUrl: string,
 ): string {
   const lines: string[] = [];
   lines.push("# QA Contact Assignment Preview\n");
 
-  lines.push(`**Matched:** ${String(matched.length)} tickets`);
+  lines.push(
+    `**Will apply:** ${String(teamMatched.length)} tickets (team members)`,
+  );
+  lines.push(
+    `**External verifier:** ${String(externalMatched.length)} tickets (not applied)`,
+  );
   lines.push(`**Unmatched:** ${String(unmatched.length)} tickets (skipped)`);
 
-  const byComment = matched.filter((m) => m.source === "comment").length;
-  const byTransition = matched.filter((m) => m.source === "transition").length;
+  const allMatched = [...teamMatched, ...externalMatched];
+  const byComment = allMatched.filter((m) => m.source === "comment").length;
+  const byTransition = allMatched.filter(
+    (m) => m.source === "transition",
+  ).length;
   lines.push(
     `**Breakdown:** ${String(byTransition)} by status transition, ${String(byComment)} by comment keyword\n`,
   );
 
-  const avgConf =
-    matched.length > 0
-      ? matched.reduce((sum, m) => sum + m.confidence, 0) / matched.length
-      : 0;
-  lines.push(`**Avg confidence:** ${avgConf.toFixed(2)}\n`);
+  if (teamMatched.length > 0) {
+    lines.push("## Proposed Assignments (Team Members)\n");
+    lines.push(...renderMatchTable(teamMatched, baseUrl));
+  }
 
-  if (matched.length > 0) {
-    lines.push("## Proposed Assignments\n");
-    lines.push("| Ticket | Summary | QA Contact | Evidence | Source | Conf |");
-    lines.push("| ------ | ------- | ---------- | -------- | ------ | ---- |");
-    for (const m of matched) {
-      const link = `[${m.key}](${baseUrl}/browse/${m.key})`;
-      lines.push(
-        `| ${link} | ${csvEscape(m.summary)} | ${m.qa_contact_name} | ${m.evidence} | ${m.source} | ${m.confidence.toFixed(2)} |`,
-      );
-    }
+  if (externalMatched.length > 0) {
+    lines.push("\n## External Verifiers (Not Applied)\n");
+    lines.push(...renderMatchTable(externalMatched, baseUrl));
   }
 
   if (unmatched.length > 0) {
@@ -266,14 +281,13 @@ function generatePreview(
     }
   }
 
-  // Top verifiers
   const counts = new Map<string, number>();
-  for (const m of matched) {
+  for (const m of teamMatched) {
     counts.set(m.qa_contact_name, (counts.get(m.qa_contact_name) ?? 0) + 1);
   }
   const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
   if (sorted.length > 0) {
-    lines.push("\n## Top Verifiers\n");
+    lines.push("\n## Top Verifiers (Team)\n");
     lines.push("| Name | Count |");
     lines.push("| ---- | ----- |");
     for (const [name, count] of sorted.slice(0, 10)) {
@@ -342,10 +356,19 @@ function main() {
     unmatched.push(ticket);
   }
 
-  // Write proposals CSV
+  // Filter to team members only
+  const teamIds = config.detection.team_account_ids;
+  const teamMatched = matched.filter((m) =>
+    teamIds.includes(m.qa_contact_account_id),
+  );
+  const externalMatched = matched.filter(
+    (m) => !teamIds.includes(m.qa_contact_account_id),
+  );
+
+  // Write proposals CSV (team members only)
   const csvHeader =
     "key,summary,qa_contact_name,qa_contact_account_id,evidence,source,confidence";
-  const csvLines = matched.map(
+  const csvLines = teamMatched.map(
     (m) =>
       `${m.key},${csvEscape(m.summary)},${csvEscape(m.qa_contact_name)},${m.qa_contact_account_id},${csvEscape(m.evidence)},${m.source},${String(m.confidence)}`,
   );
@@ -354,26 +377,28 @@ function main() {
   writeFileSync(csvPath, csvContent);
 
   // Write preview
-  const preview = generatePreview(matched, unmatched, config.jira.base_url);
+  const preview = generatePreview(
+    teamMatched,
+    externalMatched,
+    unmatched,
+    config.jira.base_url,
+  );
   writeFileSync(outputPath, preview);
-
-  const byComment = matched.filter((m) => m.source === "comment").length;
-  const byTransition = matched.filter((m) => m.source === "transition").length;
 
   console.log(
     `Identified verifiers for ${String(matched.length)} of ${String(tickets.length)} tickets.`,
   );
   console.log(
-    `  By transition: ${String(byTransition)}, by comment: ${String(byComment)}`,
+    `  Team: ${String(teamMatched.length)} (will apply), external: ${String(externalMatched.length)} (skipped)`,
   );
-  console.log(`Unmatched: ${String(unmatched.length)} (will be skipped).`);
+  console.log(`Unmatched: ${String(unmatched.length)} (no verifier found).`);
   console.log(`Preview: ${outputPath}`);
   console.log(`CSV: ${csvPath}`);
 
-  if (unmatched.length > 0 && matched.length === 0) {
+  if (teamMatched.length === 0) {
     process.exit(2);
   }
-  if (unmatched.length > 0) {
+  if (unmatched.length > 0 || externalMatched.length > 0) {
     process.exit(3);
   }
 }

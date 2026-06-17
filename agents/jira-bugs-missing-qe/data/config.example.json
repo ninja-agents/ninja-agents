@@ -26,6 +26,7 @@
     "negation_window": 5,
     "transition_statuses": ["Verified"],
     "valid_from_statuses": ["MODIFIED", "ON_QA", "ASSIGNED", "POST", "New"],
-    "bot_account_ids": ["REPLACE_WITH_YOUR_BOT_ACCOUNT_IDS"]
+    "bot_account_ids": ["REPLACE_WITH_YOUR_BOT_ACCOUNT_IDS"],
+    "team_account_ids": ["REPLACE_WITH_YOUR_TEAM_JIRA_ACCOUNT_IDS"]
   }
 }

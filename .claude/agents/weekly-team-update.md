@@ -71,7 +71,7 @@ mcp__atlassian__searchJiraIssuesUsingJql:
   cloudId: "{jira.cloud_id}"
   jql: '(assignee = "{jira_account_id}" OR cf[10470] = "{jira_account_id}") AND project in ({jira_projects_quoted_csv}) AND updated >= -7d ORDER BY updated DESC'
   maxResults: 100
-  fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "issuetype", "priority", "updated", "created", "customfield_10470", "customfield_10020"]
+  fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "statuscategorychangedate", "issuetype", "priority", "updated", "created", "customfield_10470", "customfield_10020"]
   responseContentFormat: "markdown"
 ```
 
@@ -142,7 +142,7 @@ Same pattern as GitHub. Use `iid` (not `id`). `project_path` is like "cnv-qe/kub
 
 ### jira-tickets.csv
 
-Header: `key,summary,status,resolution,resolutiondate,issuetype,priority,assignee_id,assignee_name,qa_contact_id,qa_contact_name,sprint_name`
+Header: `key,summary,status,resolution,resolutiondate,statuscategorychangedate,issuetype,priority,assignee_id,assignee_name,qa_contact_id,qa_contact_name,sprint_name`
 
 | Field             | Source                                 | Notes                                |
 | ----------------- | -------------------------------------- | ------------------------------------ |
@@ -151,6 +151,7 @@ Header: `key,summary,status,resolution,resolutiondate,issuetype,priority,assigne
 | `status`          | Status name                            | "Done", "In Progress", "New", etc.   |
 | `resolution`      | Resolution name or empty               | "Done", "", etc.                     |
 | `resolutiondate`  | ISO-8601 or empty                      |                                      |
+| `statuscategorychangedate` | ISO-8601 or empty           | When status category last changed    |
 | `issuetype`       | Issue type                             | "Story", "Bug", "Task", etc.         |
 | `priority`        | Priority name                          | "Major", "Critical", "Blocker", etc. |
 | `assignee_id`     | assignee.accountId or empty            |                                      |

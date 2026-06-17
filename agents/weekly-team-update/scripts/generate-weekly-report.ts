@@ -34,6 +34,7 @@ export interface JiraItem {
   status: string;
   resolution: string;
   resolutiondate: string;
+  statuscategorychangedate: string;
   issuetype: string;
   priority: string;
   url: string;
@@ -365,6 +366,7 @@ export function loadJiraTickets(
       status: r.status ?? "",
       resolution: r.resolution ?? "",
       resolutiondate: r.resolutiondate ?? "",
+      statuscategorychangedate: r.statuscategorychangedate ?? "",
       issuetype: r.issuetype ?? "",
       priority: r.priority ?? "",
       url,
@@ -463,8 +465,9 @@ export function filterCompletedJira(
 ): JiraItem[] {
   return tickets.filter((t) => {
     if (t.resolution !== "Done") return false;
-    const rd = parseDate(t.resolutiondate);
-    return rd !== null && rd >= windowStart && rd <= windowEnd;
+    const filterDate =
+      parseDate(t.statuscategorychangedate) ?? parseDate(t.resolutiondate);
+    return filterDate !== null && filterDate >= windowStart && filterDate <= windowEnd;
   });
 }
 

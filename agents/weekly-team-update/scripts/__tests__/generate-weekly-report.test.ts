@@ -68,6 +68,7 @@ function makeJira(overrides: Partial<JiraItem> = {}): JiraItem {
     status: "Closed",
     resolution: "Done",
     resolutiondate: "2026-05-05T10:00:00Z",
+    statuscategorychangedate: "2026-05-05T10:00:00Z",
     issuetype: "Story",
     priority: "Major",
     url: "https://redhat.atlassian.net/browse/TEST-123",
@@ -348,9 +349,31 @@ describe("filterCompletedJira", () => {
 
   it("excludes tickets outside window", () => {
     const tickets = [
-      makeJira({ resolution: "Done", resolutiondate: "2026-04-20T10:00:00Z" }),
+      makeJira({ resolution: "Done", resolutiondate: "2026-04-20T10:00:00Z", statuscategorychangedate: "2026-04-20T10:00:00Z" }),
     ];
     expect(filterCompletedJira(tickets, ws, we)).toHaveLength(0);
+  });
+
+  it("excludes tickets that only transitioned between Done statuses (e.g. VERIFIED → Closed)", () => {
+    const tickets = [
+      makeJira({
+        resolution: "Done",
+        resolutiondate: "2026-05-05T10:00:00Z",
+        statuscategorychangedate: "2026-03-15T10:00:00Z",
+      }),
+    ];
+    expect(filterCompletedJira(tickets, ws, we)).toHaveLength(0);
+  });
+
+  it("falls back to resolutiondate when statuscategorychangedate is empty", () => {
+    const tickets = [
+      makeJira({
+        resolution: "Done",
+        resolutiondate: "2026-05-05T10:00:00Z",
+        statuscategorychangedate: "",
+      }),
+    ];
+    expect(filterCompletedJira(tickets, ws, we)).toHaveLength(1);
   });
 });
 

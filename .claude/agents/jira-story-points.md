@@ -176,7 +176,46 @@ mcp__atlassian__searchJiraIssuesUsingJql:
 
 If 0 tickets found: display "No unpointed tickets in the backlog." STOP.
 
+### Resolution Filter
+
+After fetching target tickets, filter out any with resolution other than "Done" (e.g., "Duplicate", "Won't Fix", "Cannot Reproduce", "Not a Bug"). Only estimate tickets that were actually resolved with real work. Display skipped tickets: `Skipped {key}: resolution is {resolution}, not Done.`
+
 Display: `[4/7] Found {count} unpointed ticket(s) to estimate.`
+
+## Step 4.5: Fetch PR Context
+
+For each target ticket, fetch its linked GitHub PRs to enrich the estimation with actual implementation evidence.
+
+Launch ALL remote link fetches in a single parallel tool call — one per ticket:
+
+```
+mcp__atlassian__getJiraIssueRemoteIssueLinks:
+  cloudId: "redhat.atlassian.net"
+  issueIdOrKey: "{ticket_key}"
+```
+
+Parse remote links for GitHub PR URLs matching `https://github.com/{owner}/{repo}/pull/{number}`. For each PR found, fetch file stats:
+
+```
+mcp__github__pull_request_read:
+  owner: "{owner}"
+  repo: "{repo}"
+  pullNumber: {number}
+  method: "get_files"
+```
+
+Record per ticket: total files changed, total additions, total deletions across all linked PRs.
+
+PR size guidelines (signal, not final answer):
+
+- 1-3 files, <50 lines → likely 2 SP
+- 3-10 files, 50-200 lines → likely 5 SP
+- 10-20 files, 200-500 lines → likely 8 SP
+- 20+ files, 500+ lines → likely 13 SP
+
+**Important:** PR size is one signal among many. Investigation-heavy bugs may have small PRs but high effort. Weigh PR stats alongside description complexity, not instead of it. If a ticket has no linked PRs, proceed with description-only estimation.
+
+Display: `[4.5/7] Fetched PR context for {count} ticket(s) ({pr_count} PRs found).`
 
 ## Step 5: Estimate Story Points
 
@@ -187,12 +226,16 @@ For each target ticket — whether single or batch — read the full description
 For each target ticket, reason about story points by:
 
 1. **Checking for clones/backports first** — if the ticket is a clone or backport of a completed ticket in the reference data, use the parent ticket's SP as the baseline. Only deviate if the clone's scope is clearly and explicitly different.
-2. **Using product context** — the reference summary includes a Products table with what each project builds and which repos it touches. Use this to judge scope (e.g., a CONSOLE Story about "EgressIP form page" involves networking-console-plugin with NADs/UDNs — that's a complex plugin domain).
-3. **Comparing** the ticket's summary, description, issue type, labels, and components against the reference data
-4. **Identifying** the `top_similar_tickets` most similar historical tickets (by summary content, issue type, labels overlap, component match)
-5. **Considering** the sizing guide — map the ticket's apparent complexity, risk, and uncertainty to the right SP bucket
-6. **Counting** scope indicators for Stories: number of acceptance criteria, files/components touched, cross-plugin scope, K8s integration, form complexity
-7. **Suggesting** a single SP value from the Fibonacci scale (2, 5, 8, 13, 21)
+2. **Using PR context** — if Step 4.5 found linked PRs, use the file count and line changes as a strong signal for actual scope. A ticket described as "fix missing X" that touched 30 files is not a 2 SP fix.
+3. **Using product context** — the reference summary includes a Products table with what each project builds and which repos it touches. Use this to judge scope.
+4. **Comparing** the ticket's summary, description, issue type, labels, and components against the reference data
+5. **Identifying** the `top_similar_tickets` most similar historical tickets (by summary content, issue type, labels overlap, component match)
+6. **Considering** the sizing guide — map the ticket's apparent complexity, risk, and uncertainty to the right SP bucket
+7. **Counting** scope indicators for Stories: number of acceptance criteria, files/components touched, cross-plugin scope, K8s integration, form complexity
+8. **Applying calibration heuristics:**
+   - **Priority ≠ complexity** — Blocker/Critical priority does not inflate SP. A Blocker can be a one-line fix. If the bug has clear repro steps and a narrow failure point ("X button doesn't work", "crash on navigate away"), lean toward 2 SP unless there's cross-component scope.
+   - **Scope-expansion keywords** — watch for "missing from", "not supported", "add support for", "new type", "detect cluster", "IPv6/IPv4". These often require new hooks, API integration, or cross-view changes — lean toward 5-8 SP even if the description is short.
+9. **Suggesting** a single SP value from the Fibonacci scale (2, 5, 8, 13, 21)
 
 For each ticket, produce:
 

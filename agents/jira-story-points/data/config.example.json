@@ -5,7 +5,7 @@
     "user_email": "you@example.com",
     "story_points_field": "customfield_10028",
     "team_filter_id": "12345",
-    "reference_jql": "filter=12345 AND resolution = Done AND cf[10028] IS NOT EMPTY AND updated >= -180d ORDER BY updated DESC",
+    "reference_jql": "filter=12345 AND resolution IN (Done, \"Done-Errata\") AND cf[10028] IS NOT EMPTY AND updated >= -180d ORDER BY updated DESC",
     "backlog_jql": "filter=12345 AND statusCategory != Done AND cf[10028] IS EMPTY AND issuetype IN (Story, Bug, Task) AND NOT (summary ~ \"TIER-1\" OR summary ~ \"TIER-2\") ORDER BY created DESC",
     "max_reference_tickets": 300
   },

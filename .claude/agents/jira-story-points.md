@@ -178,7 +178,7 @@ If 0 tickets found: display "No unpointed tickets in the backlog." STOP.
 
 ### Resolution Filter
 
-After fetching target tickets, filter out any with resolution other than "Done" (e.g., "Duplicate", "Won't Fix", "Cannot Reproduce", "Not a Bug"). Only estimate tickets that were actually resolved with real work. Display skipped tickets: `Skipped {key}: resolution is {resolution}, not Done.`
+After fetching target tickets, filter out any with resolution other than "Done" or "Done-Errata" (e.g., skip "Duplicate", "Won't Fix", "Cannot Reproduce", "Not a Bug"). Only estimate tickets that were actually resolved with real work. Display skipped tickets: `Skipped {key}: resolution is {resolution}.`
 
 Display: `[4/7] Found {count} unpointed ticket(s) to estimate.`
 

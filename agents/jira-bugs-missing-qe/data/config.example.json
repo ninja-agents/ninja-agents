@@ -1,0 +1,31 @@
+{
+  "jira": {
+    "cloud_id": "redhat.atlassian.net",
+    "base_url": "https://redhat.atlassian.net",
+    "user_email": "your-email@redhat.com",
+    "jql": "filter=YOUR_FILTER_ID and resolution in (Done, Done-Errata) and type = Bug and \"QA Contact[User Picker (single user)]\" is EMPTY and resolved >= -365d",
+    "qa_contact_field": "customfield_10470"
+  },
+  "detection": {
+    "comment_keywords": ["verified", "tested"],
+    "negation_words": [
+      "not",
+      "no",
+      "isn't",
+      "wasn't",
+      "hasn't",
+      "haven't",
+      "cannot",
+      "don't",
+      "didn't",
+      "unable",
+      "failed to",
+      "could not",
+      "can't"
+    ],
+    "negation_window": 5,
+    "transition_statuses": ["Verified"],
+    "valid_from_statuses": ["MODIFIED", "ON_QA", "ASSIGNED", "POST", "New"],
+    "bot_account_ids": ["REPLACE_WITH_YOUR_BOT_ACCOUNT_IDS"]
+  }
+}

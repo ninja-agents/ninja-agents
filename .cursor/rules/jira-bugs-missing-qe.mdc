@@ -1,0 +1,14 @@
+---
+description: "Find resolved bugs missing QA Contact and identify verifiers. Use when the user asks for bugs missing QE, missing QA contact, find QE for bugs, or set QA contact."
+alwaysApply: false
+---
+
+# Jira Bugs Missing QE
+
+Read `.claude/agents/jira-bugs-missing-qe.md` and follow the complete workflow described there.
+
+The agent spec contains all steps, MCP tool call examples, JSON schemas, validation checkpoints, style guides, and rules. It is the single source of truth for this workflow.
+
+Ignore the YAML frontmatter fields `model` and `memory` — those are Claude Code-specific and have no effect in Cursor.
+
+For best results, use Claude Opus or an equivalent model in Cursor settings.

@@ -144,21 +144,21 @@ Same pattern as GitHub. Use `iid` (not `id`). `project_path` is like "cnv-qe/kub
 
 Header: `key,summary,status,resolution,resolutiondate,statuscategorychangedate,issuetype,priority,assignee_id,assignee_name,qa_contact_id,qa_contact_name,sprint_name`
 
-| Field             | Source                                 | Notes                                |
-| ----------------- | -------------------------------------- | ------------------------------------ |
-| `key`             | Ticket key                             | e.g., "MTV-3927"                     |
-| `summary`         | Ticket summary                         | double-quote if contains commas      |
-| `status`          | Status name                            | "Done", "In Progress", "New", etc.   |
-| `resolution`      | Resolution name or empty               | "Done", "", etc.                     |
-| `resolutiondate`  | ISO-8601 or empty                      |                                      |
-| `statuscategorychangedate` | ISO-8601 or empty           | When status category last changed    |
-| `issuetype`       | Issue type                             | "Story", "Bug", "Task", etc.         |
-| `priority`        | Priority name                          | "Major", "Critical", "Blocker", etc. |
-| `assignee_id`     | assignee.accountId or empty            |                                      |
-| `assignee_name`   | assignee.displayName or empty          |                                      |
-| `qa_contact_id`   | customfield_10470.accountId or empty   |                                      |
-| `qa_contact_name` | customfield_10470.displayName or empty |                                      |
-| `sprint_name`     | active sprint name or empty            | see extraction rule below            |
+| Field                      | Source                                 | Notes                                |
+| -------------------------- | -------------------------------------- | ------------------------------------ |
+| `key`                      | Ticket key                             | e.g., "MTV-3927"                     |
+| `summary`                  | Ticket summary                         | double-quote if contains commas      |
+| `status`                   | Status name                            | "Done", "In Progress", "New", etc.   |
+| `resolution`               | Resolution name or empty               | "Done", "", etc.                     |
+| `resolutiondate`           | ISO-8601 or empty                      |                                      |
+| `statuscategorychangedate` | ISO-8601 or empty                      | When status category last changed    |
+| `issuetype`                | Issue type                             | "Story", "Bug", "Task", etc.         |
+| `priority`                 | Priority name                          | "Major", "Critical", "Blocker", etc. |
+| `assignee_id`              | assignee.accountId or empty            |                                      |
+| `assignee_name`            | assignee.displayName or empty          |                                      |
+| `qa_contact_id`            | customfield_10470.accountId or empty   |                                      |
+| `qa_contact_name`          | customfield_10470.displayName or empty |                                      |
+| `sprint_name`              | active sprint name or empty            | see extraction rule below            |
 
 **Sprint name extraction** (CRITICAL — tickets with empty sprint_name get filtered out of the report):
 

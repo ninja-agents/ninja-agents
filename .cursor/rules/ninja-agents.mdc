@@ -20,6 +20,7 @@ AI agents for engineering teams. Self-contained under `agents/`, specs in `.clau
 | `@slack-channels-analyzer` | Analyze Slack channels for UI-related topics and trends |
 | `@jira-add-missing-activity-type` | Add missing Activity Type to completed Jira tickets |
 | `@jira-story-points` | Estimate story points using historical team data |
+| `@jira-bugs-missing-qe` | Find resolved bugs missing QA Contact, identify and set verifier |
 
 ## Key Rules
 

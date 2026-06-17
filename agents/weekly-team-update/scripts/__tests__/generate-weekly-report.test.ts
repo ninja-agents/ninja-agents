@@ -349,7 +349,11 @@ describe("filterCompletedJira", () => {
 
   it("excludes tickets outside window", () => {
     const tickets = [
-      makeJira({ resolution: "Done", resolutiondate: "2026-04-20T10:00:00Z", statuscategorychangedate: "2026-04-20T10:00:00Z" }),
+      makeJira({
+        resolution: "Done",
+        resolutiondate: "2026-04-20T10:00:00Z",
+        statuscategorychangedate: "2026-04-20T10:00:00Z",
+      }),
     ];
     expect(filterCompletedJira(tickets, ws, we)).toHaveLength(0);
   });

@@ -9,6 +9,7 @@ agents/jira-sprint-tickets-updater/data/config.json
 agents/slack-channels-analyzer/data/config.json
 agents/jira-add-missing-activity-type/data/config.json
 agents/jira-story-points/data/config.json
+agents/jira-bugs-missing-qe/data/config.json
 
 # Agent cache (contents only, keep .gitkeep)
 agents/*/data/cache/*
@@ -17,6 +18,9 @@ agents/*/data/cache/*
 # Agent output (generated reports)
 agents/*/data/output/*.md
 agents/*/data/output/*.json
+
+# Research logs (contain PII: real names, account IDs, internal ticket data)
+agents/*/research.md
 
 # Node
 node_modules/

@@ -467,7 +467,11 @@ export function filterCompletedJira(
     if (t.resolution !== "Done") return false;
     const filterDate =
       parseDate(t.statuscategorychangedate) ?? parseDate(t.resolutiondate);
-    return filterDate !== null && filterDate >= windowStart && filterDate <= windowEnd;
+    return (
+      filterDate !== null &&
+      filterDate >= windowStart &&
+      filterDate <= windowEnd
+    );
   });
 }
 

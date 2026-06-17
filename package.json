@@ -33,7 +33,10 @@
     "jira-story-points:build-reference": "tsx agents/jira-story-points/scripts/build-reference.ts",
     "jira-story-points:apply": "tsx agents/jira-story-points/scripts/apply-story-points.ts",
     "jira-story-points:validate": "tsx agents/jira-story-points/scripts/validate-output.ts",
-    "jira-story-points:test": "vitest run --dir agents/jira-story-points"
+    "jira-story-points:test": "vitest run --dir agents/jira-story-points",
+    "jira-bugs-missing-qe:identify": "tsx agents/jira-bugs-missing-qe/scripts/identify-verifiers.ts",
+    "jira-bugs-missing-qe:apply": "tsx agents/jira-bugs-missing-qe/scripts/apply-qa-contacts.ts",
+    "jira-bugs-missing-qe:test": "vitest run --dir agents/jira-bugs-missing-qe"
   },
   "dependencies": {
     "@slack/web-api": "^7.17.0"

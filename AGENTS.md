@@ -19,6 +19,7 @@ The repo follows a "data collector + deterministic script" pattern: the AI agent
 | [slack-channels-analyzer](agents/slack-channels-analyzer/)               | Analyze Slack channels to identify UI-related topics and trends                   | [README](agents/slack-channels-analyzer/README.md)        |
 | [jira-add-missing-activity-type](agents/jira-add-missing-activity-type/) | Add missing Activity Type to completed Jira tickets via classification rules      | [README](agents/jira-add-missing-activity-type/README.md) |
 | [jira-story-points](agents/jira-story-points/)                           | Estimate story points for unpointed Jira tickets using historical team data       | [README](agents/jira-story-points/README.md)              |
+| [jira-bugs-missing-qe](agents/jira-bugs-missing-qe/)                     | Find resolved bugs missing QA Contact, identify verifiers, and set the field      | [README](agents/jira-bugs-missing-qe/README.md)           |
 
 ## IDE Support
 

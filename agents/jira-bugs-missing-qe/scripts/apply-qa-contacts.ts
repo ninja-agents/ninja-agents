@@ -17,6 +17,7 @@ interface VerifierProposal {
   qa_contact_account_id: string;
   evidence: string;
   source: string;
+  confidence: string;
 }
 
 function parseArgs(argv: string[]): Record<string, string | boolean> {
@@ -113,6 +114,7 @@ export function loadProposals(csvPath: string): VerifierProposal[] {
   const accountIdx = headers.indexOf("qa_contact_account_id");
   const evidenceIdx = headers.indexOf("evidence");
   const sourceIdx = headers.indexOf("source");
+  const confIdx = headers.indexOf("confidence");
 
   return lines.slice(1).map((line) => {
     const fields = parseCsvLine(line);
@@ -123,6 +125,7 @@ export function loadProposals(csvPath: string): VerifierProposal[] {
       qa_contact_account_id: fields[accountIdx] ?? "",
       evidence: fields[evidenceIdx] ?? "",
       source: fields[sourceIdx] ?? "",
+      confidence: fields[confIdx] ?? "",
     };
   });
 }
@@ -132,10 +135,11 @@ async function jiraFetch(
   path: string,
   auth: string,
   body: unknown,
+  method: "POST" | "PUT" = "PUT",
 ): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
   const url = `${baseUrl}${path}`;
   const res = await fetch(url, {
-    method: "PUT",
+    method,
     headers: {
       Authorization: `Basic ${auth}`,
       "Content-Type": "application/json",
@@ -145,6 +149,55 @@ async function jiraFetch(
   const text = await res.text();
   const data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
   return { ok: res.ok, status: res.status, data };
+}
+
+function buildCommentBody(p: VerifierProposal): unknown {
+  return {
+    body: {
+      type: "doc",
+      version: 1,
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "text",
+              text: "QA Contact set by AI agent ",
+            },
+            {
+              type: "text",
+              text: "(jira-bugs-missing-qe)",
+              marks: [{ type: "em" }],
+            },
+          ],
+        },
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Set to: " },
+            {
+              type: "text",
+              text: p.qa_contact_name,
+              marks: [{ type: "strong" }],
+            },
+          ],
+        },
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: `Evidence: ${p.evidence}` }],
+        },
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "text",
+              text: `Detection source: ${p.source} | Confidence: ${p.confidence}`,
+            },
+          ],
+        },
+      ],
+    },
+  };
 }
 
 async function main() {
@@ -165,7 +218,7 @@ async function main() {
       `[DRY RUN] Would set QA Contact on ${String(proposals.length)} tickets:\n`,
     );
     for (const p of proposals) {
-      console.log(`  ${p.key}: ${p.qa_contact_name} (${p.evidence})`);
+      console.log(`  ${p.key}: ${p.qa_contact_name} (${p.evidence}) + comment`);
     }
     console.log("\nNo changes made.");
     return;
@@ -189,7 +242,18 @@ async function main() {
     );
 
     if (result.ok) {
-      console.log(" done.");
+      const commentResult = await jiraFetch(
+        baseUrl,
+        `/rest/api/3/issue/${p.key}/comment`,
+        auth,
+        buildCommentBody(p),
+        "POST",
+      );
+      if (commentResult.ok) {
+        console.log(" done + comment.");
+      } else {
+        console.log(" done (comment failed).");
+      }
       succeeded.push(p.key);
     } else {
       const msg =

@@ -45,7 +45,10 @@ function makeTicket(
 describe("identify-verifiers", () => {
   describe("config loading", () => {
     it("loads a valid config file", () => {
-      const configPath = resolve(import.meta.dirname, "../data/config.json");
+      const configPath = resolve(
+        import.meta.dirname,
+        "../data/config.example.json",
+      );
       const raw = readFileSync(configPath, "utf-8");
       const config = JSON.parse(raw) as Record<string, unknown>;
       expect(config).toHaveProperty("jira");

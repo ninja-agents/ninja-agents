@@ -60,7 +60,10 @@ function ticket(
 
 describe("config loading", () => {
   it("loads a valid config file", () => {
-    const configPath = resolve(import.meta.dirname, "../data/config.json");
+    const configPath = resolve(
+      import.meta.dirname,
+      "../data/config.example.json",
+    );
     const raw = readFileSync(configPath, "utf-8");
     const config = JSON.parse(raw) as Record<string, unknown>;
     expect(config).toBeDefined();
@@ -70,7 +73,10 @@ describe("config loading", () => {
   });
 
   it("has valid activity type IDs in all rules", () => {
-    const configPath = resolve(import.meta.dirname, "../data/config.json");
+    const configPath = resolve(
+      import.meta.dirname,
+      "../data/config.example.json",
+    );
     const raw = readFileSync(configPath, "utf-8");
     const config = JSON.parse(raw) as {
       classification_rules: Array<{
@@ -87,7 +93,10 @@ describe("config loading", () => {
   });
 
   it("has the correct custom field ID for Activity Type", () => {
-    const configPath = resolve(import.meta.dirname, "../data/config.json");
+    const configPath = resolve(
+      import.meta.dirname,
+      "../data/config.example.json",
+    );
     const raw = readFileSync(configPath, "utf-8");
     const config = JSON.parse(raw) as { jira: { activity_type_field: string } };
     expect(config.jira.activity_type_field).toBe("customfield_10464");

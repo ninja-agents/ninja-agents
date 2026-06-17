@@ -5,7 +5,10 @@ import { resolve } from "node:path";
 describe("build-reference", () => {
   describe("config loading", () => {
     it("loads a valid config file", () => {
-      const configPath = resolve(import.meta.dirname, "../data/config.json");
+      const configPath = resolve(
+        import.meta.dirname,
+        "../data/config.example.json",
+      );
       const raw = readFileSync(configPath, "utf-8");
       const config = JSON.parse(raw) as Record<string, unknown>;
       expect(config).toBeDefined();
@@ -15,7 +18,10 @@ describe("build-reference", () => {
     });
 
     it("has required jira fields", () => {
-      const configPath = resolve(import.meta.dirname, "../data/config.json");
+      const configPath = resolve(
+        import.meta.dirname,
+        "../data/config.example.json",
+      );
       const raw = readFileSync(configPath, "utf-8");
       const config = JSON.parse(raw) as {
         jira: Record<string, unknown>;
@@ -27,7 +33,10 @@ describe("build-reference", () => {
     });
 
     it("has all fibonacci SP values in sizing guide", () => {
-      const configPath = resolve(import.meta.dirname, "../data/config.json");
+      const configPath = resolve(
+        import.meta.dirname,
+        "../data/config.example.json",
+      );
       const raw = readFileSync(configPath, "utf-8");
       const config = JSON.parse(raw) as {
         sizing_guide: Record<string, unknown>;

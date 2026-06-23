@@ -108,6 +108,36 @@ async function jiraFetch(
   return { ok: res.ok, status: res.status, data };
 }
 
+async function jiraGet(
+  baseUrl: string,
+  path: string,
+  auth: string,
+): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
+  const res = await fetch(`${baseUrl}${path}`, {
+    headers: { Authorization: `Basic ${auth}` },
+  });
+  const text = await res.text();
+  const data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+  return { ok: res.ok, status: res.status, data };
+}
+
+async function hasExistingComment(
+  baseUrl: string,
+  auth: string,
+  issueKey: string,
+  marker: string,
+): Promise<boolean> {
+  const result = await jiraGet(
+    baseUrl,
+    `/rest/api/3/issue/${issueKey}/comment`,
+    auth,
+  );
+  if (!result.ok) return false;
+  const comments =
+    (result.data as { comments?: Array<{ body?: unknown }> }).comments ?? [];
+  return comments.some((c) => JSON.stringify(c.body).includes(marker));
+}
+
 function buildCommentBody(
   prefix: string,
   ticket: EstimatedTicket,
@@ -185,22 +215,33 @@ async function main() {
   for (const t of tickets) {
     process.stdout.write(`  ${t.key}: ${String(t.estimated_sp)} SP...`);
 
-    const commentResult = await jiraFetch(
+    const alreadyCommented = await hasExistingComment(
       baseUrl,
-      `/rest/api/3/issue/${t.key}/comment`,
       auth,
-      { body: buildCommentBody(commentPrefix, t) },
-      "POST",
+      t.key,
+      commentPrefix,
     );
 
-    if (!commentResult.ok) {
-      const msg =
-        typeof commentResult.data.errorMessages === "object"
-          ? JSON.stringify(commentResult.data.errorMessages)
-          : `Comment HTTP ${String(commentResult.status)}`;
-      console.log(` FAILED (${msg})`);
-      failed.push({ key: t.key, error: msg });
-      continue;
+    if (!alreadyCommented) {
+      const commentResult = await jiraFetch(
+        baseUrl,
+        `/rest/api/3/issue/${t.key}/comment`,
+        auth,
+        { body: buildCommentBody(commentPrefix, t) },
+        "POST",
+      );
+
+      if (!commentResult.ok) {
+        const msg =
+          typeof commentResult.data.errorMessages === "object"
+            ? JSON.stringify(commentResult.data.errorMessages)
+            : `Comment HTTP ${String(commentResult.status)}`;
+        console.log(` FAILED (${msg})`);
+        failed.push({ key: t.key, error: msg });
+        continue;
+      }
+    } else {
+      process.stdout.write(" comment exists, skipping...");
     }
 
     const spResult = await jiraFetch(

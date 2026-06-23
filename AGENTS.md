@@ -68,6 +68,12 @@ agents/{name}/
 - Only `resolution = "Done"` counts as a completed Jira deliverable
 - CSV fields containing commas must be wrapped in double quotes
 
+### Jira Write Operations
+
+The Rovo MCP server is read-only for issue fields and comments. All Jira writes (setting fields, adding comments) MUST use the REST API via TypeScript scripts with Basic Auth (`JIRA_API_TOKEN` env var + `jira.user_email` from config). Never use `editJiraIssue` or `addCommentToJiraIssue` MCP tools for writes.
+
+Scripts that add comments MUST check for existing comments with a matching prefix/marker before posting, to prevent duplicates when re-running an agent on the same tickets.
+
 ### TypeScript Conventions
 
 - Target ES2022, `NodeNext` module resolution

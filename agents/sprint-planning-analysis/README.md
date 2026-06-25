@@ -1,6 +1,6 @@
 # Sprint Planning Health-Check
 
-Analyzes a future or upcoming Jira sprint by comparing the plan against proven velocity from the past 2 sprints. Produces a health-check report with capacity analysis, load distribution, individual velocity averages, retro compliance checks, carryover tracking, planning hygiene flags, and actionable recommendations. Past sprint velocity data is persistently cached to avoid re-fetching from Jira on subsequent runs.
+Analyzes a future or upcoming Jira sprint by comparing the plan against proven velocity from the past 3 sprints. Produces a health-check report with capacity analysis, load distribution, individual velocity averages, retro compliance checks, carryover tracking, planning hygiene flags, and actionable recommendations. Past sprint velocity data is persistently cached to avoid re-fetching from Jira on subsequent runs.
 
 ## Prerequisites
 
@@ -37,9 +37,9 @@ npx tsx agents/sprint-planning-analysis/scripts/generate-sprint-planning-analysi
 
 1. **Read config** — loads shared `sprint-config.json` and determines the target sprint (from argument or auto-discovery via Jira)
 2. **Find velocity baseline (N-1)** — checks velocity history cache, then sprint review report, CSV cache, or queries Jira as fallback; writes `velocity-summary.json` and upserts into `velocity-history.json`
-3. **Find velocity baseline (N-2)** — checks velocity history cache first; fetches from Jira only if not cached; upserts into `velocity-history.json`
+3. **Find velocity baselines (N-2, N-3)** — checks velocity history cache first; fetches from Jira only if not cached; upserts into `velocity-history.json`
 4. **Fetch target sprint** — queries Jira for all issues in the target sprint and saves to CSV
-5. **Generate report** — TypeScript script computes capacity vs. velocity, load distribution, individual velocity averages (2-sprint), retro compliance, carryover analysis, planning hygiene, and recommendations
+5. **Generate report** — TypeScript script computes capacity vs. velocity, load distribution, individual velocity averages (3-sprint), retro compliance, carryover analysis, planning hygiene, and recommendations
 6. **Write takeaways** — agent writes 3-5 Key Takeaway bullets synthesizing the analysis
 7. **Display** — shows the report to the user
 

@@ -255,7 +255,7 @@ describe("computeCapacityVsVelocity", () => {
       makeIssue({ story_points: 50 }),
       makeIssue({ story_points: 55 }),
     ];
-    const result = computeCapacityVsVelocity(issues, velocity, BASE_CONFIG);
+    const result = computeCapacityVsVelocity(issues, [velocity], BASE_CONFIG);
     expect(result.status).toBe("ok");
     expect(result.target_sp).toBe(105);
   });
@@ -264,7 +264,7 @@ describe("computeCapacityVsVelocity", () => {
     const issues = Array.from({ length: 3 }, (_, i) =>
       makeIssue({ key: `T-${i}`, story_points: 40 }),
     );
-    const result = computeCapacityVsVelocity(issues, velocity, BASE_CONFIG);
+    const result = computeCapacityVsVelocity(issues, [velocity], BASE_CONFIG);
     expect(result.status).toBe("warning");
     expect(result.delta_pct).toBe(20);
   });
@@ -273,7 +273,7 @@ describe("computeCapacityVsVelocity", () => {
     const issues = Array.from({ length: 5 }, (_, i) =>
       makeIssue({ key: `T-${i}`, story_points: 30 }),
     );
-    const result = computeCapacityVsVelocity(issues, velocity, BASE_CONFIG);
+    const result = computeCapacityVsVelocity(issues, [velocity], BASE_CONFIG);
     expect(result.status).toBe("overcommitted");
     expect(result.delta_pct).toBe(50);
   });
@@ -288,7 +288,7 @@ describe("computeCapacityVsVelocity", () => {
       }),
       makeIssue({ key: "T-2", story_points: 90 }),
     ];
-    const result = computeCapacityVsVelocity(issues, velocity, BASE_CONFIG);
+    const result = computeCapacityVsVelocity(issues, [velocity], BASE_CONFIG);
     expect(result.dead_items).toHaveLength(1);
     expect(result.dead_items[0].key).toBe("T-1");
     expect(result.effective_sp).toBe(90);
@@ -298,13 +298,13 @@ describe("computeCapacityVsVelocity", () => {
     const issues = [
       makeIssue({ key: "T-1", story_points: 21, resolution: "Duplicate" }),
     ];
-    const result = computeCapacityVsVelocity(issues, velocity, BASE_CONFIG);
+    const result = computeCapacityVsVelocity(issues, [velocity], BASE_CONFIG);
     expect(result.dead_items).toHaveLength(1);
     expect(result.dead_items[0].reason).toBe("Closed as Duplicate");
   });
 
-  it("uses 2-sprint average when velocityN2 provided", () => {
-    const vel = makeVelocity({ completed_sp: 100, completed_issues: 40 });
+  it("uses multi-sprint average when multiple velocities provided", () => {
+    const velN1 = makeVelocity({ completed_sp: 100, completed_issues: 40 });
     const velN2 = makeVelocity({
       sprint_name: "Test Sprint 0",
       completed_sp: 200,
@@ -314,7 +314,11 @@ describe("computeCapacityVsVelocity", () => {
       makeIssue({ story_points: 75 }),
       makeIssue({ key: "T-2", story_points: 75 }),
     ];
-    const result = computeCapacityVsVelocity(issues, vel, BASE_CONFIG, velN2);
+    const result = computeCapacityVsVelocity(
+      issues,
+      [velN1, velN2],
+      BASE_CONFIG,
+    );
     expect(result.velocity_sp).toBe(150);
     expect(result.velocity_issues).toBe(50);
     expect(result.target_sp).toBe(150);
@@ -322,17 +326,22 @@ describe("computeCapacityVsVelocity", () => {
     expect(result.status).toBe("ok");
   });
 
-  it("falls back to N-1 when velocityN2 is null", () => {
+  it("uses single velocity when only one provided", () => {
     const vel = makeVelocity({ completed_sp: 100, completed_issues: 40 });
     const issues = [makeIssue({ story_points: 100 })];
-    const result = computeCapacityVsVelocity(issues, vel, BASE_CONFIG, null);
+    const result = computeCapacityVsVelocity(issues, [vel], BASE_CONFIG);
     expect(result.velocity_sp).toBe(100);
     expect(result.velocity_issues).toBe(40);
   });
 
-  it("computes correct overcommit delta with 2-sprint average", () => {
-    const vel = makeVelocity({ completed_sp: 126, completed_issues: 26 });
+  it("computes correct 3-sprint average", () => {
+    const velN1 = makeVelocity({ completed_sp: 231, completed_issues: 64 });
     const velN2 = makeVelocity({
+      sprint_name: "Test Sprint 1",
+      completed_sp: 126,
+      completed_issues: 26,
+    });
+    const velN3 = makeVelocity({
       sprint_name: "Test Sprint 0",
       completed_sp: 290,
       completed_issues: 66,
@@ -340,11 +349,14 @@ describe("computeCapacityVsVelocity", () => {
     const issues = Array.from({ length: 5 }, (_, i) =>
       makeIssue({ key: `T-${i}`, story_points: 66 }),
     );
-    const result = computeCapacityVsVelocity(issues, vel, BASE_CONFIG, velN2);
-    expect(result.velocity_sp).toBe(208);
-    expect(result.velocity_issues).toBe(46);
+    const result = computeCapacityVsVelocity(
+      issues,
+      [velN1, velN2, velN3],
+      BASE_CONFIG,
+    );
+    expect(result.velocity_sp).toBe(215.67);
+    expect(result.velocity_issues).toBe(52);
     expect(result.status).toBe("overcommitted");
-    expect(result.delta_pct).toBe(59);
   });
 });
 
@@ -764,7 +776,7 @@ describe("generateRecommendations", () => {
     expect(recs.some((r) => r.includes("unassigned"))).toBe(true);
   });
 
-  it("uses '2-sprint avg' label when baseline_sprints >= 2", () => {
+  it("uses dynamic sprint avg label when baseline_sprints >= 2", () => {
     const report = makeReport({
       load: [
         {
@@ -776,13 +788,13 @@ describe("generateRecommendations", () => {
           prev_sp_completed: 40,
           load_ratio: 2.5,
           risk: "extreme",
-          baseline_sprints: 2,
+          baseline_sprints: 3,
         },
       ],
     });
     const recs = generateRecommendations(report);
     const rebalance = recs.find((r) => r.includes("Rebalance Alice"))!;
-    expect(rebalance).toContain("2-sprint avg");
+    expect(rebalance).toContain("3-sprint avg");
     expect(rebalance).not.toContain("last sprint");
   });
 
@@ -827,7 +839,7 @@ describe("generateRecommendations", () => {
 // ---------------------------------------------------------------------------
 
 describe("computeIndividualVelocityAverages", () => {
-  it("averages SP across two sprints", () => {
+  it("averages SP across multiple sprints", () => {
     const n1 = makeVelocity({
       by_engineer: [
         {
@@ -865,11 +877,10 @@ describe("computeIndividualVelocityAverages", () => {
         },
       ],
     });
-    const result = computeIndividualVelocityAverages(n1, n2, BASE_CONFIG);
+    const result = computeIndividualVelocityAverages([n1, n2], BASE_CONFIG);
     const alice = result.find((r) => r.name === "Alice")!;
     expect(alice.sprints_available).toBe(2);
-    expect(alice.n1_sp_completed).toBe(80);
-    expect(alice.n2_sp_completed).toBe(60);
+    expect(alice.per_sprint_sp).toEqual([80, 60]);
     expect(alice.avg_sp_completed).toBe(70);
     expect(alice.avg_items_completed).toBe(14);
     const bob = result.find((r) => r.name === "Bob")!;
@@ -877,7 +888,51 @@ describe("computeIndividualVelocityAverages", () => {
     expect(bob.avg_items_completed).toBe(21);
   });
 
-  it("uses N-1 only when N-2 is null", () => {
+  it("computes 3-sprint average correctly", () => {
+    const n1 = makeVelocity({
+      by_engineer: [
+        {
+          name: "Alice",
+          assigned: 20,
+          completed: 16,
+          sp_completed: 90,
+          sp_remaining: 10,
+        },
+      ],
+    });
+    const n2 = makeVelocity({
+      sprint_name: "Test Sprint 0",
+      by_engineer: [
+        {
+          name: "Alice",
+          assigned: 15,
+          completed: 12,
+          sp_completed: 60,
+          sp_remaining: 15,
+        },
+      ],
+    });
+    const n3 = makeVelocity({
+      sprint_name: "Test Sprint -1",
+      by_engineer: [
+        {
+          name: "Alice",
+          assigned: 18,
+          completed: 14,
+          sp_completed: 30,
+          sp_remaining: 20,
+        },
+      ],
+    });
+    const result = computeIndividualVelocityAverages([n1, n2, n3], BASE_CONFIG);
+    const alice = result.find((r) => r.name === "Alice")!;
+    expect(alice.sprints_available).toBe(3);
+    expect(alice.per_sprint_sp).toEqual([90, 60, 30]);
+    expect(alice.avg_sp_completed).toBe(60);
+    expect(alice.avg_items_completed).toBe(14);
+  });
+
+  it("uses only available sprints when one is provided", () => {
     const n1 = makeVelocity({
       by_engineer: [
         {
@@ -896,14 +951,14 @@ describe("computeIndividualVelocityAverages", () => {
         },
       ],
     });
-    const result = computeIndividualVelocityAverages(n1, null, BASE_CONFIG);
+    const result = computeIndividualVelocityAverages([n1], BASE_CONFIG);
     const alice = result.find((r) => r.name === "Alice")!;
     expect(alice.sprints_available).toBe(1);
     expect(alice.avg_sp_completed).toBe(80);
-    expect(alice.n2_sp_completed).toBeNull();
+    expect(alice.per_sprint_sp).toEqual([80]);
   });
 
-  it("handles engineer absent from N-2", () => {
+  it("handles engineer absent from some sprints", () => {
     const n1 = makeVelocity({
       by_engineer: [
         {
@@ -934,17 +989,17 @@ describe("computeIndividualVelocityAverages", () => {
         },
       ],
     });
-    const result = computeIndividualVelocityAverages(n1, n2, BASE_CONFIG);
+    const result = computeIndividualVelocityAverages([n1, n2], BASE_CONFIG);
     const bob = result.find((r) => r.name === "Bob")!;
     expect(bob.sprints_available).toBe(1);
     expect(bob.avg_sp_completed).toBe(40);
-    expect(bob.n2_sp_completed).toBeNull();
+    expect(bob.per_sprint_sp).toEqual([40, null]);
   });
 
-  it("handles engineer absent from both sprints", () => {
+  it("handles engineer absent from all sprints", () => {
     const n1 = makeVelocity({ by_engineer: [] });
     const n2 = makeVelocity({ sprint_name: "Test Sprint 0", by_engineer: [] });
-    const result = computeIndividualVelocityAverages(n1, n2, BASE_CONFIG);
+    const result = computeIndividualVelocityAverages([n1, n2], BASE_CONFIG);
     const alice = result.find((r) => r.name === "Alice")!;
     expect(alice.sprints_available).toBe(0);
     expect(alice.avg_sp_completed).toBeNull();
@@ -962,7 +1017,7 @@ describe("computeIndividualVelocityAverages", () => {
         },
       ],
     });
-    const result = computeIndividualVelocityAverages(n1, null, BASE_CONFIG);
+    const result = computeIndividualVelocityAverages([n1], BASE_CONFIG);
     const bob = result.find((r) => r.name === "Bob")!;
     expect(bob.role).toBe("qe");
   });
@@ -986,7 +1041,7 @@ describe("computeIndividualVelocityAverages", () => {
         },
       ],
     });
-    const result = computeIndividualVelocityAverages(n1, null, BASE_CONFIG);
+    const result = computeIndividualVelocityAverages([n1], BASE_CONFIG);
     expect(result[0].name).toBe("Bob");
     expect(result[1].name).toBe("Alice");
   });
@@ -1027,22 +1082,18 @@ describe("computeLoadDistribution with individualAverages", () => {
         name: "Alice",
         role: "dev",
         sprints_available: 2,
-        n1_sp_completed: 80,
-        n2_sp_completed: 60,
+        per_sprint_sp: [80, 60],
+        per_sprint_items: [16, 12],
         avg_sp_completed: 70,
-        n1_items_completed: 16,
-        n2_items_completed: 12,
         avg_items_completed: 14,
       },
       {
         name: "Bob",
         role: "qe",
         sprints_available: 2,
-        n1_sp_completed: 80,
-        n2_sp_completed: 40,
+        per_sprint_sp: [80, 40],
+        per_sprint_items: [24, 18],
         avg_sp_completed: 60,
-        n1_items_completed: 24,
-        n2_items_completed: 18,
         avg_items_completed: 21,
       },
     ];
@@ -1105,22 +1156,18 @@ describe("computeLoadDistribution with individualAverages", () => {
         name: "Alice",
         role: "dev",
         sprints_available: 1,
-        n1_sp_completed: 80,
-        n2_sp_completed: null,
+        per_sprint_sp: [80],
+        per_sprint_items: [16],
         avg_sp_completed: 80,
-        n1_items_completed: 16,
-        n2_items_completed: null,
         avg_items_completed: 16,
       },
       {
         name: "Bob",
         role: "qe",
         sprints_available: 0,
-        n1_sp_completed: null,
-        n2_sp_completed: null,
+        per_sprint_sp: [null],
+        per_sprint_items: [null],
         avg_sp_completed: null,
-        n1_items_completed: null,
-        n2_items_completed: null,
         avg_items_completed: null,
       },
     ];
@@ -1230,22 +1277,18 @@ describe("generateEngineerProposals", () => {
           name: "Alice",
           role: "dev",
           sprints_available: 2,
-          n1_sp_completed: 40,
-          n2_sp_completed: 40,
+          per_sprint_sp: [40, 40],
+          per_sprint_items: [8, 8],
           avg_sp_completed: 40,
-          n1_items_completed: 8,
-          n2_items_completed: 8,
           avg_items_completed: 8,
         },
         {
           name: "Bob",
           role: "qe",
           sprints_available: 2,
-          n1_sp_completed: 60,
-          n2_sp_completed: 60,
+          per_sprint_sp: [60, 60],
+          per_sprint_items: [16, 16],
           avg_sp_completed: 60,
-          n1_items_completed: 16,
-          n2_items_completed: 16,
           avg_items_completed: 16,
         },
       ],

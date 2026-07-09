@@ -51,7 +51,7 @@ Read `agents/jira-sprint-tickets-updater/data/config.json` to get:
 
 The config has **two workflow types**:
 
-- **standard** (CNV, MTV, CONSOLE, MTA Story/Task/Epic): In Progress → Dev Complete when all links resolved
+- **standard** (CNV, MTV, OCPNETUI, MTA Story/Task/Epic): In Progress → Dev Complete when all links resolved
 - **bugzilla** (OCPBUGS, MTA Bug): ASSIGNED → POST (active link), POST → MODIFIED (all resolved)
 
 ### Find the Active Sprint

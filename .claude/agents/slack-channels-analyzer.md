@@ -80,7 +80,7 @@ Read the Slack JSON data. For each thread, determine: **"Is this about the conso
 
 - Mentions `networking-console-plugin`, `nmstate-console-plugin`, or the OpenShift web console networking pages
 - Discusses a UI element: page, form, wizard, dropdown, navigation item, dialog, table, button
-- References a Jira ticket in CONSOLE or an OCPBUGS with networking-console-plugin in the summary
+- References a Jira ticket in OCPNETUI or an OCPBUGS with networking-console-plugin in the summary
 - References a PR on `openshift/networking-console-plugin`
 - Reports a visual/UX issue: missing page, broken form, empty dropdown, incorrect display
 - Discusses NNCP wizard, NAD creation form, Physical networks page, network attachment definition UI, node network mapping UI
@@ -132,7 +132,7 @@ For each candidate, extract 2-3 key terms from the thread (e.g., "VLAN DHCP", "n
    project = {project_key} AND component = "{component}" AND text ~ "{key terms}" ORDER BY created DESC
    ```
 
-2. **Rovo search** — ALWAYS run `mcp__atlassian__search` with a natural-language query for broader matching. This catches tickets filed in unexpected projects (e.g., CONSOLE instead of OCPBUGS, or RFE instead of CNV). Filter results: only consider items with `type === "issue"` — ignore Confluence pages, which are noise.
+2. **Rovo search** — ALWAYS run `mcp__atlassian__search` with a natural-language query for broader matching. This catches tickets filed in unexpected projects (e.g., OCPNETUI instead of OCPBUGS, or RFE instead of CNV). Filter results: only consider items with `type === "issue"` — ignore Confluence pages, which are noise.
 
 ### Classify Search Results
 

@@ -19,7 +19,7 @@ Launches the `slack-channels-analyzer` agent which:
 1. Reads channel config and validates Slack credentials
 2. Fetches messages from configured Slack channels via `@slack/web-api`
 3. Fetches recent PRs and issues from `openshift/networking-console-plugin` via GitHub MCP
-4. Fetches Jira tickets from CONSOLE/OCPBUGS/CNV projects via Atlassian MCP
+4. Fetches Jira tickets from OCPNETUI/OCPBUGS/CNV projects via Atlassian MCP
 5. Filters Slack threads for **UI relevance only** using LLM reasoning — discards backend-only topics
 6. Generates a focused report cross-referencing all three sources
 

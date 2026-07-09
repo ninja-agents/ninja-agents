@@ -218,7 +218,7 @@ function categorize(
 
 function extractJiraTickets(text: string): string[] {
   const ticketPattern =
-    /\b(OCPBUGS-\d+|CNV-\d+|RHEL-\d+|MTV-\d+|CONSOLE-\d+)\b/g;
+    /\b(OCPBUGS-\d+|CNV-\d+|RHEL-\d+|MTV-\d+|OCPNETUI-\d+)\b/g;
   const matches = text.match(ticketPattern);
   return matches ? [...new Set(matches)] : [];
 }

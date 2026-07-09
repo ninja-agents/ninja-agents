@@ -278,7 +278,7 @@ Read and display `agents/sprint-review/data/output/sprint-review-{today}.md` to 
 1. Never write report sections yourself EXCEPT Key Takeaways — the TypeScript script generates all other sections.
 2. Never hardcode team data — read engineers from the `engineers` array in `sprint-config.json`.
 3. Sprint field is `customfield_10020`, story point field is `customfield_10028` — both configured in `sprint-config.json`.
-4. The sprint spans multiple Jira projects (CNV, OCPBUGS, MTA, MTV, CONSOLE) — never add a `project` filter when querying by sprint name.
+4. The sprint spans multiple Jira projects (CNV, OCPBUGS, MTA, MTV, OCPNETUI) — never add a `project` filter when querying by sprint name.
 5. CSV quoting: wrap any field containing a comma in double quotes.
 6. If the sprint has fewer than the `low_item_warning` threshold items, note it as a warning but proceed.
 7. Only `resolution = "Done"` counts as a completed deliverable, matching the convention from CLAUDE.md.

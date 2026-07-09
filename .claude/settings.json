@@ -29,11 +29,31 @@
       "mcp__atlassian__addCommentToJiraIssue",
       "mcp__atlassian__getJiraIssueRemoteIssueLinks",
       "mcp__github__pull_request_read",
+      "mcp__github__get_file_contents",
+      "mcp__github__issue_read",
+      "mcp__github__search_code",
+      "mcp__github__search_repositories",
+      "mcp__gitlab__get_file_contents",
+      "mcp__gitlab__get_repository_tree",
+      "mcp__atlassian__editJiraIssue",
+      "mcp__atlassian__transitionJiraIssue",
+      "mcp__atlassian__getTransitionsForJiraIssue",
+      "mcp__atlassian__getJiraProjectIssueTypesMetadata",
+      "mcp__atlassian__getJiraIssueTypeMetaWithFields",
+      "Bash(npx tsx *)",
+      "Bash(npm *)",
+      "Bash(grep:*)",
+      "Bash(head:*)",
+      "Bash(node:*)",
       "Bash(python3:*)",
       "Bash(find:*)",
       "Bash(git:*)",
       "Bash(wc:*)",
-      "Bash(rm -f agents/*/data/cache/*)"
+      "Bash(rm -f agents/*/data/cache/*)",
+      "Bash(rm -f /home/rlavi/Projects/ninja-agents/agents/*/data/cache/*)",
+      "Bash(cat:*)",
+      "Bash(echo:*)",
+      "Bash(cd:*)"
     ]
   }
 }

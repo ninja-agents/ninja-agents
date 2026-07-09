@@ -85,7 +85,28 @@ This captures both assignee AND QA Contact tickets per engineer. Each engineer h
 - Check all Jira queries succeeded (no errors). If any error: display it, STOP.
 - If ALL Jira queries returned 0 tickets combined: display warning, STOP and ask user.
 
-Only proceed to Batch 2 after validation passes.
+Only proceed to Step 2.5 after validation passes.
+
+## Step 2.5: Fetch Sprint Backlog
+
+The per-engineer Jira queries (Step 2) use `updated >= -7d`, which captures Completed items for the current week but misses In Progress sprint tickets that haven't been touched recently. A supplementary sprint-based query fills this gap.
+
+1. **Discover the active sprint name**: scan `customfield_10020` from any Jira response returned in Step 2. Find the sprint object with `"state": "active"` whose name matches the `sprint_name_pattern` in `team-config.json`. Example: `"MIG-NET-Frontend Sprint 4"`.
+
+2. **Query all active sprint tickets**:
+
+```
+mcp__atlassian__searchJiraIssuesUsingJql:
+  cloudId: "{jira.cloud_id}"
+  jql: 'sprint = "{active_sprint_name}" ORDER BY key ASC'
+  maxResults: 100
+  fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "statuscategorychangedate", "issuetype", "priority", "updated", "created", "customfield_10470", "customfield_10020"]
+  responseContentFormat: "markdown"
+```
+
+3. **Merge into the Jira dataset**: deduplicate by ticket key — per-engineer results take precedence (they have richer context from the 7-day window). The sprint query adds tickets that were missed because they weren't updated in the last 7 days.
+
+This ensures ALL active sprint work appears in the In Progress section, not just items touched this week.
 
 ## Step 3: Fetch GitLab MRs (Batch 2)
 
@@ -134,6 +155,8 @@ Header: `engineer,number,title,repo,state,created_at,merged_at,html_url,issue_re
 
 Include BOTH merged and open PRs. Deduplicate by PR number — keep the merged version if a PR appears in both searches.
 
+**Handling tool responses**: PR search results may be returned inline or as a file reference. In BOTH cases, parse the full response and extract every PR. Do NOT skip inline responses.
+
 ### gitlab-mrs.csv
 
 Header: `engineer,iid,title,project_path,state,created_at,merged_at,web_url`
@@ -174,7 +197,9 @@ Header: `key,summary,status,resolution,resolutiondate,statuscategorychangedate,i
 
 Every ticket returned by the Jira query MUST have `sprint_name` populated if `customfield_10020` contains a non-closed sprint. Do NOT leave it empty when sprint data exists in the response.
 
-Save ALL tickets from the query — do NOT filter by team membership. The Python script handles team matching via config.
+Save ALL tickets from the query — do NOT filter by team membership. The TypeScript script handles team matching via config.
+
+**Handling tool responses**: Jira query results may be returned inline in the conversation OR as a file reference, depending on response size. In BOTH cases, parse the full JSON and extract every issue. Do NOT skip inline responses — iterate the `issues` array (or `issues.nodes` if present) from each engineer's query response and add one CSV row per issue. If a response was saved to a file, read that file; if it was returned inline, extract directly from the conversation context.
 
 ### last-updated.txt
 
@@ -207,51 +232,55 @@ Handle exit codes:
 
 ## Step 6.5: Write Key Highlights
 
-The script outputs a placeholder in the Key Highlights section. Replace it with polished, leadership-friendly theme summaries.
+The script outputs a placeholder in the Key Highlights section. Replace it with per-product leadership summaries.
 
 1. Read the report at `agents/weekly-team-update/data/output/weekly-update-{today}.md`
-2. Study the **Completed This Week** section to understand what the team shipped
-3. Use the **Highlight Context** printed by the script (CVE counts, test versions, feature/bug counts) as anchoring facts — do not recount items yourself
-4. Write 3-5 highlight bullets
-5. Replace everything between `## Key Highlights` and the next `##` heading with your bullets (remove the `<!-- HIGHLIGHTS_PLACEHOLDER -->` marker)
+2. Study the **Completed This Week** and **In Progress** sections
+3. Use the **Highlight Context** printed by the script — it provides per-product breakdowns of completed items, in-progress counts, and notable items (CVEs, etc.)
+4. Write a per-product summary (see format below)
+5. Replace everything between `## Key Highlights` and the next `##` heading with your summaries (remove the `<!-- HIGHLIGHTS_PLACEHOLDER -->` marker)
 
-### Highlight Style Guide
+### Highlight Format
 
-**Format rules:**
+Write one `### ProductName` sub-heading per product that had activity. Each product gets 2-3 sentences covering:
+- What shipped this week (outcomes, not ticket IDs)
+- What's actively in progress
+- Any CVEs fixed, blockers, or notable items
 
-- Exactly 3-5 bullets, each starting with `- `
-- Active voice, past tense ("Shipped", "Completed", "Delivered", "Fixed", "Added")
-- Each bullet covers a _theme_, not an individual ticket — group related items
-- Never truncate with "..." — summarize instead
-- Never join items with semicolons — use "and" or restructure the sentence
-- Quantify when possible ("11 fixes", "three versions")
-- Include business context where available ("Tech Preview", "now in QA")
-- Do NOT include markdown links — the detailed sections have those
-- Every claim must trace to an item in "Completed This Week" — never invent work
+**Rules:**
+- Only include products that had completed work OR significant in-progress activity
+- Skip products where the only activity is training courses or quarterly connections
+- If a product has only minor in-progress items and nothing completed, fold it into a brief final "Other" line or omit it
+- Active voice, past tense for completed work ("Shipped", "Fixed", "Delivered")
+- Present tense for in-progress ("Storage access mode selection is in review")
+- Quantify when possible ("8 bug fixes", "two features")
+- Do NOT include markdown links or Jira ticket IDs — the detailed sections have those
+- Every claim must trace to an item in the report — never invent work
+- Keep the total section under ~150 words — concise enough to scan in 30 seconds
 
-**Good examples:**
-
-```
-- Shipped 11 CVE fixes across Console Plugins and MTA, addressing vulnerabilities in lodash, axios, and 3 other libraries
-- Completed Tier 1/2 release testing for three CNV versions (4.12.23, 4.14.18, 4.18.35)
-- MTV delivered AAP hook integration (Tech Preview) and copy-offload UX improvements, both now in QA
-- CNV added CLI command display to the Create VM flow
-```
-
-**Bad examples (do NOT write like this):**
+**Good example:**
 
 ```
-- CVE remediation across Console Plugins and MTA — 11 fixes shipped for lodash, immutable, axios, fast-xml-parser, qs
-- MTV feature delivery: MTV hook for AAP integration; consolidate AI context into standardized AGENTS.md for...
+### MTV (Migration Toolkit for Virtualization)
+Shipped multi-NIC network mapping support and a migration alerts dashboard card. Fixed CVE-2026-42342 (React Router denial-of-service). Storage access mode selection, ASAP cutover option, and LUKS secret support are in review.
+
+### MTA (Migration Toolkit for Applications)
+Delivered 8 bug fixes covering post-0.10 upgrade regressions including filter layout, extra logout, and duplicate notifications. Migrated scope-based access control to the new endpoint and remediated serialize-javascript CVE.
+
+### CNV (Container-Native Virtualization)
+Fixed clone source list regression on release-4.22. CI infrastructure setup and e2e test migration continue.
+
+### Networking Console Plugins
+Completed nmstate-console-plugin 5.0 ART image update. VM tab implementation for NAD/UDN detail pages is in progress.
 ```
 
 ### Self-check before proceeding:
 
-- All bullets use active voice
-- No truncation ("...")
-- No semicolons joining separate items
-- Every fact matches an item in Completed This Week
-- 3-5 bullets total
+- Each product has a sub-heading with 2-3 sentences
+- All sentences use active voice
+- No markdown links or ticket IDs in highlights
+- Every fact matches an item in the report
+- Total section is under ~150 words
 - Placeholder marker is removed from the file
 
 ## Step 7: Validate Links

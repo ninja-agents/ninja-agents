@@ -1075,30 +1075,75 @@ export function computeHighlightData(
   };
 }
 
-export function formatHighlightContext(data: HighlightData): string {
+export function formatHighlightContext(
+  data: HighlightData,
+  sections?: Map<string, Map<string, EngineerBlock>>,
+): string {
   const lines: string[] = ["--- Highlight Context ---"];
-  if (data.cve) {
-    const libStr =
-      data.cve.libraries.length > 0
-        ? ` (${data.cve.libraries.join(", ")})`
-        : "";
-    lines.push(
-      `  CVE: ${data.cve.count} fixes across ${data.cve.products.join(", ")}${libStr}`,
-    );
+
+  if (!sections) {
+    if (data.cve) {
+      const libStr =
+        data.cve.libraries.length > 0
+          ? ` (${data.cve.libraries.join(", ")})`
+          : "";
+      lines.push(
+        `  CVE: ${data.cve.count} fixes across ${data.cve.products.join(", ")}${libStr}`,
+      );
+    }
+    if (data.testing) {
+      lines.push(
+        `  Testing: CNV Tier 1/2 for ${data.testing.versions.join(", ")}`,
+      );
+    }
+    const fmtMap = (label: string, m: Map<string, string[]>) => {
+      const parts = [...m.entries()]
+        .filter(([, v]) => v.length > 0)
+        .map(([k, v]) => `${k} (${v.length})`);
+      if (parts.length > 0) lines.push(`  ${label}: ${parts.join(", ")}`);
+    };
+    fmtMap("Features", data.features);
+    fmtMap("Bugs", data.bugs);
+    return lines.join("\n");
   }
-  if (data.testing) {
-    lines.push(
-      `  Testing: CNV Tier 1/2 for ${data.testing.versions.join(", ")}`,
-    );
+
+  for (const [pk, engineers] of sections) {
+    const completed: string[] = [];
+    const inProgress: string[] = [];
+    const notable: string[] = [];
+
+    for (const [, block] of engineers) {
+      for (const t of block.completed_tickets) {
+        completed.push(cleanSummary(t.summary));
+        if (t.summary.toUpperCase().includes("CVE")) notable.push(t.summary);
+      }
+      for (const pr of block.completed_prs) {
+        completed.push(cleanSummary(pr.title));
+        if (pr.title.toUpperCase().includes("CVE")) notable.push(pr.title);
+      }
+      for (const t of block.in_progress_tickets) {
+        inProgress.push(cleanSummary(t.summary));
+      }
+      for (const pr of block.in_progress_prs) {
+        inProgress.push(cleanSummary(pr.title));
+      }
+    }
+
+    if (completed.length === 0 && inProgress.length === 0) continue;
+
+    lines.push("");
+    lines.push(`### ${pk}`);
+    if (completed.length > 0) {
+      lines.push(`Completed (${completed.length}): ${completed.join("; ")}`);
+    }
+    if (inProgress.length > 0) {
+      lines.push(`In Progress (${inProgress.length}): ${inProgress.join("; ")}`);
+    }
+    if (notable.length > 0) {
+      lines.push(`Notable: ${notable.join("; ")}`);
+    }
   }
-  const fmtMap = (label: string, m: Map<string, string[]>) => {
-    const parts = [...m.entries()]
-      .filter(([, v]) => v.length > 0)
-      .map(([k, v]) => `${k} (${v.length})`);
-    if (parts.length > 0) lines.push(`  ${label}: ${parts.join(", ")}`);
-  };
-  fmtMap("Features", data.features);
-  fmtMap("Bugs", data.bugs);
+
   return lines.join("\n");
 }
 
@@ -1347,7 +1392,7 @@ export function main(argv: string[] = process.argv): void {
   console.log(`  Total completed items: ${totalCompleted}`);
   console.log(`  Total in-progress items: ${totalIp}`);
   console.log(`  Date range: ${wsStr} to ${rdStr}`);
-  console.log(`\n${formatHighlightContext(highlightData)}`);
+  console.log(`\n${formatHighlightContext(highlightData, sections)}`);
 
   if (warnings.length > 0) {
     process.stderr.write(

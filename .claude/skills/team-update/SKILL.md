@@ -19,7 +19,8 @@ No arguments needed - automatically queries all data sources and generates the r
 Launches the `weekly-team-update` agent which:
 
 1. **Fetches last 7 days of activity** via parallel MCP queries:
-   - Batch 1: GitHub PRs (merged + open) + Jira tickets (per-engineer assignee queries) for all engineers (parallel calls)
+   - Batch 1: GitHub PRs (merged + open) + Jira tickets (per-engineer assignee queries, 7-day window) for all engineers (parallel calls)
+   - Batch 1.5: Jira sprint backlog (all active sprint tickets regardless of update date) to capture In Progress items not touched this week
    - Batch 2: GitLab MRs (merged + open) for all engineers (parallel calls)
 2. **Saves data to CSV** in `agents/weekly-team-update/data/cache/` (github-prs.csv, gitlab-mrs.csv, jira-tickets.csv)
 3. **Runs `agents/weekly-team-update/scripts/generate-weekly-report.ts`** which deterministically:
@@ -40,7 +41,8 @@ A weekly report with:
 
 ### Key Highlights
 
-- 3-5 polished theme summaries written by the agent (active voice, no truncation, leadership-friendly)
+- Per-product summaries written by the agent (2-3 sentences each, active voice, leadership-friendly)
+- Each product with activity gets a sub-heading covering what shipped, what's in progress, and notable items
 
 ### Completed This Week
 

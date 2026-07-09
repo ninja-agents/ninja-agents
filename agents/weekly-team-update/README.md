@@ -35,9 +35,10 @@ npx tsx agents/weekly-team-update/scripts/validate-report-links.ts
 1. Reads `data/team-config.json` for engineer usernames and product mappings
 2. Fetches data via parallel MCP queries:
    - GitHub PRs (merged + open) for each engineer
-   - Jira tickets (assignee + QA contact) for each engineer
+   - Jira tickets (assignee + QA contact, updated in last 7 days) for each engineer
+   - Jira sprint backlog (all tickets in the active sprint, regardless of update date) to ensure In Progress items are never missed
    - GitLab MRs (merged + open) for each engineer
-3. Saves raw data as CSV in `data/cache/`
+3. Merges per-engineer and sprint-based Jira results (dedup by key) and saves as CSV in `data/cache/`
 4. Runs `scripts/generate-weekly-report.ts` for deterministic formatting (body sections)
 5. Agent writes Key Highlights — polished theme summaries derived from the completed work data
 6. Validates all links with `scripts/validate-report-links.ts`

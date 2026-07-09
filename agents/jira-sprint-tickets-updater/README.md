@@ -4,7 +4,7 @@ Transition Jira sprint tickets based on the status of their linked GitHub PRs.
 
 ## Prerequisites
 
-- **Atlassian Rovo MCP** — Jira ticket data from redhat.atlassian.net
+- **Atlassian Rovo MCP** — Jira ticket data from your Jira site
 - **GitHub MCP** — PR status checks from github.com
 - Tokens must be set as environment variables before launching Claude Code.
 

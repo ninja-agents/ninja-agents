@@ -49,7 +49,7 @@ function ticket(
   }> = {},
 ) {
   return {
-    key: overrides.key ?? "CNV-100",
+    key: overrides.key ?? "PROJ-100",
     summary: overrides.summary ?? "Some task",
     issuetype: overrides.issuetype ?? "Story",
     labels: overrides.labels ?? "",
@@ -111,8 +111,8 @@ describe("parseCsvLine", () => {
   });
 
   it("handles quoted fields with commas", () => {
-    expect(parseCsvLine('CNV-1,"Fix the thing, quickly",Bug,flaky')).toEqual([
-      "CNV-1",
+    expect(parseCsvLine('PROJ-1,"Fix the thing, quickly",Bug,flaky')).toEqual([
+      "PROJ-1",
       "Fix the thing, quickly",
       "Bug",
       "flaky",
@@ -120,8 +120,8 @@ describe("parseCsvLine", () => {
   });
 
   it("handles escaped double quotes inside quoted fields", () => {
-    expect(parseCsvLine('CNV-2,"She said ""hello""",Story,')).toEqual([
-      "CNV-2",
+    expect(parseCsvLine('PROJ-2,"She said ""hello""",Story,')).toEqual([
+      "PROJ-2",
       'She said "hello"',
       "Story",
       "",
@@ -129,8 +129,8 @@ describe("parseCsvLine", () => {
   });
 
   it("handles empty fields", () => {
-    expect(parseCsvLine("CNV-3,summary,Bug,")).toEqual([
-      "CNV-3",
+    expect(parseCsvLine("PROJ-3,summary,Bug,")).toEqual([
+      "PROJ-3",
       "summary",
       "Bug",
       "",
@@ -142,20 +142,20 @@ describe("parseCsv", () => {
   it("parses a well-formed CSV into tickets", () => {
     const csv = [
       "key,summary,issuetype,labels",
-      "CNV-1,Fix login,Bug,flaky;regression",
-      "CNV-2,Add feature,Story,",
+      "PROJ-1,Fix login,Bug,flaky;regression",
+      "PROJ-2,Add feature,Story,",
     ].join("\n");
 
     const tickets = parseCsv(csv);
     expect(tickets).toHaveLength(2);
     expect(tickets[0]).toEqual({
-      key: "CNV-1",
+      key: "PROJ-1",
       summary: "Fix login",
       issuetype: "Bug",
       labels: "flaky;regression",
     });
     expect(tickets[1]).toEqual({
-      key: "CNV-2",
+      key: "PROJ-2",
       summary: "Add feature",
       issuetype: "Story",
       labels: "",
@@ -173,7 +173,7 @@ describe("parseCsv", () => {
   it("handles quoted summaries with commas", () => {
     const csv = [
       "key,summary,issuetype,labels",
-      'MTV-10,"Migrate VMs, step 2",Task,tech-debt',
+      'TEAM-10,"Migrate VMs, step 2",Task,tech-debt',
     ].join("\n");
 
     const tickets = parseCsv(csv);
@@ -295,13 +295,13 @@ describe("classifyTicket", () => {
 
   it("preserves ticket fields in output", () => {
     const input = ticket({
-      key: "MTV-55",
+      key: "TEAM-55",
       summary: "Fix auth",
       issuetype: "Bug",
       labels: "flaky",
     });
     const result = classifyTicket(input, RULES, DEFAULT_TYPE);
-    expect(result.key).toBe("MTV-55");
+    expect(result.key).toBe("TEAM-55");
     expect(result.summary).toBe("Fix auth");
     expect(result.issuetype).toBe("Bug");
     expect(result.labels).toBe("flaky");
@@ -319,7 +319,7 @@ describe("classifyTicket", () => {
 describe("generatePreview", () => {
   const classified = [
     {
-      key: "CNV-1",
+      key: "PROJ-1",
       summary: "Fix bug",
       issuetype: "Bug",
       labels: "",
@@ -328,7 +328,7 @@ describe("generatePreview", () => {
       matched_rule: "issue type match",
     },
     {
-      key: "CNV-2",
+      key: "PROJ-2",
       summary: "New feature",
       issuetype: "Story",
       labels: "",
@@ -337,7 +337,7 @@ describe("generatePreview", () => {
       matched_rule: "default",
     },
     {
-      key: "CNV-3",
+      key: "PROJ-3",
       summary: "CVE fix",
       issuetype: "Bug",
       labels: "security",
@@ -348,22 +348,22 @@ describe("generatePreview", () => {
   ];
 
   it("includes the title and total count", () => {
-    const preview = generatePreview(classified);
+    const preview = generatePreview(classified, "https://test.atlassian.net");
     expect(preview).toContain("# Activity Type Classification Preview");
     expect(preview).toContain("Total tickets: 3");
   });
 
   it("includes summary table with activity type counts", () => {
-    const preview = generatePreview(classified);
+    const preview = generatePreview(classified, "https://test.atlassian.net");
     expect(preview).toContain("| Quality / Stability / Reliability | 1 |");
     expect(preview).toContain("| Product / Portfolio Work | 1 |");
     expect(preview).toContain("| Security & Compliance | 1 |");
   });
 
   it("includes proposed assignments table with linked ticket keys and summaries", () => {
-    const preview = generatePreview(classified);
+    const preview = generatePreview(classified, "https://test.atlassian.net");
     expect(preview).toContain(
-      "[CNV-1](https://redhat.atlassian.net/browse/CNV-1)",
+      "[PROJ-1](https://test.atlassian.net/browse/PROJ-1)",
     );
     expect(preview).toContain("| Fix bug |");
     expect(preview).toContain("| Summary |");
@@ -379,7 +379,7 @@ describe("generatePreview", () => {
           "This is a very long summary that exceeds sixty characters and should be truncated",
       },
     ];
-    const preview = generatePreview(longTicket);
+    const preview = generatePreview(longTicket, "https://test.atlassian.net");
     expect(preview).toContain(
       "This is a very long summary that exceeds sixty characters an...",
     );
@@ -387,20 +387,20 @@ describe("generatePreview", () => {
   });
 
   it("includes defaulted tickets section when defaults exist", () => {
-    const preview = generatePreview(classified);
+    const preview = generatePreview(classified, "https://test.atlassian.net");
     expect(preview).toContain("## Defaulted Tickets (review recommended)");
-    expect(preview).toContain("CNV-2");
+    expect(preview).toContain("PROJ-2");
     expect(preview).toContain("New feature");
   });
 
   it("omits defaulted section when no defaults exist", () => {
     const noDefaults = classified.filter((t) => t.matched_rule !== "default");
-    const preview = generatePreview(noDefaults);
+    const preview = generatePreview(noDefaults, "https://test.atlassian.net");
     expect(preview).not.toContain("Defaulted Tickets");
   });
 
   it("handles empty input", () => {
-    const preview = generatePreview([]);
+    const preview = generatePreview([], "https://test.atlassian.net");
     expect(preview).toContain("Total tickets: 0");
   });
 });

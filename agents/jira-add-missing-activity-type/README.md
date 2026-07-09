@@ -4,7 +4,7 @@ Finds completed Jira tickets missing the Activity Type field, classifies each ti
 
 ## Prerequisites
 
-- **Atlassian Rovo MCP** — Jira read access to `redhat.atlassian.net` (for fetching tickets)
+- **Atlassian Rovo MCP** — Jira read access to your Jira site (for fetching tickets)
 - **`JIRA_API_TOKEN`** — Jira API token for write access ([create one here](https://id.atlassian.com/manage-profile/security/api-tokens))
 - **`jira.user_email`** — your Jira email, set in `data/config.json`
 - Tokens must be set as environment variables before launching Claude Code.
@@ -47,7 +47,7 @@ npm run jira-add-missing-activity-type:apply -- --dry-run --cache agents/jira-ad
 
 Edit `data/config.json` to customize:
 
-- **JQL query** — which tickets to target (default: saved filter 91323 + Done + Activity Type empty)
+- **JQL query** — which tickets to target (default: your saved filter + Done + Activity Type empty)
 - **Classification rules** — ordered list of rules mapping labels/keywords/issue types to Activity Types
 - **Default Activity Type** — fallback for tickets matching no rule (default: Product / Portfolio Work)
 

@@ -100,7 +100,7 @@ describe("parseInlineMarkdown", () => {
 
 describe("buildIssuePayload", () => {
   const draft = {
-    source_key: "CNV-12345",
+    source_key: "PROJ-12345",
     summary: "[QE] Test story",
     description: "A description.",
     acceptance_criteria: "1. Criterion A\n2. Criterion B",
@@ -109,22 +109,22 @@ describe("buildIssuePayload", () => {
     issue_type: "Story",
     priority: "Normal",
     labels: ["qe"],
-    components: ["CNV User Interface"],
+    components: ["Project UI"],
     story_points: 5,
     assignee_account_id: "712020:abc-123",
-    target_project_key: "CNV",
+    target_project_key: "PROJ",
   };
 
   it("builds a valid payload with all fields", () => {
     const payload = buildIssuePayload(draft) as {
       fields: Record<string, unknown>;
     };
-    expect(payload.fields.project).toEqual({ key: "CNV" });
+    expect(payload.fields.project).toEqual({ key: "PROJ" });
     expect(payload.fields.issuetype).toEqual({ name: "Story" });
     expect(payload.fields.summary).toBe("[QE] Test story");
     expect(payload.fields.priority).toEqual({ name: "Normal" });
     expect(payload.fields.labels).toEqual(["qe"]);
-    expect(payload.fields.components).toEqual([{ name: "CNV User Interface" }]);
+    expect(payload.fields.components).toEqual([{ name: "Project UI" }]);
     expect(payload.fields.customfield_10028).toBe(5);
     expect(payload.fields.assignee).toEqual({ accountId: "712020:abc-123" });
   });
@@ -172,13 +172,13 @@ describe("parseCliArgs", () => {
   });
 
   it("parses --update with issue key", () => {
-    const args = parseCliArgs(["--update", "CNV-88823"]);
-    expect(args.updateKey).toBe("CNV-88823");
+    const args = parseCliArgs(["--update", "PROJ-88823"]);
+    expect(args.updateKey).toBe("PROJ-88823");
   });
 
   it("parses --update with --dry-run", () => {
-    const args = parseCliArgs(["--update", "CNV-88823", "--dry-run"]);
-    expect(args.updateKey).toBe("CNV-88823");
+    const args = parseCliArgs(["--update", "PROJ-88823", "--dry-run"]);
+    expect(args.updateKey).toBe("PROJ-88823");
     expect(args.dryRun).toBe(true);
   });
 

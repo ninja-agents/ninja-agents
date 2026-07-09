@@ -14,7 +14,7 @@ Estimate story points for unpointed Jira tickets by comparing them against histo
 
 ```bash
 /jira-story-points              # estimate all unpointed backlog tickets
-/jira-story-points CNV-12345    # estimate a specific ticket
+/jira-story-points PROJ-12345    # estimate a specific ticket
 ```
 
 ### Cursor

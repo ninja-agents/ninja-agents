@@ -329,7 +329,7 @@ export function loadJiraTickets(
     const key = r.key ?? "";
     let url = r.url ?? "";
     if (!url || !url.startsWith("http")) {
-      url = `https://redhat.atlassian.net/browse/${key}`;
+      url = `${config.jira.base_url}/${key}`;
     }
 
     let engineer = r.engineer ?? "";

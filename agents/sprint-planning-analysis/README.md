@@ -13,7 +13,7 @@ Analyzes a future or upcoming Jira sprint by comparing the plan against proven v
 
 ```bash
 /sprint-planning-analysis                              # auto-discovers the next/future sprint
-/sprint-planning-analysis "MIG-NET-Frontend Sprint 3"  # analyze a specific sprint
+/sprint-planning-analysis "Your Team Sprint 3"  # analyze a specific sprint
 ```
 
 ### Cursor

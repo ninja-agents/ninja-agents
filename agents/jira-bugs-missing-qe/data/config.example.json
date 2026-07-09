@@ -1,7 +1,7 @@
 {
   "jira": {
-    "cloud_id": "redhat.atlassian.net",
-    "base_url": "https://redhat.atlassian.net",
+    "cloud_id": "your-site.atlassian.net",
+    "base_url": "https://your-site.atlassian.net",
     "user_email": "your-email@redhat.com",
     "jql": "filter=YOUR_FILTER_ID and resolution in (Done, Done-Errata) and type = Bug and \"QA Contact[User Picker (single user)]\" is EMPTY and resolved >= -365d",
     "qa_contact_field": "customfield_10470"

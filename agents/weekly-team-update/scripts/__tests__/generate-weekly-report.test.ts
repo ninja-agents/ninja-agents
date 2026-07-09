@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { resolve } from "node:path";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import {
   parseDate,
   parseCsvLine,
@@ -71,7 +71,7 @@ function makeJira(overrides: Partial<JiraItem> = {}): JiraItem {
     statuscategorychangedate: "2026-05-05T10:00:00Z",
     issuetype: "Story",
     priority: "Major",
-    url: "https://redhat.atlassian.net/browse/TEST-123",
+    url: "https://test.atlassian.net/browse/TEST-123",
     role: "assignee",
     sprint_name: "",
     nested_prs: [],
@@ -228,12 +228,12 @@ describe("fmtPrLink", () => {
 describe("fmtTicketLink", () => {
   it("formats completed ticket", () => {
     const t = makeJira({
-      key: "CNV-123",
+      key: "PROJ-123",
       summary: "Fix thing",
       resolutiondate: "2026-05-07T00:00:00Z",
     });
     expect(fmtTicketLink(t, true)).toBe(
-      "- [CNV-123 - Fix thing](https://redhat.atlassian.net/browse/TEST-123) (resolved May 7)",
+      "- [PROJ-123 - Fix thing](https://test.atlassian.net/browse/TEST-123) (resolved May 7)",
     );
   });
 
@@ -435,10 +435,10 @@ describe("filterInProgressJira", () => {
   });
 
   it("excludes tickets not in matching sprint when pattern is provided", () => {
-    const pattern = /^MIG-NET-Frontend Sprint \d+$/;
+    const pattern = /^Team Sprint \d+$/;
     const inSprint = makeJira({
       status: "In Progress",
-      sprint_name: "MIG-NET-Frontend Sprint 5",
+      sprint_name: "Team Sprint 5",
     });
     const notInSprint = makeJira({
       status: "In Progress",
@@ -468,19 +468,19 @@ describe("filterInProgressJira", () => {
 
 describe("extractTicketIds", () => {
   it("extracts ticket IDs from PR title", () => {
-    const re = /((CNV|MTV|MTA|OCPBUGS|CONSOLE)-\d+)/g;
-    expect(extractTicketIds("CNV-123: fix bug", re)).toEqual(["CNV-123"]);
+    const re = /((PROJ|TEAM|BUGS|NETUI)-\d+)/g;
+    expect(extractTicketIds("PROJ-123: fix bug", re)).toEqual(["PROJ-123"]);
   });
 
   it("extracts multiple IDs", () => {
-    const re = /((CNV|MTV|MTA|OCPBUGS|CONSOLE)-\d+)/g;
+    const re = /((PROJ|TEAM|BUGS|NETUI)-\d+)/g;
     expect(
-      extractTicketIds("OCPBUGS-81616, OCPBUGS-79458: CVE fix", re),
-    ).toEqual(["OCPBUGS-81616", "OCPBUGS-79458"]);
+      extractTicketIds("BUGS-81616, BUGS-79458: CVE fix", re),
+    ).toEqual(["BUGS-81616", "BUGS-79458"]);
   });
 
   it("returns empty for no match", () => {
-    const re = /((CNV|MTV|MTA)-\d+)/g;
+    const re = /((PROJ|TEAM)-\d+)/g;
     expect(extractTicketIds("just a PR title", re)).toEqual([]);
   });
 });
@@ -491,35 +491,35 @@ describe("extractTicketIds", () => {
 
 describe("nestPrsUnderTickets", () => {
   it("nests PR under ticket by title match", () => {
-    const re = /((CNV|MTV)-\d+)/g;
-    const pr = makePR({ title: "CNV-100: fix bug" });
-    const ticket = makeJira({ key: "CNV-100", nested_prs: [] });
+    const re = /((PROJ|TEAM)-\d+)/g;
+    const pr = makePR({ title: "PROJ-100: fix bug" });
+    const ticket = makeJira({ key: "PROJ-100", nested_prs: [] });
     const { tickets, orphanPrs } = nestPrsUnderTickets([pr], [ticket], re);
     expect(tickets[0].nested_prs).toHaveLength(1);
     expect(orphanPrs).toHaveLength(0);
   });
 
   it("nests PR via issue_refs", () => {
-    const re = /((CNV|MTV)-\d+)/g;
-    const pr = makePR({ title: "Fix something", issue_refs: ["CNV-200"] });
-    const ticket = makeJira({ key: "CNV-200", nested_prs: [] });
+    const re = /((PROJ|TEAM)-\d+)/g;
+    const pr = makePR({ title: "Fix something", issue_refs: ["PROJ-200"] });
+    const ticket = makeJira({ key: "PROJ-200", nested_prs: [] });
     const { tickets, orphanPrs } = nestPrsUnderTickets([pr], [ticket], re);
     expect(tickets[0].nested_prs).toHaveLength(1);
     expect(orphanPrs).toHaveLength(0);
   });
 
   it("nests PR via github ref index", () => {
-    const re = /((MTA)-\d+)/g;
+    const re = /((TEAM)-\d+)/g;
     const pr = makePR({
       title: "Use shared component",
-      repo: "konveyor/tackle2-ui",
+      repo: "org/example-ui",
       issue_refs: ["3212"],
-      engineer: "Radek",
+      engineer: "Test Engineer",
     });
     const ticket = makeJira({
-      key: "MTA-6873",
-      summary: "[tackle2-ui#3212] Replace duplicated implementations",
-      engineer: "Radek",
+      key: "TEAM-6873",
+      summary: "[example-ui#3212] Replace duplicated implementations",
+      engineer: "Test Engineer",
       nested_prs: [],
     });
     const { tickets, orphanPrs } = nestPrsUnderTickets([pr], [ticket], re);
@@ -528,9 +528,9 @@ describe("nestPrsUnderTickets", () => {
   });
 
   it("orphans PR when no match found", () => {
-    const re = /((CNV)-\d+)/g;
+    const re = /((PROJ)-\d+)/g;
     const pr = makePR({ title: "Unrelated change" });
-    const ticket = makeJira({ key: "CNV-999", nested_prs: [] });
+    const ticket = makeJira({ key: "PROJ-999", nested_prs: [] });
     const { orphanPrs } = nestPrsUnderTickets([pr], [ticket], re);
     expect(orphanPrs).toHaveLength(1);
   });
@@ -659,14 +659,14 @@ describe("fmtTestTaskSummary", () => {
   it("aggregates versions and creates summary", () => {
     const tickets = [
       makeJira({
-        key: "CNV-1",
+        key: "PROJ-1",
         summary: "[TIER-1] cnv-4.18.35",
-        url: "https://redhat.atlassian.net/browse/CNV-1",
+        url: "https://test.atlassian.net/browse/PROJ-1",
       }),
       makeJira({
-        key: "CNV-2",
+        key: "PROJ-2",
         summary: "[TIER-2] cnv-4.14.18",
-        url: "https://redhat.atlassian.net/browse/CNV-2",
+        url: "https://test.atlassian.net/browse/PROJ-2",
       }),
     ];
     const result = fmtTestTaskSummary(tickets);
@@ -708,7 +708,7 @@ describe("generateHighlights", () => {
       in_progress_tickets: [],
       in_progress_prs: [],
     });
-    sections.set("MTA", engineers);
+    sections.set("TEAM", engineers);
 
     const highlights = generateHighlights(sections);
     expect(highlights.length).toBeGreaterThan(0);
@@ -740,7 +740,7 @@ describe("generateHighlights", () => {
       in_progress_tickets: [],
       in_progress_prs: [],
     });
-    sections.set("CNV", engineers);
+    sections.set("PROJ", engineers);
 
     const highlights = generateHighlights(sections);
     expect(highlights).toContainEqual(expect.stringContaining("4.18.35"));
@@ -811,12 +811,12 @@ describe("computeHighlightData", () => {
       in_progress_tickets: [],
       in_progress_prs: [],
     });
-    sections.set("MTA", engineers);
+    sections.set("TEAM", engineers);
 
     const data = computeHighlightData(sections);
     expect(data.cve).not.toBeNull();
     expect(data.cve!.count).toBe(2);
-    expect(data.cve!.products).toEqual(["MTA"]);
+    expect(data.cve!.products).toEqual(["TEAM"]);
     expect(data.cve!.libraries).toContain("lodash");
     expect(data.cve!.libraries).toContain("axios");
   });
@@ -846,7 +846,7 @@ describe("computeHighlightData", () => {
       in_progress_tickets: [],
       in_progress_prs: [],
     });
-    sections.set("CNV", engineers);
+    sections.set("PROJ", engineers);
 
     const data = computeHighlightData(sections);
     expect(data.testing).not.toBeNull();
@@ -877,12 +877,12 @@ describe("computeHighlightData", () => {
       in_progress_tickets: [],
       in_progress_prs: [],
     });
-    sections.set("MTV", engineers);
+    sections.set("TEAM", engineers);
 
     const data = computeHighlightData(sections);
     expect(data.cve).toBeNull();
     expect(data.testing).toBeNull();
-    expect(data.features.get("MTV")).toEqual(["A feature"]);
+    expect(data.features.get("TEAM")).toEqual(["A feature"]);
   });
 
   it("does not truncate feature summaries", () => {
@@ -911,10 +911,10 @@ describe("computeHighlightData", () => {
       in_progress_tickets: [],
       in_progress_prs: [],
     });
-    sections.set("MTV", engineers);
+    sections.set("TEAM", engineers);
 
     const data = computeHighlightData(sections);
-    const feature = data.features.get("MTV")![0];
+    const feature = data.features.get("TEAM")![0];
     expect(feature).not.toContain("...");
     expect(feature.length).toBeGreaterThan(60);
   });
@@ -925,20 +925,20 @@ describe("formatHighlightContext", () => {
     const data = {
       cve: {
         count: 5,
-        products: ["MTA", "Console Plugins"],
+        products: ["TEAM", "Console Plugins"],
         libraries: ["lodash", "axios"],
       },
       testing: { versions: ["4.14.18", "4.18.35"] },
-      features: new Map([["MTV", ["feature 1", "feature 2"]]]),
-      bugs: new Map([["MTA", ["bug fix 1"]]]),
+      features: new Map([["PROJ", ["feature 1", "feature 2"]]]),
+      bugs: new Map([["TEAM", ["bug fix 1"]]]),
     };
     const output = formatHighlightContext(data);
     expect(output).toContain(
-      "CVE: 5 fixes across MTA, Console Plugins (lodash, axios)",
+      "CVE: 5 fixes across TEAM, Console Plugins (lodash, axios)",
     );
     expect(output).toContain("Testing: CNV Tier 1/2 for 4.14.18, 4.18.35");
-    expect(output).toContain("Features: MTV (2)");
-    expect(output).toContain("Bugs: MTA (1)");
+    expect(output).toContain("Features: PROJ (2)");
+    expect(output).toContain("Bugs: TEAM (1)");
   });
 
   it("omits empty categories", () => {
@@ -950,6 +950,99 @@ describe("formatHighlightContext", () => {
     };
     const output = formatHighlightContext(data);
     expect(output).toBe("--- Highlight Context ---");
+  });
+
+  it("formats per-product context when sections provided", () => {
+    const data = {
+      cve: null,
+      testing: null,
+      features: new Map<string, string[]>(),
+      bugs: new Map<string, string[]>(),
+    };
+    const sections = new Map<string, Map<string, EngineerBlock>>([
+      [
+        "TEAM",
+        new Map([
+          [
+            "Alice",
+            {
+              name: "Alice",
+              completed_tickets: [
+                {
+                  engineer: "Alice",
+                  key: "TEAM-100",
+                  summary: "Add multi-NIC support",
+                  status: "Done",
+                  resolution: "Done",
+                  resolutiondate: "2026-07-01",
+                  statuscategorychangedate: "2026-07-01",
+                  issuetype: "Story",
+                  priority: "Major",
+                  url: "https://example.com/TEAM-100",
+                  role: "assignee" as const,
+                  sprint_name: "Sprint 5",
+                  nested_prs: [],
+                },
+              ],
+              completed_prs: [],
+              in_progress_tickets: [
+                {
+                  engineer: "Alice",
+                  key: "TEAM-101",
+                  summary: "Storage access mode selection",
+                  status: "In Progress",
+                  resolution: "",
+                  resolutiondate: "",
+                  statuscategorychangedate: "",
+                  issuetype: "Story",
+                  priority: "Major",
+                  url: "https://example.com/TEAM-101",
+                  role: "assignee" as const,
+                  sprint_name: "Sprint 5",
+                  nested_prs: [],
+                },
+              ],
+              in_progress_prs: [],
+            },
+          ],
+        ]),
+      ],
+    ]);
+    const output = formatHighlightContext(data, sections);
+    expect(output).toContain("### TEAM");
+    expect(output).toContain("Completed (1):");
+    expect(output).toContain("multi-NIC support");
+    expect(output).toContain("In Progress (1):");
+    expect(output).toContain("access mode selection");
+  });
+
+  it("skips products with no activity when sections provided", () => {
+    const data = {
+      cve: null,
+      testing: null,
+      features: new Map<string, string[]>(),
+      bugs: new Map<string, string[]>(),
+    };
+    const sections = new Map<string, Map<string, EngineerBlock>>([
+      [
+        "PROJ",
+        new Map([
+          [
+            "Bob",
+            {
+              name: "Bob",
+              completed_tickets: [],
+              completed_prs: [],
+              in_progress_tickets: [],
+              in_progress_prs: [],
+            },
+          ],
+        ]),
+      ],
+    ]);
+    const output = formatHighlightContext(data, sections);
+    expect(output).toBe("--- Highlight Context ---");
+    expect(output).not.toContain("### PROJ");
   });
 });
 

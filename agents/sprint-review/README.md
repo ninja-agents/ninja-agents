@@ -4,7 +4,7 @@ Analyze the currently active Jira sprint and generate a data-driven retrospectiv
 
 ## Prerequisites
 
-- **Atlassian Rovo MCP** — for Jira sprint data from redhat.atlassian.net
+- **Atlassian Rovo MCP** — for Jira sprint data from your Jira site
 
 Tokens must be set as environment variables before launching your IDE.
 
@@ -53,7 +53,7 @@ cp data/sprint-config.example.json data/sprint-config.json
 Edit `data/sprint-config.json` to customize:
 
 - **board_id** — your Jira Scrum board ID
-- **jira.project_key** — the Jira project key (e.g., "CNV")
+- **jira.project_key** — the Jira project key (e.g., "PROJ")
 - **jira.story_point_fields** — ordered list of candidate custom field IDs to try for story points
 - **thresholds** — analysis parameters (days before "stalled", estimation ratios, etc.)
 - **statuses** — status groupings for your Jira workflow (blocked, not_started, in_progress, done)

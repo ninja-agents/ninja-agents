@@ -1,9 +1,9 @@
 {
   "jira": {
-    "cloud_id": "redhat.atlassian.net",
-    "base_url": "https://redhat.atlassian.net",
-    "user_email": "",
-    "jql": "filter=91323 and statusCategory = Done and \"Activity Type[Dropdown]\" is EMPTY",
+    "cloud_id": "your-site.atlassian.net",
+    "base_url": "https://your-site.atlassian.net",
+    "user_email": "you@example.com",
+    "jql": "filter=YOUR_FILTER_ID and statusCategory = Done and \"Activity Type[Dropdown]\" is EMPTY",
     "activity_type_field": "customfield_10464"
   },
   "classification_rules": [

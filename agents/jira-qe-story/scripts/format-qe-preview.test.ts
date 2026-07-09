@@ -10,7 +10,7 @@ import {
 } from "./format-qe-preview.js";
 
 const validDraft: QEStoryDraft = {
-  source_key: "CNV-12345",
+  source_key: "PROJ-12345",
   summary: "[QE] Implement VM migration flow",
   description: "Test the VM migration flow end-to-end.",
   acceptance_criteria:
@@ -23,17 +23,17 @@ const validDraft: QEStoryDraft = {
   components: [],
   story_points: 5,
   assignee_account_id: "712020:abc-123",
-  target_project_key: "CNV",
+  target_project_key: "PROJ",
 };
 
 const testConfig = {
   qe_engineers: [
-    { name: "Leon Kladnitsky", jira_account_id: "712020:abc-123" },
-    { name: "Pedro Abreu", jira_account_id: "712020:def-456" },
+    { name: "Alice Engineer", jira_account_id: "712020:abc-123" },
+    { name: "Bob Tester", jira_account_id: "712020:def-456" },
   ],
   projects: [
-    { jira_prefix: "CNV", name: "Container-Native Virtualization" },
-    { jira_prefix: "MTV", name: "Migration Toolkit for Virtualization" },
+    { jira_prefix: "PROJ", name: "Example Project" },
+    { jira_prefix: "TEAM", name: "Team Project" },
   ],
 };
 
@@ -177,7 +177,7 @@ describe("formatPreview", () => {
     expect(preview).toContain("# QE Story Preview");
     expect(preview).toContain("### Acceptance Criteria");
     expect(preview).toContain("### Test Scenarios");
-    expect(preview).toContain("Clones: CNV-12345");
+    expect(preview).toContain("Clones: PROJ-12345");
   });
 
   it("includes coverage summary", () => {
@@ -197,7 +197,7 @@ describe("formatPreview", () => {
 
   it("includes dev story table when provided", () => {
     const devStory = {
-      key: "CNV-12345",
+      key: "PROJ-12345",
       fields: {
         summary: "Implement VM migration flow",
         status: { name: "In Progress" },

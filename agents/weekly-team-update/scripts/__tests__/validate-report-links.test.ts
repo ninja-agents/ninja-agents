@@ -78,7 +78,7 @@ describe("classifyLinks", () => {
   it("classifies GitLab MR links", () => {
     const links = [
       makeLink({
-        url: "https://gitlab.cee.redhat.com/org/repo/-/merge_requests/42",
+        url: "https://gitlab.example.com/org/repo/-/merge_requests/42",
       }),
     ];
     const classified = classifyLinks(links);
@@ -87,7 +87,7 @@ describe("classifyLinks", () => {
 
   it("classifies Jira links", () => {
     const links = [
-      makeLink({ url: "https://redhat.atlassian.net/browse/CNV-123" }),
+      makeLink({ url: "https://test.atlassian.net/browse/PROJ-123" }),
     ];
     const classified = classifyLinks(links);
     expect(classified.jira).toHaveLength(1);
@@ -102,8 +102,8 @@ describe("classifyLinks", () => {
   it("classifies mixed links correctly", () => {
     const links = [
       makeLink({ url: "https://github.com/o/r/pull/1" }),
-      makeLink({ url: "https://gitlab.cee.redhat.com/p/-/merge_requests/2" }),
-      makeLink({ url: "https://redhat.atlassian.net/browse/ABC-3" }),
+      makeLink({ url: "https://gitlab.example.com/p/-/merge_requests/2" }),
+      makeLink({ url: "https://test.atlassian.net/browse/ABC-3" }),
       makeLink({ url: "https://other.com" }),
     ];
     const classified = classifyLinks(links);
@@ -157,7 +157,7 @@ describe("verifyGitlabMrSync", () => {
   it("returns ok for valid MR link", () => {
     const link = makeLink({
       link_text: "MR !10 - Add feature",
-      url: "https://gitlab.cee.redhat.com/cnv-qe/kubevirt-ui/-/merge_requests/10",
+      url: "https://gitlab.example.com/team/project/-/merge_requests/10",
     });
     const result = verifyGitlabMrSync(link);
     expect(result.status).toBe("ok");
@@ -166,7 +166,7 @@ describe("verifyGitlabMrSync", () => {
   it("returns error for MR number mismatch", () => {
     const link = makeLink({
       link_text: "MR !99 - Fix",
-      url: "https://gitlab.cee.redhat.com/org/repo/-/merge_requests/10",
+      url: "https://gitlab.example.com/org/repo/-/merge_requests/10",
     });
     const result = verifyGitlabMrSync(link);
     expect(result.status).toBe("error");
@@ -176,7 +176,7 @@ describe("verifyGitlabMrSync", () => {
   it("returns error for unparseable URL", () => {
     const link = makeLink({
       link_text: "MR !1",
-      url: "https://gitlab.cee.redhat.com/org/repo/issues/1",
+      url: "https://gitlab.example.com/org/repo/issues/1",
     });
     const result = verifyGitlabMrSync(link);
     expect(result.status).toBe("error");
@@ -190,18 +190,18 @@ describe("verifyGitlabMrSync", () => {
 describe("verifyJira", () => {
   it("returns ok for valid Jira link", () => {
     const link = makeLink({
-      link_text: "CNV-123 - Fix thing",
-      url: "https://redhat.atlassian.net/browse/CNV-123",
+      link_text: "PROJ-123 - Fix thing",
+      url: "https://test.atlassian.net/browse/PROJ-123",
     });
     const result = verifyJira(link);
     expect(result.status).toBe("ok");
-    expect(result.message).toBe("CNV-123");
+    expect(result.message).toBe("PROJ-123");
   });
 
   it("returns error for ticket key mismatch", () => {
     const link = makeLink({
-      link_text: "MTV-999 - Wrong ticket",
-      url: "https://redhat.atlassian.net/browse/CNV-123",
+      link_text: "TEAM-999 - Wrong ticket",
+      url: "https://test.atlassian.net/browse/PROJ-123",
     });
     const result = verifyJira(link);
     expect(result.status).toBe("error");
@@ -211,7 +211,7 @@ describe("verifyJira", () => {
   it("returns error for unparseable Jira URL", () => {
     const link = makeLink({
       link_text: "Some link",
-      url: "https://redhat.atlassian.net/wiki/123",
+      url: "https://test.atlassian.net/wiki/123",
     });
     const result = verifyJira(link);
     expect(result.status).toBe("error");

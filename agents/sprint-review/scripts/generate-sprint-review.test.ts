@@ -36,7 +36,7 @@ import {
 // ---------------------------------------------------------------------------
 
 const BASE_CONFIG: SprintConfig = {
-  board_id: 11806,
+  board_id: 12345,
   sprint_name_prefix: "Test Sprint",
   jira: {
     cloud_id: "test.atlassian.net",

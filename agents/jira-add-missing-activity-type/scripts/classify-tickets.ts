@@ -173,7 +173,10 @@ export function classifyTicket(
   };
 }
 
-export function generatePreview(classified: ClassifiedTicket[]): string {
+export function generatePreview(
+  classified: ClassifiedTicket[],
+  baseUrl: string,
+): string {
   const lines: string[] = [];
   lines.push("# Activity Type Classification Preview\n");
   lines.push(`Generated: ${new Date().toISOString()}\n`);
@@ -201,7 +204,7 @@ export function generatePreview(classified: ClassifiedTicket[]): string {
     const summary =
       t.summary.length > 60 ? t.summary.slice(0, 60) + "..." : t.summary;
     lines.push(
-      `| [${t.key}](https://redhat.atlassian.net/browse/${t.key}) | ${summary} | ${t.issuetype} | ${t.activity_type} | ${t.matched_rule} |`,
+      `| [${t.key}](${baseUrl}/browse/${t.key}) | ${summary} | ${t.issuetype} | ${t.activity_type} | ${t.matched_rule} |`,
     );
   }
   lines.push("");
@@ -214,7 +217,7 @@ export function generatePreview(classified: ClassifiedTicket[]): string {
     );
     for (const t of defaults) {
       lines.push(
-        `- [${t.key}](https://redhat.atlassian.net/browse/${t.key}): ${t.summary}`,
+        `- [${t.key}](${baseUrl}/browse/${t.key}): ${t.summary}`,
       );
     }
     lines.push("");
@@ -254,7 +257,7 @@ function main() {
     ),
   );
 
-  const preview = generatePreview(classified);
+  const preview = generatePreview(classified, config.jira.base_url);
   writeFileSync(outputPath, preview);
 
   const classifiedCsvPath = resolve(cacheDir, "classified-tickets.csv");

@@ -1,7 +1,7 @@
 {
   "jira": {
-    "cloud_id": "redhat.atlassian.net",
-    "board_id": 11806
+    "cloud_id": "test.atlassian.net",
+    "board_id": 12345
   },
   "sprint": {
     "name_pattern": "Test Sprint"
@@ -18,7 +18,7 @@
   ],
   "engineers": [],
   "projects": {
-    "CNV": {
+    "PROJ": {
       "workflows": {
         "standard": {
           "issue_types": [
@@ -59,7 +59,7 @@
         }
       }
     },
-    "OCPBUGS": {
+    "BUGS": {
       "workflows": {
         "bugzilla": {
           "issue_types": ["Bug", "Vulnerability"],

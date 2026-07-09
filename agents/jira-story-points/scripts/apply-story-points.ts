@@ -7,9 +7,7 @@ interface JiraConfig {
     user_email: string;
     story_points_field: string;
   };
-  estimation: {
-    comment_prefix: string;
-  };
+  estimation: Record<string, unknown>;
 }
 
 interface EstimatedTicket {
@@ -33,7 +31,7 @@ function parseArgs(argv: string[]): Record<string, string | boolean> {
         "Usage: apply-story-points.ts --config <path> --estimates <path> [--dry-run]",
       );
       console.log(
-        "\nApplies SP estimates to Jira tickets (comment + set field) and writes estimation history.",
+        "\nApplies SP estimates to Jira tickets and writes estimation history.",
       );
       process.exit(0);
     }
@@ -108,72 +106,6 @@ async function jiraFetch(
   return { ok: res.ok, status: res.status, data };
 }
 
-async function jiraGet(
-  baseUrl: string,
-  path: string,
-  auth: string,
-): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
-  const res = await fetch(`${baseUrl}${path}`, {
-    headers: { Authorization: `Basic ${auth}` },
-  });
-  const text = await res.text();
-  const data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
-  return { ok: res.ok, status: res.status, data };
-}
-
-async function hasExistingComment(
-  baseUrl: string,
-  auth: string,
-  issueKey: string,
-  marker: string,
-): Promise<boolean> {
-  const result = await jiraGet(
-    baseUrl,
-    `/rest/api/3/issue/${issueKey}/comment`,
-    auth,
-  );
-  if (!result.ok) return false;
-  const comments =
-    (result.data as { comments?: Array<{ body?: unknown }> }).comments ?? [];
-  return comments.some((c) => JSON.stringify(c.body).includes(marker));
-}
-
-function buildCommentBody(
-  prefix: string,
-  ticket: EstimatedTicket,
-): Record<string, unknown> {
-  return {
-    type: "doc",
-    version: 1,
-    content: [
-      {
-        type: "paragraph",
-        content: [{ type: "text", text: prefix, marks: [{ type: "em" }] }],
-      },
-      {
-        type: "paragraph",
-        content: [
-          {
-            type: "text",
-            text: `${String(ticket.estimated_sp)} SP`,
-            marks: [{ type: "strong" }],
-          },
-          { type: "text", text: ` — ${ticket.reasoning}` },
-        ],
-      },
-      {
-        type: "paragraph",
-        content: [
-          {
-            type: "text",
-            text: `Similar tickets: ${ticket.similar_tickets.join(", ")}`,
-          },
-        ],
-      },
-    ],
-  };
-}
-
 function loadHistory(historyPath: string): HistoryEntry[] {
   if (existsSync(historyPath)) {
     return JSON.parse(readFileSync(historyPath, "utf-8")) as HistoryEntry[];
@@ -206,7 +138,6 @@ async function main() {
   const auth = getAuth(config);
   const baseUrl = config.jira.base_url;
   const spField = config.jira.story_points_field;
-  const commentPrefix = config.estimation.comment_prefix;
 
   const succeeded: string[] = [];
   const failed: Array<{ key: string; error: string }> = [];
@@ -214,35 +145,6 @@ async function main() {
 
   for (const t of tickets) {
     process.stdout.write(`  ${t.key}: ${String(t.estimated_sp)} SP...`);
-
-    const alreadyCommented = await hasExistingComment(
-      baseUrl,
-      auth,
-      t.key,
-      commentPrefix,
-    );
-
-    if (!alreadyCommented) {
-      const commentResult = await jiraFetch(
-        baseUrl,
-        `/rest/api/3/issue/${t.key}/comment`,
-        auth,
-        { body: buildCommentBody(commentPrefix, t) },
-        "POST",
-      );
-
-      if (!commentResult.ok) {
-        const msg =
-          typeof commentResult.data.errorMessages === "object"
-            ? JSON.stringify(commentResult.data.errorMessages)
-            : `Comment HTTP ${String(commentResult.status)}`;
-        console.log(` FAILED (${msg})`);
-        failed.push({ key: t.key, error: msg });
-        continue;
-      }
-    } else {
-      process.stdout.write(" comment exists, skipping...");
-    }
 
     const spResult = await jiraFetch(
       baseUrl,

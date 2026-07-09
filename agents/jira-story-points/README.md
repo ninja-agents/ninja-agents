@@ -5,7 +5,7 @@ Estimate story points for unpointed Jira tickets by comparing them against histo
 ## Prerequisites
 
 - **Atlassian Rovo MCP** — for Jira ticket queries (read-only)
-- **JIRA_API_TOKEN** — for setting fields and adding comments via REST API (get from [Atlassian API tokens](https://id.atlassian.com/manage-profile/security/api-tokens))
+- **JIRA_API_TOKEN** — for setting fields via REST API (get from [Atlassian API tokens](https://id.atlassian.com/manage-profile/security/api-tokens))
 - Tokens must be set as environment variables before launching Claude Code
 
 ## Usage
@@ -39,7 +39,7 @@ npm run jira-story-points:validate -- agents/jira-story-points/data/cache/refere
 4. **Identify targets** — fetches the specified ticket or finds unpointed backlog tickets
 5. **Estimate** — Claude compares each target against historical data and suggests SP with reasoning
 6. **Preview** — displays proposed estimates for user approval
-7. **Apply** — adds a Jira comment with justification (skips if comment already exists) and sets the SP field via REST API
+7. **Apply** — sets the SP field via REST API
 
 ## Configuration
 
@@ -61,7 +61,7 @@ agents/jira-story-points/
 │   ├── build-reference.ts          # generates reference summary from cached JSON
 │   ├── build-reference.test.ts     # config and parsing tests
 │   ├── validate-output.ts          # validates reference summary completeness
-│   └── apply-story-points.ts       # sets SP field + comment via Jira REST API
+│   └── apply-story-points.ts       # sets SP field via Jira REST API
 └── data/
     ├── config.example.json         # template config (committed)
     ├── config.json                 # real config (gitignored)

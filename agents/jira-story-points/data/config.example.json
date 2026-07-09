@@ -37,8 +37,7 @@
     }
   },
   "estimation": {
-    "top_similar_tickets": 5,
-    "comment_prefix": "*AI Story Point Estimation*"
+    "top_similar_tickets": 5
   },
   "projects": [
     {

@@ -26,13 +26,13 @@ Launches the `jira-story-points` agent which:
 4. Identifies target tickets (specific key or unpointed backlog tickets)
 5. Estimates SP by comparing targets against historical data using Claude's reasoning
 6. Previews estimates with reasoning for user approval
-7. Adds a Jira comment with justification and sets the SP field
+7. Sets the SP field
 
 ## Expected Output
 
 - A table of proposed SP estimates with confidence levels and similar ticket references
 - Per-ticket reasoning explaining why the suggested SP fits
-- After approval: Jira comments added and SP fields set on each ticket
+- After approval: SP fields set on each ticket
 
 ## Critical Rules
 

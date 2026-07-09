@@ -1110,11 +1110,15 @@ describe("config helpers", () => {
 describe("end-to-end", () => {
   const config = existsSync(CONFIG_PATH) ? loadConfig(CONFIG_PATH) : null;
   const hasCache = existsSync(resolve(CACHE_DIR, "github-prs.csv"));
-  const referenceFile = resolve(
-    AGENT_ROOT,
-    "data/output/weekly-update-2026-05-07.md",
-  );
-  const hasReference = existsSync(referenceFile);
+  const outputDir = resolve(AGENT_ROOT, "data/output");
+  const referenceFile = existsSync(outputDir)
+    ? readdirSync(outputDir)
+        .filter((f) => /^weekly-update-\d{4}-\d{2}-\d{2}\.md$/.test(f))
+        .sort()
+        .pop()
+    : undefined;
+  const hasReference = !!referenceFile;
+  const refDateStr = referenceFile?.match(/(\d{4}-\d{2}-\d{2})/)?.[1];
 
   it.skipIf(!config || !hasCache || !hasReference)(
     "generates output identical to reference report",
@@ -1125,7 +1129,7 @@ describe("end-to-end", () => {
       const jiraTickets = loadJiraTickets(CACHE_DIR, config!);
       const allPrs = [...githubPrs, ...gitlabMrs];
 
-      const reportDate = new Date("2026-05-07T00:00:00Z");
+      const reportDate = new Date(`${refDateStr!}T00:00:00Z`);
       const windowStart = new Date(
         reportDate.getTime() - 7 * 24 * 60 * 60 * 1000,
       );
@@ -1134,13 +1138,19 @@ describe("end-to-end", () => {
       );
 
       const completedPrs = filterCompletedPrs(allPrs, windowStart, windowEnd);
-      const openPrs = filterOpenPrs(allPrs);
+      const prCutoff = new Date(
+        reportDate.getTime() - 30 * 24 * 60 * 60 * 1000,
+      );
+      const openPrs = filterOpenPrs(allPrs, prCutoff);
       const completedJira = filterCompletedJira(
         jiraTickets,
         windowStart,
         windowEnd,
       );
-      const ipJira = filterInProgressJira(jiraTickets);
+      const sprintPattern = config!.sprint_name_pattern
+        ? new RegExp(config!.sprint_name_pattern)
+        : undefined;
+      const ipJira = filterInProgressJira(jiraTickets, sprintPattern);
 
       const { tickets: completedTickets, orphanPrs: completedOrphanPrs } =
         nestPrsUnderTickets(completedPrs, completedJira, ticketIdRe);
@@ -1189,7 +1199,10 @@ describe("end-to-end", () => {
       reportLines.push(formatInProgressSection(sections, config!));
 
       const reportText = reportLines.join("\n") + "\n";
-      const expected = readFileSync(referenceFile, "utf-8");
+      const expected = readFileSync(
+        resolve(outputDir, referenceFile!),
+        "utf-8",
+      );
 
       const stripHighlights = (s: string) =>
         s.replace(

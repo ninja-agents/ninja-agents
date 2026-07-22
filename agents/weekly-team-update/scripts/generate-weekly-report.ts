@@ -66,6 +66,8 @@ interface TeamConfig {
     name: string;
     jira_prefixes: string[];
     repos: string[];
+    filter_github_synced_without_pr?: boolean;
+    github_orgs?: string[];
   }[];
   engineers: {
     name: string;
@@ -129,6 +131,16 @@ export function buildRepoToProduct(config: TeamConfig): Map<string, string> {
       if (parts.length === 2) {
         mapping.set(parts[1], p.key);
       }
+    }
+  }
+  return mapping;
+}
+
+export function buildOrgToProduct(config: TeamConfig): Map<string, string> {
+  const mapping = new Map<string, string>();
+  for (const p of config.products) {
+    for (const org of p.github_orgs ?? []) {
+      mapping.set(org, p.key);
     }
   }
   return mapping;
@@ -475,6 +487,24 @@ export function filterCompletedJira(
   });
 }
 
+export function filterGithubSyncedTickets(
+  tickets: JiraItem[],
+  config: TeamConfig,
+): JiraItem[] {
+  const filteredPrefixes = new Set<string>(
+    config.products
+      .filter((p) => p.filter_github_synced_without_pr)
+      .flatMap((p) => p.jira_prefixes),
+  );
+  if (filteredPrefixes.size === 0) return tickets;
+
+  return tickets.filter((t) => {
+    const prefix = t.key.includes("-") ? t.key.split("-")[0] : "";
+    if (!filteredPrefixes.has(prefix)) return true;
+    return !(JIRA_GITHUB_REF_RE.test(t.summary) && t.nested_prs.length === 0);
+  });
+}
+
 export function filterInProgressJira(
   tickets: JiraItem[],
   sprintPattern?: RegExp,
@@ -598,6 +628,7 @@ export function determineProduct(
   prefixToProduct: Map<string, string>,
   ocpbugsSummaryRe: RegExp,
   ticketIdRe: RegExp,
+  orgToProduct: Map<string, string> = new Map(),
 ): string {
   if (
     "key" in item &&
@@ -647,6 +678,8 @@ export function determineProduct(
   }
   const m = ocpbugsSummaryRe.exec(pr.title);
   if (m && repoToProduct.has(m[0])) return repoToProduct.get(m[0])!;
+  const org = pr.repo.includes("/") ? pr.repo.split("/")[0] : "";
+  if (org && orgToProduct.has(org)) return orgToProduct.get(org)!;
   return "Other";
 }
 
@@ -675,6 +708,7 @@ export function organize(
 ): Map<string, Map<string, EngineerBlock>> {
   const repoToProduct = buildRepoToProduct(config);
   const prefixToProduct = buildPrefixToProduct(config);
+  const orgToProduct = buildOrgToProduct(config);
   const ocpbugsSummaryRe = buildOcpbugsSummaryRepoRe(config);
   const productOrder = [...config.products.map((p) => p.key), "Other"];
   const engineerNames = config.engineers.map((e) => e.name);
@@ -709,6 +743,7 @@ export function organize(
       prefixToProduct,
       ocpbugsSummaryRe,
       ticketIdRe,
+      orgToProduct,
     );
     getBlock(product, t.engineer).completed_tickets.push(t);
   }
@@ -720,6 +755,7 @@ export function organize(
       prefixToProduct,
       ocpbugsSummaryRe,
       ticketIdRe,
+      orgToProduct,
     );
     getBlock(product, p.engineer).completed_prs.push(p);
   }
@@ -731,6 +767,7 @@ export function organize(
       prefixToProduct,
       ocpbugsSummaryRe,
       ticketIdRe,
+      orgToProduct,
     );
     getBlock(product, t.engineer).in_progress_tickets.push(t);
   }
@@ -742,6 +779,7 @@ export function organize(
       prefixToProduct,
       ocpbugsSummaryRe,
       ticketIdRe,
+      orgToProduct,
     );
     getBlock(product, p.engineer).in_progress_prs.push(p);
   }
@@ -1137,7 +1175,9 @@ export function formatHighlightContext(
       lines.push(`Completed (${completed.length}): ${completed.join("; ")}`);
     }
     if (inProgress.length > 0) {
-      lines.push(`In Progress (${inProgress.length}): ${inProgress.join("; ")}`);
+      lines.push(
+        `In Progress (${inProgress.length}): ${inProgress.join("; ")}`,
+      );
     }
     if (notable.length > 0) {
       lines.push(`Notable: ${notable.join("; ")}`);
@@ -1322,11 +1362,16 @@ export function main(argv: string[] = process.argv): void {
     ticketIdRe,
   );
 
-  const nestedCount = completedTickets.reduce(
+  const visibleCompletedTickets = filterGithubSyncedTickets(
+    completedTickets,
+    config,
+  );
+
+  const nestedCount = visibleCompletedTickets.reduce(
     (s, t) => s + t.nested_prs.length,
     0,
   );
-  const ticketsWithPrs = completedTickets.filter(
+  const ticketsWithPrs = visibleCompletedTickets.filter(
     (t) => t.nested_prs.length > 0,
   ).length;
   console.log(
@@ -1335,7 +1380,7 @@ export function main(argv: string[] = process.argv): void {
 
   // Organize by product
   const sections = organize(
-    completedTickets,
+    visibleCompletedTickets,
     completedOrphanPrs,
     ipTickets,
     ipOrphanPrs,
@@ -1350,9 +1395,9 @@ export function main(argv: string[] = process.argv): void {
     `# ${config.report_title}`,
     fmtReportDate(reportDate),
     "",
-    "## Key Highlights",
-    "<!-- HIGHLIGHTS_PLACEHOLDER -->",
-    "- (highlights pending)",
+    "## Summary",
+    "<!-- SUMMARY_PLACEHOLDER -->",
+    "- (summary pending)",
   ];
   reportLines.push("");
 

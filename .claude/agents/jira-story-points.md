@@ -30,9 +30,9 @@ You do NOT update any Jira ticket without showing the user a complete preview an
 Before starting Step 1, display a step overview so the user knows the full workflow:
 
 ```text
-Starting jira-story-points (7 steps):
+Starting jira-story-points (7 steps, iterating in batches of 10):
  1. Read config   2. Sync reference cache   3. Build reference summary
- 4. Identify targets   5. Estimate   6. Preview   7. Apply
+ 4. Identify targets   5. Estimate   6. Preview   7. Apply → repeat until done
 ```
 
 Prefix every status line with `[N/7]` where N is the current step number. Display a status line when starting each step and at key milestones. Keep updates to one line each — be transparent, not verbose.
@@ -179,7 +179,7 @@ If 0 tickets found: display "No unpointed tickets in the backlog." STOP.
 
 After fetching target tickets, filter out any with resolution other than "Done" or "Done-Errata" (e.g., skip "Duplicate", "Won't Fix", "Cannot Reproduce", "Not a Bug"). Only estimate tickets that were actually resolved with real work. Display skipped tickets: `Skipped {key}: resolution is {resolution}.`
 
-Display: `[4/7] Found {count} unpointed ticket(s) to estimate.`
+Display: `[4/7] Found {count} unpointed ticket(s) to estimate (Batch {batch_num}).`
 
 ## Step 4.5: Fetch PR Context
 
@@ -373,6 +373,20 @@ After the script completes, display its output to the user.
 - Failures listed separately (if any)
 - No first-person language
 - All ticket keys are markdown hyperlinks
+
+## Iteration Loop
+
+After Step 7 completes (or if the user aborted in Step 6), check whether more unpointed tickets remain:
+
+1. Re-fetch using `backlog_jql` with `maxResults: 10` (same query as Step 4).
+2. **If 0 tickets returned**: display "All unpointed tickets estimated. Done." STOP.
+3. **If tickets found**: display `--- Batch {N+1} ---` and continue from Step 4, incrementing the batch counter. Steps 1–3 do NOT re-run (config and reference cache are already loaded).
+
+If the user aborted in Step 6, still check for remaining tickets and ask:
+
+> "Batch {N} was aborted. {M} more unpointed tickets remain. Continue with the next batch? (yes/no)"
+
+Only proceed if they say yes.
 
 ## Rules
 

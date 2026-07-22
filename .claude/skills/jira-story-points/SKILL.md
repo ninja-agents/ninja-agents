@@ -23,7 +23,7 @@ Launches the `jira-story-points` agent which:
 1. Reads config (JQL filters, sizing guide, estimation preferences)
 2. Syncs a reference cache of historical Done tickets with SP values (skips if fresh)
 3. Builds a reference summary with SP distribution and per-type averages
-4. Identifies target tickets (specific key or unpointed backlog tickets)
+4. Identifies target tickets (specific key, or unpointed backlog tickets in batches of 10)
 5. Estimates SP by comparing targets against historical data using Claude's reasoning
 6. Previews estimates with reasoning for user approval
 7. Sets the SP field
@@ -33,6 +33,7 @@ Launches the `jira-story-points` agent which:
 - A table of proposed SP estimates with confidence levels and similar ticket references
 - Per-ticket reasoning explaining why the suggested SP fits
 - After approval: SP fields set on each ticket
+- Repeats batches of 10 until all unpointed backlog tickets are estimated
 
 ## Critical Rules
 

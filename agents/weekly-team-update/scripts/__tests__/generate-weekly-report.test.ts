@@ -11,12 +11,14 @@ import {
   buildTicketIdRe,
   buildRepoToProduct,
   buildPrefixToProduct,
+  buildOrgToProduct,
   buildOcpbugsSummaryRepoRe,
   buildAccountIdToName,
   buildJiraDisplayToName,
   filterCompletedPrs,
   filterOpenPrs,
   filterCompletedJira,
+  filterGithubSyncedTickets,
   filterInProgressJira,
   extractTicketIds,
   nestPrsUnderTickets,
@@ -463,6 +465,88 @@ describe("filterInProgressJira", () => {
 });
 
 // ---------------------------------------------------------------------------
+// filterGithubSyncedTickets
+// ---------------------------------------------------------------------------
+
+describe("filterGithubSyncedTickets", () => {
+  const configWithFilter = {
+    products: [
+      {
+        key: "MTA",
+        name: "Migration Toolkit for Applications",
+        jira_prefixes: ["MTA"],
+        repos: [],
+        filter_github_synced_without_pr: true,
+      },
+      {
+        key: "MTV",
+        name: "Migration Toolkit for Virtualization",
+        jira_prefixes: ["MTV"],
+        repos: [],
+      },
+    ],
+  } as Parameters<typeof filterGithubSyncedTickets>[1];
+
+  it("removes a GitHub-synced MTA ticket with no nested PRs", () => {
+    const ticket = makeJira({
+      key: "MTA-1234",
+      summary: "[tackle2-ui#2840] Some feature",
+      nested_prs: [],
+    });
+    expect(filterGithubSyncedTickets([ticket], configWithFilter)).toHaveLength(
+      0,
+    );
+  });
+
+  it("keeps a GitHub-synced MTA ticket that has a nested PR", () => {
+    const ticket = makeJira({
+      key: "MTA-1234",
+      summary: "[tackle2-ui#2840] Some feature",
+      nested_prs: [makePR()],
+    });
+    expect(filterGithubSyncedTickets([ticket], configWithFilter)).toHaveLength(
+      1,
+    );
+  });
+
+  it("keeps an MTA ticket with no [repo#NNNN] pattern even without nested PRs", () => {
+    const ticket = makeJira({
+      key: "MTA-7238",
+      summary: "RedHat logo appears too white/washed out",
+      nested_prs: [],
+    });
+    expect(filterGithubSyncedTickets([ticket], configWithFilter)).toHaveLength(
+      1,
+    );
+  });
+
+  it("does not filter GitHub-synced tickets for products without the flag", () => {
+    const ticket = makeJira({
+      key: "MTV-999",
+      summary: "[some-repo#123] Some feature",
+      nested_prs: [],
+    });
+    expect(filterGithubSyncedTickets([ticket], configWithFilter)).toHaveLength(
+      1,
+    );
+  });
+
+  it("is a no-op when no product has the flag set", () => {
+    const configNoFilter = {
+      products: [
+        { key: "MTA", name: "MTA", jira_prefixes: ["MTA"], repos: [] },
+      ],
+    } as Parameters<typeof filterGithubSyncedTickets>[1];
+    const ticket = makeJira({
+      key: "MTA-1234",
+      summary: "[tackle2-ui#2840] Some feature",
+      nested_prs: [],
+    });
+    expect(filterGithubSyncedTickets([ticket], configNoFilter)).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // extractTicketIds
 // ---------------------------------------------------------------------------
 
@@ -474,9 +558,10 @@ describe("extractTicketIds", () => {
 
   it("extracts multiple IDs", () => {
     const re = /((PROJ|TEAM|BUGS|NETUI)-\d+)/g;
-    expect(
-      extractTicketIds("BUGS-81616, BUGS-79458: CVE fix", re),
-    ).toEqual(["BUGS-81616", "BUGS-79458"]);
+    expect(extractTicketIds("BUGS-81616, BUGS-79458: CVE fix", re)).toEqual([
+      "BUGS-81616",
+      "BUGS-79458",
+    ]);
   });
 
   it("returns empty for no match", () => {
@@ -616,6 +701,97 @@ describe("determineProduct", () => {
         ticketIdRe,
       ),
     ).toBe("Other");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildOrgToProduct + determineProduct org routing
+// ---------------------------------------------------------------------------
+
+describe("buildOrgToProduct", () => {
+  it("maps each org to its product key", () => {
+    const config = {
+      products: [
+        {
+          key: "MTA",
+          name: "MTA",
+          jira_prefixes: ["MTA"],
+          repos: [],
+          github_orgs: ["konveyor"],
+        },
+        { key: "MTV", name: "MTV", jira_prefixes: ["MTV"], repos: [] },
+      ],
+    } as Parameters<typeof buildOrgToProduct>[0];
+    const map = buildOrgToProduct(config);
+    expect(map.get("konveyor")).toBe("MTA");
+    expect(map.has("migtools")).toBe(false);
+  });
+
+  it("returns empty map when no product has github_orgs", () => {
+    const config = {
+      products: [
+        { key: "MTA", name: "MTA", jira_prefixes: ["MTA"], repos: [] },
+      ],
+    } as Parameters<typeof buildOrgToProduct>[0];
+    expect(buildOrgToProduct(config).size).toBe(0);
+  });
+});
+
+describe("determineProduct org routing", () => {
+  const emptyMap = new Map<string, string>();
+  const ocpbugsRe = /nomatch/;
+  const ticketIdRe = /nomatch/g;
+  const fakeConfig = { products: [], engineers: [] } as unknown as Parameters<
+    typeof determineProduct
+  >[1];
+
+  it("routes a konveyor-org PR to MTA via orgToProduct", () => {
+    const pr = makePR({ repo: "konveyor/tackle2-hub" });
+    const orgToProduct = new Map([["konveyor", "MTA"]]);
+    expect(
+      determineProduct(
+        pr,
+        fakeConfig,
+        emptyMap,
+        emptyMap,
+        ocpbugsRe,
+        ticketIdRe,
+        orgToProduct,
+      ),
+    ).toBe("MTA");
+  });
+
+  it("falls through to Other for orgs not in orgToProduct", () => {
+    const pr = makePR({ repo: "migtools/mta-tackle2-hub" });
+    const orgToProduct = new Map([["konveyor", "MTA"]]);
+    expect(
+      determineProduct(
+        pr,
+        fakeConfig,
+        emptyMap,
+        emptyMap,
+        ocpbugsRe,
+        ticketIdRe,
+        orgToProduct,
+      ),
+    ).toBe("Other");
+  });
+
+  it("repo-level match takes precedence over org-level", () => {
+    const pr = makePR({ repo: "konveyor/special-repo" });
+    const repoToProduct = new Map([["konveyor/special-repo", "MTV"]]);
+    const orgToProduct = new Map([["konveyor", "MTA"]]);
+    expect(
+      determineProduct(
+        pr,
+        fakeConfig,
+        repoToProduct,
+        emptyMap,
+        ocpbugsRe,
+        ticketIdRe,
+        orgToProduct,
+      ),
+    ).toBe("MTV");
   });
 });
 
@@ -1160,8 +1336,13 @@ describe("end-to-end", () => {
         ticketIdRe,
       );
 
-      const sections = organize(
+      const visibleCompletedTickets = filterGithubSyncedTickets(
         completedTickets,
+        config!,
+      );
+
+      const sections = organize(
+        visibleCompletedTickets,
         completedOrphanPrs,
         ipTickets,
         ipOrphanPrs,
@@ -1180,9 +1361,9 @@ describe("end-to-end", () => {
         `# ${config!.report_title}`,
         fmtReportDate(reportDate),
         "",
-        "## Key Highlights",
-        "<!-- HIGHLIGHTS_PLACEHOLDER -->",
-        "- (highlights pending)",
+        "## Summary",
+        "<!-- SUMMARY_PLACEHOLDER -->",
+        "- (summary pending)",
       ];
       reportLines.push("");
 
@@ -1205,10 +1386,7 @@ describe("end-to-end", () => {
       );
 
       const stripHighlights = (s: string) =>
-        s.replace(
-          /## Key Highlights\n[\s\S]*?\n(?=\n## )/,
-          "## Key Highlights\n",
-        );
+        s.replace(/## Summary\n[\s\S]*?\n(?=\n## )/, "## Summary\n");
       expect(stripHighlights(reportText)).toBe(stripHighlights(expected));
     },
   );

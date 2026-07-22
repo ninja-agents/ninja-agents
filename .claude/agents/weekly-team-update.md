@@ -230,57 +230,56 @@ Handle exit codes:
 - **Exit 2**: Data quality problem. Display the error. Ask user to retry data collection or proceed.
 - **Exit 3**: Warnings present. Report was generated. Note the warnings and proceed.
 
-## Step 6.5: Write Key Highlights
+## Step 6.5: Write Summary
 
-The script outputs a placeholder in the Key Highlights section. Replace it with per-product leadership summaries.
+The script outputs a placeholder in the Summary section. Replace it with one rich paragraph per product.
 
 1. Read the report at `agents/weekly-team-update/data/output/weekly-update-{today}.md`
 2. Study the **Completed This Week** and **In Progress** sections
 3. Use the **Highlight Context** printed by the script — it provides per-product breakdowns of completed items, in-progress counts, and notable items (CVEs, etc.)
 4. Write a per-product summary (see format below)
-5. Replace everything between `## Key Highlights` and the next `##` heading with your summaries (remove the `<!-- HIGHLIGHTS_PLACEHOLDER -->` marker)
+5. Replace everything between `## Summary` and the next `##` heading with your summaries (remove the `<!-- SUMMARY_PLACEHOLDER -->` marker)
 
-### Highlight Format
+### Summary Format
 
-Write one `### ProductName` sub-heading per product that had activity. Each product gets 2-3 sentences covering:
+Write one `### ProductName` sub-heading per configured product, always — every product gets a paragraph regardless of volume. Each product gets one rich paragraph covering:
+
 - What shipped this week (outcomes, not ticket IDs)
 - What's actively in progress
 - Any CVEs fixed, blockers, or notable items
 
 **Rules:**
-- Only include products that had completed work OR significant in-progress activity
-- Skip products where the only activity is training courses or quarterly connections
-- If a product has only minor in-progress items and nothing completed, fold it into a brief final "Other" line or omit it
+
+- **Every configured product gets a paragraph, always.** If a product had no completed work, describe what is actively in progress. If it was quiet, note that briefly.
 - Active voice, past tense for completed work ("Shipped", "Fixed", "Delivered")
 - Present tense for in-progress ("Storage access mode selection is in review")
 - Quantify when possible ("8 bug fixes", "two features")
 - Do NOT include markdown links or Jira ticket IDs — the detailed sections have those
 - Every claim must trace to an item in the report — never invent work
-- Keep the total section under ~150 words — concise enough to scan in 30 seconds
+- Be thorough — one substantive paragraph per product
 
 **Good example:**
 
 ```
 ### MTV (Migration Toolkit for Virtualization)
-Shipped multi-NIC network mapping support and a migration alerts dashboard card. Fixed CVE-2026-42342 (React Router denial-of-service). Storage access mode selection, ASAP cutover option, and LUKS secret support are in review.
+Shipped storage access mode selection, LUKS secret specification, migration alerts integration, and ASAP cutover option. Added clustered Hyper-V and CSV support with a backport to 2.12. Migrated to React 18 and React Router 7. Six patches covering bug fixes and UI improvements are in review.
 
 ### MTA (Migration Toolkit for Applications)
-Delivered 8 bug fixes covering post-0.10 upgrade regressions including filter layout, extra logout, and duplicate notifications. Migrated scope-based access control to the new endpoint and remediated serialize-javascript CVE.
+Fixed branding regressions including logo alignment and title overflow, with hub-side login page and favicon support shipped. Two merged PRs landed this week; modal and DualListSelector PF5 migration, Dockerfile improvements, and lint cleanup continue in progress.
 
 ### CNV (Container-Native Virtualization)
-Fixed clone source list regression on release-4.22. CI infrastructure setup and e2e test migration continue.
+No features shipped this week — the team completed quarterly connection sessions and course work. Hot-cluster CI infrastructure setup for networking and nmstate console plugins is underway, along with VM network details with clickable NAD/UDN/CUDN links.
 
 ### Networking Console Plugins
-Completed nmstate-console-plugin 5.0 ART image update. VM tab implementation for NAD/UDN detail pages is in progress.
+Remediated CVE-2026-13676 (fast-uri security bypass) and CVE-2026-13149 (brace-expansion DoS) on the 5.0 branch with backports across four release streams. Completed 5.0 ART image update. VM tab for NAD/UDN/CUDN detail pages is in progress.
 ```
 
 ### Self-check before proceeding:
 
-- Each product has a sub-heading with 2-3 sentences
+- Every configured product has a `### ProductName` sub-heading with a paragraph
 - All sentences use active voice
-- No markdown links or ticket IDs in highlights
+- No markdown links or ticket IDs in the summary
 - Every fact matches an item in the report
-- Total section is under ~150 words
 - Placeholder marker is removed from the file
 
 ## Step 7: Validate Links

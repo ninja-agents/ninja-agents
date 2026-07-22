@@ -16,7 +16,12 @@ export interface ClassificationRule {
 }
 
 interface Config {
-  jira: { cloud_id: string; jql: string; activity_type_field: string };
+  jira: {
+    cloud_id: string;
+    base_url: string;
+    jql: string;
+    activity_type_field: string;
+  };
   classification_rules: ClassificationRule[];
   default_activity_type: ActivityType;
 }
@@ -216,9 +221,7 @@ export function generatePreview(
       "These tickets matched no specific rule and were assigned the default Activity Type.\n",
     );
     for (const t of defaults) {
-      lines.push(
-        `- [${t.key}](${baseUrl}/browse/${t.key}): ${t.summary}`,
-      );
+      lines.push(`- [${t.key}](${baseUrl}/browse/${t.key}): ${t.summary}`);
     }
     lines.push("");
   }

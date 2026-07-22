@@ -28,7 +28,7 @@ Launches the `weekly-team-update` agent which:
    - Nests PRs under their parent Jira tickets
    - Organizes by product and engineer
    - Generates formatted markdown (with a placeholder for highlights)
-4. **Writes Key Highlights** — the agent reads the completed work and writes polished, leadership-friendly theme summaries
+4. **Writes Summary** — the agent reads the completed work and writes one rich paragraph per product, always including every product
 5. **Validates all links** via `agents/weekly-team-update/scripts/validate-report-links.ts`
 6. **Saves to file**: `agents/weekly-team-update/data/output/weekly-update-{YYYY-MM-DD}.md`
 7. **Displays** the report
@@ -39,10 +39,10 @@ Launches the `weekly-team-update` agent which:
 
 A weekly report with:
 
-### Key Highlights
+### Summary
 
-- Per-product summaries written by the agent (2-3 sentences each, active voice, leadership-friendly)
-- Each product with activity gets a sub-heading covering what shipped, what's in progress, and notable items
+- One rich paragraph per product, always — every configured product is included
+- Active voice, leadership-friendly prose covering what shipped, what's in progress, and notable items
 
 ### Completed This Week
 

@@ -10,6 +10,7 @@ agents/slack-channels-analyzer/data/config.json
 agents/jira-add-missing-activity-type/data/config.json
 agents/jira-story-points/data/config.json
 agents/jira-bugs-missing-qe/data/config.json
+agents/jira-move-cnv2networking/data/config.json
 
 # Agent cache (contents only, keep .gitkeep)
 agents/*/data/cache/*

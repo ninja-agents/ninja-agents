@@ -8,18 +8,19 @@ The repo follows a "data collector + deterministic script" pattern: the AI agent
 
 ## Available Agents
 
-| Agent                                                                    | Description                                                                       | Docs                                                      |
-| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| [weekly-team-update](agents/weekly-team-update/)                         | Generates a leadership-ready weekly status report from GitHub, GitLab, and Jira   | [README](agents/weekly-team-update/README.md)             |
-| [sprint-review](agents/sprint-review/)                                   | Sprint retrospective analysis from active Jira sprint                             | [README](agents/sprint-review/README.md)                  |
-| [sprint-planning-analysis](agents/sprint-planning-analysis/)             | Sprint planning health-check against velocity baseline                            | [README](agents/sprint-planning-analysis/README.md)       |
-| [repo-contextification](agents/repo-contextification/)                   | Audit repo docs and AI-readiness, interactively scaffold missing files            | [README](agents/repo-contextification/README.md)          |
-| [jira-qe-story](agents/jira-qe-story/)                                   | Generate QE story from dev Jira story with acceptance criteria and test scenarios | [README](agents/jira-qe-story/README.md)                  |
-| [jira-sprint-tickets-updater](agents/jira-sprint-tickets-updater/)       | Transition Jira sprint tickets based on linked GitHub PR status                   | [README](agents/jira-sprint-tickets-updater/README.md)    |
-| [slack-channels-analyzer](agents/slack-channels-analyzer/)               | Analyze Slack channels to identify UI-related topics and trends                   | [README](agents/slack-channels-analyzer/README.md)        |
-| [jira-add-missing-activity-type](agents/jira-add-missing-activity-type/) | Add missing Activity Type to completed Jira tickets via classification rules      | [README](agents/jira-add-missing-activity-type/README.md) |
-| [jira-story-points](agents/jira-story-points/)                           | Estimate story points for unpointed Jira tickets using historical team data       | [README](agents/jira-story-points/README.md)              |
-| [jira-bugs-missing-qe](agents/jira-bugs-missing-qe/)                     | Find resolved bugs missing QA Contact, identify verifiers, and set the field      | [README](agents/jira-bugs-missing-qe/README.md)           |
+| Agent                                                                    | Description                                                                         | Docs                                                      |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| [weekly-team-update](agents/weekly-team-update/)                         | Generates a leadership-ready weekly status report from GitHub, GitLab, and Jira     | [README](agents/weekly-team-update/README.md)             |
+| [sprint-review](agents/sprint-review/)                                   | Sprint retrospective analysis from active Jira sprint                               | [README](agents/sprint-review/README.md)                  |
+| [sprint-planning-analysis](agents/sprint-planning-analysis/)             | Sprint planning health-check against velocity baseline                              | [README](agents/sprint-planning-analysis/README.md)       |
+| [repo-contextification](agents/repo-contextification/)                   | Audit repo docs and AI-readiness, interactively scaffold missing files              | [README](agents/repo-contextification/README.md)          |
+| [jira-qe-story](agents/jira-qe-story/)                                   | Generate QE story from dev Jira story with acceptance criteria and test scenarios   | [README](agents/jira-qe-story/README.md)                  |
+| [jira-sprint-tickets-updater](agents/jira-sprint-tickets-updater/)       | Transition Jira sprint tickets based on linked GitHub PR status                     | [README](agents/jira-sprint-tickets-updater/README.md)    |
+| [slack-channels-analyzer](agents/slack-channels-analyzer/)               | Analyze Slack channels to identify UI-related topics and trends                     | [README](agents/slack-channels-analyzer/README.md)        |
+| [jira-add-missing-activity-type](agents/jira-add-missing-activity-type/) | Add missing Activity Type to completed Jira tickets via classification rules        | [README](agents/jira-add-missing-activity-type/README.md) |
+| [jira-story-points](agents/jira-story-points/)                           | Estimate story points for unpointed Jira tickets using historical team data         | [README](agents/jira-story-points/README.md)              |
+| [jira-bugs-missing-qe](agents/jira-bugs-missing-qe/)                     | Find resolved bugs missing QA Contact, identify verifiers, and set the field        | [README](agents/jira-bugs-missing-qe/README.md)           |
+| [jira-move-cnv2networking](agents/jira-move-cnv2networking/)             | Move CNV networking tickets to OCPBUGS (bugs) or the RFE project (feature requests) | [README](agents/jira-move-cnv2networking/README.md)       |
 
 ## IDE Support
 

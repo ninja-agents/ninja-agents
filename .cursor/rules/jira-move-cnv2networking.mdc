@@ -1,0 +1,14 @@
+---
+description: "Move CNV networking tickets to the correct target project. Use when the user asks to migrate CNV tickets, move bugs to OCPBUGS, move feature requests to RFE, or run the networking ticket migration."
+alwaysApply: false
+---
+
+# jira-move-cnv2networking
+
+Read `.claude/agents/jira-move-cnv2networking.md` and follow the complete workflow described there.
+
+The agent spec contains all steps, MCP tool call examples, CSV schemas, validation checkpoints, classification rules, and rules. It is the single source of truth for this workflow.
+
+Ignore the YAML frontmatter fields `model` and `memory` — those are Claude Code-specific and have no effect in Cursor.
+
+For best results, use Claude Opus or an equivalent model in Cursor settings.

@@ -215,23 +215,43 @@ Record for each ticket: `key`, `numeric_id` (the `id` field from the search resu
 
 For Feature Requests, `target_component` = join `target_components` with `", "` (e.g. `"Network - Core, User Interface"` or `"Network - Core"` for nmstate-only FREs).
 
+## Step 3.5: Duplicate Check for Confirmed FREs
+
+For every ticket classified with `target_project = RFE` and empty `review_flag` (confirmed Feature Requests), search the RFE project on the same Jira instance for existing tickets on the same topic.
+
+Run all searches in parallel (one per confirmed FRE):
+
+```
+mcp__atlassian__searchJiraIssuesUsingJql:
+  cloudId: "{jira.cloud_id}"
+  jql: project = RFE AND text ~ "<2-4 key terms from CNV summary>" AND statusCategory != Done
+  maxResults: 3
+  fields: ["summary", "status"]
+```
+
+Extract 2-4 meaningful domain-specific terms from the CNV ticket summary (e.g. `"nmstate-topology"` from "nmstate-topology not giving much useful info"). Avoid generic words like "UI", "user", "option", "add".
+
+- If results are returned: set `possible_duplicate` = `"<top-match-key>: <truncated summary>"` (key + first 60 chars of summary).
+- If no results: set `possible_duplicate` = `""` (empty).
+
 ## Step 4: Save to CSV & Generate Preview
 
 Save results to `agents/jira-move-cnv2networking/data/cache/tickets.csv`:
 
-Header: `key,numeric_id,summary,issuetype,status,target_project,target_component,reason,review_flag`
+Header: `key,numeric_id,summary,issuetype,status,target_project,target_component,reason,review_flag,possible_duplicate`
 
-| Field              | Source                  | Notes                                                                                                               |
-| ------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `key`              | `issue.key`             | e.g., CNV-12345                                                                                                     |
-| `numeric_id`       | `issue.id`              | numeric Jira ID — used to correlate `successfulIssues` after bulk move                                              |
-| `summary`          | `fields.summary`        | wrap in double quotes if contains comma                                                                             |
-| `issuetype`        | `fields.issuetype.name` | Bug or Feature Request                                                                                              |
-| `status`           | `fields.status.name`    | current Jira status                                                                                                 |
-| `target_project`   | classified              | OCPBUGS, RFE, or empty (excluded/unclassified)                                                                      |
-| `target_component` | classified              | component name, or empty                                                                                            |
-| `reason`           | classified              | one-line explanation; wrap in double quotes                                                                         |
-| `review_flag`      | classified              | empty=clean, ci-excluded, in-flight-no-action, review-required, review-required,type-mismatch-suspect, unclassified |
+| Field                | Source                  | Notes                                                                                                               |
+| -------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `key`                | `issue.key`             | e.g., CNV-12345                                                                                                     |
+| `numeric_id`         | `issue.id`              | numeric Jira ID — used to correlate `successfulIssues` after bulk move                                              |
+| `summary`            | `fields.summary`        | wrap in double quotes if contains comma                                                                             |
+| `issuetype`          | `fields.issuetype.name` | Bug or Feature Request                                                                                              |
+| `status`             | `fields.status.name`    | current Jira status                                                                                                 |
+| `target_project`     | classified              | OCPBUGS, RFE, or empty (excluded/unclassified)                                                                      |
+| `target_component`   | classified              | component name, or empty                                                                                            |
+| `reason`             | classified              | one-line explanation; wrap in double quotes                                                                         |
+| `review_flag`        | classified              | empty=clean, ci-excluded, in-flight-no-action, review-required, review-required,type-mismatch-suspect, unclassified |
+| `possible_duplicate` | Step 3.5                | empty, or `"RFE-XXXX: <summary>"` if a possible duplicate was found in the RFE project                              |
 
 **CSV quoting:** wrap any field containing a comma in double quotes. Escape internal double quotes by doubling them.
 
@@ -252,12 +272,17 @@ Read and display `agents/jira-move-cnv2networking/data/output/preview.md`. Also 
 
 > Preview saved to: `agents/jira-move-cnv2networking/data/output/preview.md`
 
-The preview has four sections:
+The preview has five sections:
 
-1. **Confirmed moves** — tickets ready to move (no `review_flag`)
+1. **Confirmed moves** — tickets ready to move (no `review_flag`); FREs with a possible duplicate appear in a highlighted subsection
 2. **Flagged for review** — tickets needing human decision before moving
 3. **CI/tooling excluded** — tickets excluded from migration entirely
 4. **Unclassified** — tickets with no keyword match
+5. **In-flight / no action** — in-flight tickets with no keyword match
+
+If any confirmed FRE has a non-empty `possible_duplicate`, display this warning before the confirmation prompt:
+
+> ⚠ **N FRE(s) have possible duplicates in RFE** — verify before moving. Use `select` to include only tickets you've confirmed are not duplicates.
 
 Then ask:
 

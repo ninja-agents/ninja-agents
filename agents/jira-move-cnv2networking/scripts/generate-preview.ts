@@ -11,6 +11,7 @@ interface TicketRow {
   target_component: string;
   reason: string;
   review_flag: string;
+  possible_duplicate: string;
 }
 
 function parseArgs(argv: string[]): Record<string, string> {
@@ -47,6 +48,7 @@ function parseCsv(content: string): TicketRow[] {
       target_component: cols[6],
       reason: cols[7] ?? "",
       review_flag: cols[8] ?? "",
+      possible_duplicate: cols[9] ?? "",
     });
   }
   return rows;
@@ -144,20 +146,48 @@ function generateMarkdown(rows: TicketRow[]): string {
 
     if (confirmedRfes.length > 0) {
       const rfeProject = confirmedRfes[0]?.target_project ?? "RFE";
-      lines.push(
-        `### Feature Requests → ${rfeProject} (${confirmedRfes.length})`,
-        "",
-      );
-      lines.push(
-        `| CNV Key | Summary | Status | Component | Why |`,
-        `|---------|---------|--------|-----------|-----|`,
-      );
-      for (const r of confirmedRfes) {
+      const cleanRfes = confirmedRfes.filter((r) => !r.possible_duplicate);
+      const dupRfes = confirmedRfes.filter((r) => r.possible_duplicate);
+
+      if (cleanRfes.length > 0) {
         lines.push(
-          `| ${jiraLink(r.key)} | ${truncate(r.summary, 55)} | ${r.status} | ${r.target_component || "—"} | ${truncate(r.reason, 50)} |`,
+          `### Feature Requests → ${rfeProject} (${cleanRfes.length})`,
+          "",
         );
+        lines.push(
+          `| CNV Key | Summary | Status | Component | Why |`,
+          `|---------|---------|--------|-----------|-----|`,
+        );
+        for (const r of cleanRfes) {
+          lines.push(
+            `| ${jiraLink(r.key)} | ${truncate(r.summary, 55)} | ${r.status} | ${r.target_component || "—"} | ${truncate(r.reason, 50)} |`,
+          );
+        }
+        lines.push("");
       }
-      lines.push("");
+
+      if (dupRfes.length > 0) {
+        lines.push(
+          `### ⚠ Feature Requests → ${rfeProject} — Possible Duplicates (${dupRfes.length})`,
+          "",
+        );
+        lines.push(
+          "_These FREs may already exist in the RFE project. Verify before moving._",
+          "",
+        );
+        lines.push(
+          `| CNV Key | Summary | Status | Component | Possible Duplicate | Why |`,
+          `|---------|---------|--------|-----------|-------------------|-----|`,
+        );
+        for (const r of dupRfes) {
+          const dupKey = r.possible_duplicate.split(":")[0].trim();
+          const dupLabel = truncate(r.possible_duplicate, 55);
+          lines.push(
+            `| ${jiraLink(r.key)} | ${truncate(r.summary, 45)} | ${r.status} | ${r.target_component || "—"} | ${jiraLink(dupKey)} — ${dupLabel} | ${truncate(r.reason, 40)} |`,
+          );
+        }
+        lines.push("");
+      }
     }
   }
 

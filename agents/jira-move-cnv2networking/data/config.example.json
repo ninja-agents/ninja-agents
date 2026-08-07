@@ -1,0 +1,105 @@
+{
+  "jira": {
+    "cloud_id": "redhat.atlassian.net",
+    "cloud_uuid": "YOUR_CLOUD_UUID"
+  },
+  "source": {
+    "jql": "project = CNV AND component in (\"CNV User Interface\", \"CNV User Experience\") AND statusCategory != Done AND type in (Bug, \"Feature Request\") ORDER BY created ASC",
+    "bugKeywords": {
+      "nmstate": [
+        "NNCP",
+        "NodeNetworkConfigurationPolicy",
+        "NMState",
+        "nmstate",
+        "NodeNetworkState",
+        "NNS",
+        "NodeNetworkConfigurationEnactment",
+        "NNCE",
+        "nmstate-console-plugin",
+        "kubernetes-nmstate",
+        "NMState CR",
+        "nmstate-topology",
+        "node network",
+        "CNV bridge"
+      ],
+      "nmstateSummaryOnly": [
+        "Linux bridge",
+        "Bond",
+        "OVS-Bridge",
+        "VLAN interface",
+        "static IP",
+        "bonding",
+        "MAC address"
+      ],
+      "networking": [
+        "NetworkAttachmentDefinition",
+        "NAD",
+        "UserDefinedNetwork",
+        "UDN",
+        "ClusterUserDefinedNetwork",
+        "CUDN",
+        "NetworkPolicy",
+        "NetworkPolicies",
+        "MultiNetworkPolicy",
+        "OVN-Kubernetes",
+        "localnet",
+        "secondary network",
+        "LoadBalancer",
+        "L2 NAD",
+        "Multus"
+      ],
+      "networkingSummaryOnly": ["SR-IOV", "macvlan", "Physical Network"]
+    },
+    "ciExcludePatterns": [
+      "Konflux build",
+      "auto-teardown",
+      "Console tests UNSTABLE",
+      "Console T2",
+      "PR-validation",
+      "jira validation",
+      "runner-busy",
+      "lgtm/approved",
+      "stale jsonpath",
+      "resolve-console-image",
+      "offline npm ci",
+      "gating test",
+      "ibmc-cluster",
+      "recheck-jira",
+      "must-gather",
+      "review sync"
+    ],
+    "manualExcludeKeys": [],
+    "inFlightStatuses": ["MODIFIED", "POST", "ON_QA", "VERIFIED"],
+    "rfeTypeWatchPatterns": ["[RFE]", "add an option"],
+    "rfeTypeAdvisoryPatterns": [
+      "missing option",
+      "does not support",
+      "not exposed",
+      "code cleanup",
+      "refactor",
+      "simplify"
+    ]
+  },
+  "versionMapping": {
+    "note": "Maps CNV version names to OCPBUGS version objects {id, name}. Use `.id` in API calls.",
+    "cnvToOcpbugsId": {
+      "CNV v4.12": { "id": "21809", "name": "4.12" }
+    }
+  },
+  "targets": {
+    "bugs": {
+      "project": "OCPBUGS",
+      "projectId": "10325",
+      "bugIssueTypeId": "10016",
+      "components": [
+        "Networking / networking-console-plugin",
+        "Networking / nmstate-console-plugin"
+      ]
+    },
+    "rfes": {
+      "project": "RFE",
+      "nmstateComponents": ["Network - Core"],
+      "networkingComponents": ["Network - Core", "User Interface"]
+    }
+  }
+}

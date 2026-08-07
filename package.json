@@ -36,7 +36,9 @@
     "jira-story-points:test": "vitest run --dir agents/jira-story-points",
     "jira-bugs-missing-qe:identify": "tsx agents/jira-bugs-missing-qe/scripts/identify-verifiers.ts",
     "jira-bugs-missing-qe:apply": "tsx agents/jira-bugs-missing-qe/scripts/apply-qa-contacts.ts",
-    "jira-bugs-missing-qe:test": "vitest run --dir agents/jira-bugs-missing-qe"
+    "jira-bugs-missing-qe:test": "vitest run --dir agents/jira-bugs-missing-qe",
+    "jira-move-cnv2networking:generate": "tsx agents/jira-move-cnv2networking/scripts/generate-preview.ts",
+    "jira-move-cnv2networking:test": "vitest run --dir agents/jira-move-cnv2networking"
   },
   "dependencies": {
     "@slack/web-api": "^7.17.0"

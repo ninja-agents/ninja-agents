@@ -53,7 +53,8 @@
       "Bash(rm -f /home/rlavi/Projects/ninja-agents/agents/*/data/cache/*)",
       "Bash(cat:*)",
       "Bash(echo:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(curl * redhat.atlassian.net/rest/api/3/*)"
     ]
   }
 }

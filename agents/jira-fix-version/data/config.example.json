@@ -1,0 +1,33 @@
+{
+  "jira": {
+    "cloud_id": "your-site.atlassian.net"
+  },
+  "source": {
+    "jql": "filter = YOUR_FILTER AND statusCategory = Done AND type = bug AND fixVersion is EMPTY"
+  },
+  "branchToFixVersion": {
+    "_notes": "Look up Jira version IDs at: Jira project → Project settings → Versions → click a version (ID is in the URL). Branches with id and name both empty-string are intentionally ignored (non-release/experimental branches).",
+    "your-org/your-repo": {
+      "main": { "id": "TODO", "name": "Product 2.0" },
+      "release-1.x": { "id": "TODO", "name": "Product 1.x.z" }
+    },
+    "konveyor/tackle2-ui": {
+      "main": { "id": "TODO", "name": "MTA 8.3.0" },
+      "release-0.10": { "id": "TODO", "name": "MTA 8.2.1" },
+      "release-0.9": { "id": "TODO", "name": "MTA 8.1.0" },
+      "release-0.8": { "id": "TODO", "name": "MTA 8.0.0" },
+      "asset-generation": { "id": "", "name": "" }
+    },
+    "konveyor/tackle2-hub": {
+      "main": { "id": "TODO", "name": "MTA 8.3.0" },
+      "asset-generation": { "id": "", "name": "" }
+    }
+  },
+  "upcoming_changes": [
+    {
+      "_doc": "Add entries here when a branch naming or version cutover is coming. The agent warns when a date is within 7 days or up to 30 days past.",
+      "date": "2026-08-14",
+      "description": "Branch naming cutover for next release cycle — update branchToFixVersion"
+    }
+  ]
+}

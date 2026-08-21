@@ -11,6 +11,8 @@ agents/jira-add-missing-activity-type/data/config.json
 agents/jira-story-points/data/config.json
 agents/jira-bugs-missing-qe/data/config.json
 agents/jira-move-cnv2networking/data/config.json
+agents/jira-fix-version/data/config.json
+agents/vertex-billing/data/config.json
 
 # Agent cache (contents only, keep .gitkeep)
 agents/*/data/cache/*

@@ -38,7 +38,11 @@
     "jira-bugs-missing-qe:apply": "tsx agents/jira-bugs-missing-qe/scripts/apply-qa-contacts.ts",
     "jira-bugs-missing-qe:test": "vitest run --dir agents/jira-bugs-missing-qe",
     "jira-move-cnv2networking:generate": "tsx agents/jira-move-cnv2networking/scripts/generate-preview.ts",
-    "jira-move-cnv2networking:test": "vitest run --dir agents/jira-move-cnv2networking"
+    "jira-move-cnv2networking:test": "vitest run --dir agents/jira-move-cnv2networking",
+    "jira-fix-version:resolve-issues": "tsx agents/jira-fix-version/scripts/resolve-github-issues.ts",
+    "jira-fix-version:generate": "tsx agents/jira-fix-version/scripts/generate-preview.ts",
+    "jira-fix-version:test": "vitest run --dir agents/jira-fix-version",
+    "vertex-billing": "tsx agents/vertex-billing/scripts/vertex-billing.ts"
   },
   "dependencies": {
     "@slack/web-api": "^7.17.0"

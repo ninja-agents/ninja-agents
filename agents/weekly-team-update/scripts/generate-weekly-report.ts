@@ -27,6 +27,12 @@ export interface PRItem {
   ticket_id?: string;
 }
 
+export interface CustomerCase {
+  case_id: string;
+  url: string;
+  customer_name: string;
+}
+
 export interface JiraItem {
   engineer: string;
   key: string;
@@ -41,6 +47,7 @@ export interface JiraItem {
   role: "assignee" | "qa_contact";
   sprint_name: string;
   nested_prs: PRItem[];
+  customer_cases: CustomerCase[];
 }
 
 export interface EngineerBlock {
@@ -385,9 +392,41 @@ export function loadJiraTickets(
       role,
       sprint_name: r.sprint_name ?? "",
       nested_prs: [],
+      customer_cases: [],
     });
   }
   return items;
+}
+
+export function loadCustomerCases(
+  cacheDir: string,
+): Map<string, CustomerCase[]> {
+  const rows = loadCsvFile(resolve(cacheDir, "customer-cases.csv"));
+  const map = new Map<string, CustomerCase[]>();
+  for (const r of rows) {
+    const key = r.ticket_key ?? "";
+    if (!key) continue;
+    const entry: CustomerCase = {
+      case_id: r.case_id ?? "",
+      url: r.case_url ?? "",
+      customer_name: r.customer_name ?? "",
+    };
+    if (!entry.case_id) continue;
+    const list = map.get(key) ?? [];
+    list.push(entry);
+    map.set(key, list);
+  }
+  return map;
+}
+
+export function mergeCustomerCases(
+  tickets: JiraItem[],
+  cases: Map<string, CustomerCase[]>,
+): void {
+  for (const t of tickets) {
+    const cc = cases.get(t.key);
+    if (cc) t.customer_cases = cc;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -525,8 +564,10 @@ export function filterInProgressJira(
     if (excludedStatuses.has(t.status)) return false;
     if (sprintPattern && !sprintPattern.test(t.sprint_name)) return false;
     if (t.issuetype === "Bug" || t.issuetype === "Vulnerability") {
-      const relevant = t.role === "qa_contact" ? qeStatuses : devStatuses;
-      if (!relevant.has(t.status)) return false;
+      if (t.customer_cases.length === 0) {
+        const relevant = t.role === "qa_contact" ? qeStatuses : devStatuses;
+        if (!relevant.has(t.status)) return false;
+      }
     }
     return true;
   });
@@ -856,17 +897,25 @@ export function fmtPrLink(pr: PRItem, indent: number = 0): string {
   return `${prefix}[${label} ${num} - ${pr.title}](${pr.url})${mergedStr}`;
 }
 
+function fmtCustomerCases(cases: CustomerCase[]): string {
+  if (cases.length === 0) return "";
+  const names = cases.map((c) => c.customer_name || c.case_id);
+  const label = names.length === 1 ? "Customer" : "Customers";
+  return ` — ${label}: ${names.join(", ")}`;
+}
+
 export function fmtTicketLink(t: JiraItem, completed: boolean = true): string {
   const qaTag = t.role === "qa_contact" ? " (QA)" : "";
+  const ccStr = fmtCustomerCases(t.customer_cases);
   if (completed) {
-    return `- [${t.key} - ${t.summary}](${t.url}) (resolved ${fmtDate(t.resolutiondate)})${qaTag}`;
+    return `- [${t.key} - ${t.summary}](${t.url}) (resolved ${fmtDate(t.resolutiondate)})${qaTag}${ccStr}`;
   }
   const statusStr = t.status;
   const prioritySuffix =
     t.priority === "Blocker" || t.priority === "Critical"
       ? `, ${t.priority} priority`
       : "";
-  return `- [${t.key} - ${t.summary}](${t.url}) (${statusStr}${prioritySuffix})${qaTag}`;
+  return `- [${t.key} - ${t.summary}](${t.url}) (${statusStr}${prioritySuffix})${qaTag}${ccStr}`;
 }
 
 export function fmtTestTaskSummary(testTickets: JiraItem[]): string {
@@ -1042,11 +1091,17 @@ function extractCveLibs(texts: string[]): string[] {
   return found;
 }
 
+export interface CustomerHighlight {
+  summary: string;
+  customers: string[];
+}
+
 export interface HighlightData {
   cve: { count: number; products: string[]; libraries: string[] } | null;
   testing: { versions: string[] } | null;
   features: Map<string, string[]>;
   bugs: Map<string, string[]>;
+  customerTickets: Map<string, CustomerHighlight[]>;
 }
 
 export function computeHighlightData(
@@ -1058,9 +1113,25 @@ export function computeHighlightData(
   const testVersions = new Set<string>();
   const features = new Map<string, string[]>();
   const bugs = new Map<string, string[]>();
+  const customerTickets = new Map<string, CustomerHighlight[]>();
 
   for (const [pk, engineers] of sections) {
     for (const [, block] of engineers) {
+      for (const t of block.in_progress_tickets) {
+        if (t.customer_cases.length > 0) {
+          if (!customerTickets.has(pk)) customerTickets.set(pk, []);
+          const names = [
+            ...new Set(
+              t.customer_cases.map((c) => c.customer_name || c.case_id),
+            ),
+          ];
+          customerTickets.get(pk)!.push({
+            summary: cleanSummary(t.summary),
+            customers: names,
+          });
+        }
+      }
+
       for (const t of block.completed_tickets) {
         const isTest = /^\[(?:TIER|POST|STAGE)/i.test(t.summary);
         const isCve = t.summary.toUpperCase().includes("CVE");
@@ -1110,6 +1181,7 @@ export function computeHighlightData(
       testVersions.size > 0 ? { versions: [...testVersions].sort() } : null,
     features,
     bugs,
+    customerTickets,
   };
 }
 
@@ -1181,6 +1253,16 @@ export function formatHighlightContext(
     }
     if (notable.length > 0) {
       lines.push(`Notable: ${notable.join("; ")}`);
+    }
+
+    const custEntries = data.customerTickets.get(pk);
+    if (custEntries && custEntries.length > 0) {
+      const parts = custEntries.map(
+        (e) => `${e.summary} (${e.customers.join(", ")})`,
+      );
+      lines.push(
+        `Customer-impacting (${custEntries.length}): ${parts.join("; ")}`,
+      );
     }
   }
 
@@ -1302,11 +1384,14 @@ export function main(argv: string[] = process.argv): void {
   const githubPrs = loadGithubPrs(cacheDir);
   const gitlabMrs = loadGitlabMrs(cacheDir);
   const jiraTickets = loadJiraTickets(cacheDir, config);
+  const customerCases = loadCustomerCases(cacheDir);
+  mergeCustomerCases(jiraTickets, customerCases);
   const allPrs = [...githubPrs, ...gitlabMrs];
 
   console.log(`  GitHub PRs: ${githubPrs.length} rows`);
   console.log(`  GitLab MRs: ${gitlabMrs.length} rows`);
   console.log(`  Jira tickets: ${jiraTickets.length} rows`);
+  console.log(`  Customer cases: ${customerCases.size} tickets with cases`);
 
   // Validate
   const { warnings, errors } = validateData(

@@ -1,8 +1,6 @@
 # Ninja Agents
 
-<p align="center">
-  <img src="logo.png" alt="Ninja Agents logo" width="200">
-</p>
+![Ninja Agents logo](logo.png)
 
 A shared playground for AI agents that help engineering teams ship status reports, run sprint retrospectives, and audit repository documentation. Each agent is a self-contained directory under `agents/` with its own scripts, config, and data. Agents run inside [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Cursor](https://cursor.com) via MCP servers that connect to GitHub, GitLab, and Jira.
 
@@ -34,20 +32,21 @@ See [docs/mcp-setup.md](docs/mcp-setup.md) for the full token setup guide and tr
 
 ## Available Agents
 
-| Agent                                                                    | Claude Code                       | Cursor                            | Description                                                      |
-| ------------------------------------------------------------------------ | --------------------------------- | --------------------------------- | ---------------------------------------------------------------- |
-| [weekly-team-update](agents/weekly-team-update/)                         | `/team-update`                    | `@weekly-team-update`             | Weekly team report for leadership from GitHub, GitLab, and Jira  |
-| [sprint-review](agents/sprint-review/)                                   | `/sprint-review`                  | `@sprint-review`                  | Sprint retrospective analysis from active Jira sprint            |
-| [sprint-planning-analysis](agents/sprint-planning-analysis/)             | `/sprint-planning-analysis`       | `@sprint-planning-analysis`       | Sprint planning health-check against velocity baseline           |
-| [repo-contextification](agents/repo-contextification/)                   | `/repo-contextification`          | `@repo-contextification`          | Audit repo docs and AI-readiness, scaffold missing files         |
-| [jira-qe-story](agents/jira-qe-story/)                                   | `/jira-qe-story`                  | `@jira-qe-story`                  | Generate QE story from dev Jira story, create in Jira with link  |
-| [jira-sprint-tickets-updater](agents/jira-sprint-tickets-updater/)       | `/jira-sprint-tickets-updater`    | `@jira-sprint-tickets-updater`    | Transition sprint tickets based on linked GitHub PR status       |
-| [slack-channels-analyzer](agents/slack-channels-analyzer/)               | `/slack-channels-analyzer`        | `@slack-channels-analyzer`        | Analyze Slack channels for UI-related topics and trends          |
-| [jira-add-missing-activity-type](agents/jira-add-missing-activity-type/) | `/jira-add-missing-activity-type` | `@jira-add-missing-activity-type` | Add missing Activity Type to completed Jira tickets              |
-| [jira-story-points](agents/jira-story-points/)                           | `/jira-story-points`              | `@jira-story-points`              | Estimate story points using historical team data                 |
-| [jira-bugs-missing-qe](agents/jira-bugs-missing-qe/)                     | `/jira-bugs-missing-qe`           | `@jira-bugs-missing-qe`           | Find resolved bugs missing QA Contact, identify and set verifier |
-| [jira-move-cnv2networking](agents/jira-move-cnv2networking/)             | `/jira-move-cnv2networking`       | `@jira-move-cnv2networking`       | Move CNV networking tickets to OCPBUGS or the RFE project        |
-| _(scaffold a new agent)_                                                 | `/create-agent`                   | copy `agents/_template/`          | Scaffold a new agent with best-practice structure and specs      |
+| Agent                                                                    | Claude Code                       | Cursor                            | Description                                                       |
+| ------------------------------------------------------------------------ | --------------------------------- | --------------------------------- | ----------------------------------------------------------------- |
+| [weekly-team-update](agents/weekly-team-update/)                         | `/team-update`                    | `@weekly-team-update`             | Weekly team report for leadership from GitHub, GitLab, and Jira   |
+| [sprint-review](agents/sprint-review/)                                   | `/sprint-review`                  | `@sprint-review`                  | Sprint retrospective analysis from active Jira sprint             |
+| [sprint-planning-analysis](agents/sprint-planning-analysis/)             | `/sprint-planning-analysis`       | `@sprint-planning-analysis`       | Sprint planning health-check against velocity baseline            |
+| [repo-contextification](agents/repo-contextification/)                   | `/repo-contextification`          | `@repo-contextification`          | Audit repo docs and AI-readiness, scaffold missing files          |
+| [jira-qe-story](agents/jira-qe-story/)                                   | `/jira-qe-story`                  | `@jira-qe-story`                  | Generate QE story from dev Jira story, create in Jira with link   |
+| [jira-sprint-tickets-updater](agents/jira-sprint-tickets-updater/)       | `/jira-sprint-tickets-updater`    | `@jira-sprint-tickets-updater`    | Transition sprint tickets based on linked GitHub PR status        |
+| [slack-channels-analyzer](agents/slack-channels-analyzer/)               | `/slack-channels-analyzer`        | `@slack-channels-analyzer`        | Analyze Slack channels for UI-related topics and trends           |
+| [jira-add-missing-activity-type](agents/jira-add-missing-activity-type/) | `/jira-add-missing-activity-type` | `@jira-add-missing-activity-type` | Add missing Activity Type to completed Jira tickets               |
+| [jira-story-points](agents/jira-story-points/)                           | `/jira-story-points`              | `@jira-story-points`              | Estimate story points using historical team data                  |
+| [jira-bugs-missing-qe](agents/jira-bugs-missing-qe/)                     | `/jira-bugs-missing-qe`           | `@jira-bugs-missing-qe`           | Find resolved bugs missing QA Contact, identify and set verifier  |
+| [jira-move-cnv2networking](agents/jira-move-cnv2networking/)             | `/jira-move-cnv2networking`       | `@jira-move-cnv2networking`       | Move CNV networking tickets to OCPBUGS or the RFE project         |
+| [jira-fix-version](agents/jira-fix-version/)                             | `/jira-fix-version`               | `@jira-fix-version`               | Set fixVersions on resolved tickets by tracing merged PR branches |
+| _(scaffold a new agent)_                                                 | `/create-agent`                   | copy `agents/_template/`          | Scaffold a new agent with best-practice structure and specs       |
 
 Each agent has its own README with setup and usage instructions.
 
@@ -111,7 +110,16 @@ ninja-agents/
 │   └── rules/                         # Project rules (Cursor)
 └── agents/                            # Self-contained agent directories
     ├── _template/                     # Skeleton for new agents
-    ├── weekly-team-update/            # Weekly team report agent
-    ├── sprint-review/                  # Sprint retrospective agent
-    └── repo-contextification/         # Documentation audit agent
+    ├── weekly-team-update/
+    ├── sprint-review/
+    ├── sprint-planning-analysis/
+    ├── repo-contextification/
+    ├── slack-channels-analyzer/
+    ├── jira-qe-story/
+    ├── jira-sprint-tickets-updater/
+    ├── jira-story-points/
+    ├── jira-bugs-missing-qe/
+    ├── jira-add-missing-activity-type/
+    ├── jira-move-cnv2networking/
+    └── jira-fix-version/
 ```

@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { resolve } from "node:path";
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import {
+  readFileSync,
+  existsSync,
+  readdirSync,
+  writeFileSync,
+  mkdirSync,
+  rmSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import {
   parseDate,
   parseCsvLine,
@@ -37,9 +45,12 @@ import {
   computeHighlightData,
   formatHighlightContext,
   validateData,
+  loadCustomerCases,
+  mergeCustomerCases,
   type PRItem,
   type JiraItem,
   type EngineerBlock,
+  type CustomerCase,
 } from "../generate-weekly-report.js";
 
 const AGENT_ROOT = resolve(import.meta.dirname, "../..");
@@ -77,6 +88,7 @@ function makeJira(overrides: Partial<JiraItem> = {}): JiraItem {
     role: "assignee",
     sprint_name: "",
     nested_prs: [],
+    customer_cases: [],
     ...overrides,
   };
 }
@@ -253,6 +265,105 @@ describe("fmtTicketLink", () => {
   it("adds priority suffix for Critical/Blocker", () => {
     const t = makeJira({ status: "In Progress", priority: "Critical" });
     expect(fmtTicketLink(t, false)).toContain("Critical priority");
+  });
+
+  it("appends single customer inline", () => {
+    const t = makeJira({
+      key: "PROJ-100",
+      summary: "Fix crash",
+      resolutiondate: "2026-05-07T00:00:00Z",
+      customer_cases: [
+        {
+          case_id: "CIPOE-100",
+          url: "https://your-site.atlassian.net/browse/CIPOE-100",
+          customer_name: "Acme Corp",
+        },
+      ],
+    });
+    const result = fmtTicketLink(t, true);
+    expect(result).toContain("— Customer: Acme Corp");
+  });
+
+  it("appends multiple customers", () => {
+    const t = makeJira({
+      customer_cases: [
+        { case_id: "CIPOE-100", url: "", customer_name: "Acme" },
+        { case_id: "CIPOE-200", url: "", customer_name: "Widget Inc" },
+      ],
+    });
+    const result = fmtTicketLink(t, true);
+    expect(result).toContain("— Customers: Acme, Widget Inc");
+  });
+
+  it("shows account key when customer name is empty", () => {
+    const t = makeJira({
+      customer_cases: [{ case_id: "CIPOE-300", url: "", customer_name: "" }],
+    });
+    const result = fmtTicketLink(t, false);
+    expect(result).toContain("— Customer: CIPOE-300");
+  });
+
+  it("shows no customer info when customer_cases is empty", () => {
+    const t = makeJira({ customer_cases: [] });
+    const result = fmtTicketLink(t, true);
+    expect(result).not.toContain("Customer");
+    expect(result).not.toContain("—");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadCustomerCases / mergeCustomerCases
+// ---------------------------------------------------------------------------
+
+describe("loadCustomerCases", () => {
+  it("parses CSV into a map keyed by ticket", () => {
+    const dir = resolve(tmpdir(), `cc-test-${process.pid}`);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      resolve(dir, "customer-cases.csv"),
+      [
+        "ticket_key,case_id,case_url,customer_name",
+        'MTV-100,CIPOE-100,https://your-site.atlassian.net/browse/CIPOE-100,"Acme Corp"',
+        "MTV-100,CIPOE-200,https://your-site.atlassian.net/browse/CIPOE-200,Widget",
+        "MTV-200,CIPOE-300,https://your-site.atlassian.net/browse/CIPOE-300,",
+      ].join("\n"),
+    );
+    const map = loadCustomerCases(dir);
+    expect(map.size).toBe(2);
+    expect(map.get("MTV-100")).toHaveLength(2);
+    expect(map.get("MTV-100")![0].customer_name).toBe("Acme Corp");
+    expect(map.get("MTV-200")![0].customer_name).toBe("");
+    rmSync(dir, { recursive: true });
+  });
+
+  it("returns empty map when file is missing", () => {
+    const map = loadCustomerCases("/tmp/nonexistent-cc-dir");
+    expect(map.size).toBe(0);
+  });
+});
+
+describe("mergeCustomerCases", () => {
+  it("merges cases into matching tickets", () => {
+    const tickets = [
+      makeJira({ key: "MTV-100" }),
+      makeJira({ key: "MTV-200" }),
+    ];
+    const cases = new Map<string, CustomerCase[]>([
+      [
+        "MTV-100",
+        [
+          {
+            case_id: "CIPOE-100",
+            url: "https://your-site.atlassian.net/browse/CIPOE-100",
+            customer_name: "Acme",
+          },
+        ],
+      ],
+    ]);
+    mergeCustomerCases(tickets, cases);
+    expect(tickets[0].customer_cases).toHaveLength(1);
+    expect(tickets[0].customer_cases[0].case_id).toBe("CIPOE-100");
+    expect(tickets[1].customer_cases).toHaveLength(0);
   });
 });
 
@@ -434,6 +545,26 @@ describe("filterInProgressJira", () => {
       status: "ON_QA",
     });
     expect(filterInProgressJira([bugDevOther])).toHaveLength(0);
+  });
+
+  it("includes Bug with customer accounts regardless of status", () => {
+    const bugNew = makeJira({
+      issuetype: "Bug",
+      role: "assignee",
+      status: "New",
+      customer_cases: [
+        { case_id: "CIPOE-100", url: "", customer_name: "Acme Corp" },
+      ],
+    });
+    expect(filterInProgressJira([bugNew])).toHaveLength(1);
+
+    const bugNewNoCases = makeJira({
+      issuetype: "Bug",
+      role: "assignee",
+      status: "New",
+      customer_cases: [],
+    });
+    expect(filterInProgressJira([bugNewNoCases])).toHaveLength(0);
   });
 
   it("excludes tickets not in matching sprint when pattern is provided", () => {
@@ -1094,6 +1225,48 @@ describe("computeHighlightData", () => {
     expect(feature).not.toContain("...");
     expect(feature.length).toBeGreaterThan(60);
   });
+
+  it("collects customer-impacting in-progress tickets", () => {
+    const sections = new Map<string, Map<string, EngineerBlock>>();
+    const engineers = new Map<string, EngineerBlock>();
+    engineers.set("User", {
+      name: "User",
+      completed_tickets: [],
+      completed_prs: [],
+      in_progress_tickets: [
+        makeJira({
+          summary: "React error #31 on network resource Details page",
+          status: "ASSIGNED",
+          customer_cases: [
+            {
+              case_id: "CIPOE-100",
+              url: "https://test.atlassian.net/browse/CIPOE-100",
+              customer_name: "Acme Corp",
+            },
+            {
+              case_id: "CIPOE-200",
+              url: "https://test.atlassian.net/browse/CIPOE-200",
+              customer_name: "Widget Inc",
+            },
+          ],
+        }),
+        makeJira({
+          summary: "Bug with no customer",
+          status: "In Progress",
+        }),
+      ],
+      in_progress_prs: [],
+    });
+    sections.set("Networking", engineers);
+
+    const data = computeHighlightData(sections);
+    expect(data.customerTickets.has("Networking")).toBe(true);
+    const entries = data.customerTickets.get("Networking")!;
+    expect(entries).toHaveLength(1);
+    expect(entries[0].customers).toContain("Acme Corp");
+    expect(entries[0].customers).toContain("Widget Inc");
+    expect(entries[0].summary).toContain("react error");
+  });
 });
 
 describe("formatHighlightContext", () => {
@@ -1107,6 +1280,7 @@ describe("formatHighlightContext", () => {
       testing: { versions: ["4.14.18", "4.18.35"] },
       features: new Map([["PROJ", ["feature 1", "feature 2"]]]),
       bugs: new Map([["TEAM", ["bug fix 1"]]]),
+      customerTickets: new Map(),
     };
     const output = formatHighlightContext(data);
     expect(output).toContain(
@@ -1123,6 +1297,7 @@ describe("formatHighlightContext", () => {
       testing: null,
       features: new Map<string, string[]>(),
       bugs: new Map<string, string[]>(),
+      customerTickets: new Map(),
     };
     const output = formatHighlightContext(data);
     expect(output).toBe("--- Highlight Context ---");
@@ -1134,6 +1309,7 @@ describe("formatHighlightContext", () => {
       testing: null,
       features: new Map<string, string[]>(),
       bugs: new Map<string, string[]>(),
+      customerTickets: new Map(),
     };
     const sections = new Map<string, Map<string, EngineerBlock>>([
       [
@@ -1158,6 +1334,7 @@ describe("formatHighlightContext", () => {
                   role: "assignee" as const,
                   sprint_name: "Sprint 5",
                   nested_prs: [],
+                  customer_cases: [],
                 },
               ],
               completed_prs: [],
@@ -1176,6 +1353,7 @@ describe("formatHighlightContext", () => {
                   role: "assignee" as const,
                   sprint_name: "Sprint 5",
                   nested_prs: [],
+                  customer_cases: [],
                 },
               ],
               in_progress_prs: [],
@@ -1198,6 +1376,7 @@ describe("formatHighlightContext", () => {
       testing: null,
       features: new Map<string, string[]>(),
       bugs: new Map<string, string[]>(),
+      customerTickets: new Map(),
     };
     const sections = new Map<string, Map<string, EngineerBlock>>([
       [
@@ -1303,6 +1482,8 @@ describe("end-to-end", () => {
       const githubPrs = loadGithubPrs(CACHE_DIR);
       const gitlabMrs = loadGitlabMrs(CACHE_DIR);
       const jiraTickets = loadJiraTickets(CACHE_DIR, config!);
+      const customerCases = loadCustomerCases(CACHE_DIR);
+      mergeCustomerCases(jiraTickets, customerCases);
       const allPrs = [...githubPrs, ...gitlabMrs];
 
       const reportDate = new Date(`${refDateStr!}T00:00:00Z`);

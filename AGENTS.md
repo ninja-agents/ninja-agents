@@ -21,6 +21,7 @@ The repo follows a "data collector + deterministic script" pattern: the AI agent
 | [jira-story-points](agents/jira-story-points/)                           | Estimate story points for unpointed Jira tickets using historical team data         | [README](agents/jira-story-points/README.md)              |
 | [jira-bugs-missing-qe](agents/jira-bugs-missing-qe/)                     | Find resolved bugs missing QA Contact, identify verifiers, and set the field        | [README](agents/jira-bugs-missing-qe/README.md)           |
 | [jira-move-cnv2networking](agents/jira-move-cnv2networking/)             | Move CNV networking tickets to OCPBUGS (bugs) or the RFE project (feature requests) | [README](agents/jira-move-cnv2networking/README.md)       |
+| [jira-fix-version](agents/jira-fix-version/)                             | Set fixVersions on resolved tickets by tracing merged PR branches                   | [README](agents/jira-fix-version/README.md)               |
 
 ## IDE Support
 
@@ -65,7 +66,7 @@ agents/{name}/
 ### MCP Tool Requirements
 
 - GitLab queries MUST include `scope: "all"` -- without it, results may be empty
-- Jira `cloudId` uses the site URL (`redhat.atlassian.net`), not a UUID
+- Jira `cloudId` uses the site URL (e.g., `your-site.atlassian.net`), not a UUID
 - Only `resolution = "Done"` counts as a completed Jira deliverable
 - CSV fields containing commas must be wrapped in double quotes
 

@@ -71,7 +71,7 @@ mcp__atlassian__searchJiraIssuesUsingJql:
   cloudId: "{jira.cloud_id}"
   jql: '(assignee = "{jira_account_id}" OR cf[10470] = "{jira_account_id}") AND project in ({jira_projects_quoted_csv}) AND updated >= -7d ORDER BY updated DESC'
   maxResults: 100
-  fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "statuscategorychangedate", "issuetype", "priority", "updated", "created", "customfield_10470", "customfield_10020"]
+  fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "statuscategorychangedate", "issuetype", "priority", "updated", "created", "customfield_10470", "customfield_10020", "issuelinks"]
   responseContentFormat: "markdown"
 ```
 
@@ -100,13 +100,34 @@ mcp__atlassian__searchJiraIssuesUsingJql:
   cloudId: "{jira.cloud_id}"
   jql: 'sprint = "{active_sprint_name}" ORDER BY key ASC'
   maxResults: 100
-  fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "statuscategorychangedate", "issuetype", "priority", "updated", "created", "customfield_10470", "customfield_10020"]
+  fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "statuscategorychangedate", "issuetype", "priority", "updated", "created", "customfield_10470", "customfield_10020", "issuelinks"]
   responseContentFormat: "markdown"
 ```
 
 3. **Merge into the Jira dataset**: deduplicate by ticket key — per-engineer results take precedence (they have richer context from the 7-day window). The sprint query adds tickets that were missed because they weren't updated in the last 7 days.
 
 This ensures ALL active sprint work appears in the In Progress section, not just items touched this week.
+
+## Step 2.75: Extract Customer Accounts from Issue Links
+
+Customer/account data is embedded in the `issuelinks` field already returned in Steps 2 and 2.5 — no extra API calls needed.
+
+For each Jira ticket, scan the `issuelinks` array for links with `type.name === "Account"` (link type id `10075`, outward text "impacts account"):
+
+1. **Filter**: keep only links that have an `outwardIssue` with a key starting with `CIPOE-`.
+2. **Extract**: `outwardIssue.key` (e.g., `CIPOE-100000`) as the account key, and `outwardIssue.fields.summary` (e.g., `"Acme Corp"`) as the customer name.
+
+Build a list of `{ticket_key, case_id, case_url, customer_name}` entries where:
+
+- `case_id` = the CIPOE key (e.g., `"CIPOE-100000"`)
+- `case_url` = `https://your-site.atlassian.net/browse/{CIPOE_key}`
+- `customer_name` = the CIPOE ticket summary (the company name)
+
+Tickets with no Account-type issue links produce no entries.
+
+Display: `Found {count} customer accounts across {ticket_count} tickets.`
+
+If no customer accounts are found at all, that is normal — proceed without warning.
 
 ## Step 3: Fetch GitLab MRs (Batch 2)
 
@@ -188,7 +209,7 @@ Header: `key,summary,status,resolution,resolutiondate,statuscategorychangedate,i
 `customfield_10020` returns an array of sprint objects like:
 
 ```json
-[{"id": 67465, "name": "MIG-NET-Frontend Sprint 3", "state": "active", "boardId": 11806, ...}]
+[{"id": 67465, "name": "Team Sprint 3", "state": "active", "boardId": 12345, ...}]
 ```
 
 1. Find the object with `"state": "active"` and use its `name` field
@@ -200,6 +221,19 @@ Every ticket returned by the Jira query MUST have `sprint_name` populated if `cu
 Save ALL tickets from the query — do NOT filter by team membership. The TypeScript script handles team matching via config.
 
 **Handling tool responses**: Jira query results may be returned inline in the conversation OR as a file reference, depending on response size. In BOTH cases, parse the full JSON and extract every issue. Do NOT skip inline responses — iterate the `issues` array (or `issues.nodes` if present) from each engineer's query response and add one CSV row per issue. If a response was saved to a file, read that file; if it was returned inline, extract directly from the conversation context.
+
+### customer-cases.csv
+
+Header: `ticket_key,case_id,case_url,customer_name`
+
+| Field           | Source                              | Notes                                                 |
+| --------------- | ----------------------------------- | ----------------------------------------------------- |
+| `ticket_key`    | Jira ticket key                     | e.g., "OCPBUGS-85606"                                 |
+| `case_id`       | CIPOE account key from issue link   | e.g., "CIPOE-100000"                                  |
+| `case_url`      | Browse URL to the CIPOE ticket      | `https://your-site.atlassian.net/browse/CIPOE-100000` |
+| `customer_name` | CIPOE ticket summary (company name) | double-quote if contains commas                       |
+
+A ticket may have multiple rows (one per account). Tickets with no Account-type issue links have no rows. This file may be empty (header only) if no customer accounts exist — that is normal.
 
 ### last-updated.txt
 
@@ -247,6 +281,7 @@ Write one `### ProductName` sub-heading per configured product, always — every
 - What shipped this week (outcomes, not ticket IDs)
 - What's actively in progress
 - Any CVEs fixed, blockers, or notable items
+- Any customer-impacting bugs — name the affected customers (from the "Customer-impacting" lines in the Highlight Context)
 
 **Rules:**
 
@@ -257,6 +292,7 @@ Write one `### ProductName` sub-heading per configured product, always — every
 - Do NOT include markdown links or Jira ticket IDs — the detailed sections have those
 - Every claim must trace to an item in the report — never invent work
 - Be thorough — one substantive paragraph per product
+- **Customer-impacting bugs must be called out** with the customer names. Use the format: "Three customer-impacting bugs are tracked: a React error affecting Acme Corp and Globex Inc, a NetworkPolicy creation error affecting Contoso Ltd, and a localnet NAD builder issue affecting Initech and Widget Co."
 
 **Good example:**
 

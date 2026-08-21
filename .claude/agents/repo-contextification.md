@@ -20,7 +20,7 @@ description: |
   user: "/repo-contextification acme/widget-api"
   assistant: "Launching repo-contextification agent targeting acme/widget-api on GitHub."
   </example>
-model: opus
+model: sonnet
 memory: project
 ---
 

@@ -11,7 +11,7 @@ assistant: launches the slack-channels-analyzer agent
 user: '/slack-channels-analyzer'
 assistant: launches the slack-channels-analyzer agent
 </example>"
-model: opus
+model: sonnet
 memory: project
 ---
 

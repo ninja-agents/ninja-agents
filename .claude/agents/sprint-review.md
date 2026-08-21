@@ -14,7 +14,7 @@ description: |
   user: "Generate sprint retrospective report"
   assistant: "Let me launch the sprint-review agent to analyze the current sprint and generate the retro report."
   </example>
-model: opus
+model: sonnet
 memory: project
 ---
 

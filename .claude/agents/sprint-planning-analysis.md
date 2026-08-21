@@ -14,7 +14,7 @@ description: |
   user: "/sprint-planning-analysis MIG-NET-Frontend Sprint 3"
   assistant: "I'll analyze Sprint 3's planning against the previous sprint's velocity."
   </example>
-model: opus
+model: sonnet
 memory: project
 ---
 

@@ -96,6 +96,68 @@ When reviewing changes to this repo, check for:
 - **Link hygiene** -- all report links use markdown hyperlinks with descriptive text, not bare URLs
 - **Lint/format compliance** -- `npm run lint` and `npm run format:check` pass at the repo root
 
+## Shared Agent Conventions
+
+These conventions are referenced by agent specs to avoid duplicating boilerplate. When a spec says "follow the X convention from AGENTS.md", look here.
+
+### Jira Constants
+
+- **cloudId**: `"redhat.atlassian.net"` (all Jira queries)
+- **Custom fields**: sprint = `customfield_10020`, story points = `customfield_10028`, QA contact = `customfield_10470`, activity type = `customfield_10464`
+- **Completed deliverable**: only `resolution = "Done"` counts
+
+### Script Exit Codes
+
+All agent TypeScript scripts follow this contract:
+
+- **Exit 0**: Success. Proceed to next step.
+- **Exit 1**: Fatal error. Display the error message. STOP.
+- **Exit 2**: Data quality problem. Display the error. Ask user to retry or proceed.
+- **Exit 3**: Warnings present. Output was generated. Note warnings and proceed.
+
+### Jira Pagination
+
+When querying Jira REST API with paginated results, use `startAt` parameter:
+
+1. Start with `startAt=0`, `maxResults=100`
+2. If the response contains `total > startAt + maxResults`, increment `startAt` by 100 and repeat
+3. Combine all pages before proceeding
+
+### User Approval Flow
+
+When an agent modifies Jira tickets, display a preview table and prompt:
+
+```
+Ready to [apply/set] [these N items]?
+
+- **yes** — apply all updates
+- **select** — let me pick which ones to apply
+- **abort** — cancel, no tickets will be modified
+```
+
+Wait for the user's response. NEVER proceed without explicit approval. This is non-negotiable.
+
+### CSV Quoting
+
+- Wrap any field containing a comma in double quotes
+- Escape internal double quotes by doubling them (`""`)
+- Do NOT quote fields that don't contain commas
+
+### Progress Communication
+
+Before starting work, display a numbered step overview. Prefix every status line with `[N/X]` where N is the current step. Keep updates to one line each.
+
+### Sequential Processing
+
+Process Jira write operations sequentially to avoid rate limits. Do not fire parallel update calls.
+
+### Validation Checkpoints
+
+After data collection, verify:
+
+- The query succeeded (no errors). If it returned 0 tickets, display a message and STOP.
+- If the MCP/API call returned an error, display it, STOP, and ask user how to proceed.
+
 ## Contributing a New Agent
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contribution workflow. In Claude Code, run `/create-agent` to scaffold everything automatically. In Cursor, copy `agents/_template/` and follow the wiring guide in the template README.

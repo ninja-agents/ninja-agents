@@ -55,78 +55,17 @@ If `${ticket_key}` was provided as an argument, note it for Step 4.
 
 ## Step 2: Sync Reference Cache
 
-Check if `agents/jira-story-points/data/cache/reference-tickets.json` exists and `last-updated.txt` is less than 7 days old. If so, skip to Step 3.
+Run the data-fetching script to sync the reference cache (skips if cache is less than 7 days old):
 
-Otherwise, fetch historical tickets:
-
-```
-mcp__atlassian__searchJiraIssuesUsingJql:
-  cloudId: "redhat.atlassian.net"
-  jql: '{reference_jql from config}'
-  maxResults: 100
-  fields: ["summary", "description", "issuetype", "priority", "labels", "components", "status", "resolution", "customfield_10028"]
-  responseContentFormat: "markdown"
+```bash
+npx tsx agents/jira-story-points/scripts/fetch-data.ts --sync-reference
 ```
 
-### Pagination
+Required env vars: `JIRA_API_TOKEN`, `JIRA_EMAIL`.
 
-If the query returns exactly 100 results, paginate using `nextPageToken`:
+If exit code is 1, display the error and STOP.
 
-```
-mcp__atlassian__searchJiraIssuesUsingJql:
-  cloudId: "redhat.atlassian.net"
-  jql: '{same JQL}'
-  maxResults: 100
-  nextPageToken: "{token from previous response}"
-```
-
-Repeat until fewer than 100 results are returned. Combine all pages before proceeding.
-
-### Save to JSON
-
-Save all fetched tickets to `agents/jira-story-points/data/cache/reference-tickets.json` as an array:
-
-```json
-[
-  {
-    "key": "CNV-12345",
-    "summary": "Add support for ...",
-    "description": "As a user, I want to ...",
-    "story_points": 5,
-    "issuetype": "Story",
-    "priority": "Major",
-    "labels": ["ui", "networking"],
-    "components": ["Console"],
-    "status": "Closed",
-    "resolution": "Done"
-  }
-]
-```
-
-| Field          | Source                     | Notes                                 |
-| -------------- | -------------------------- | ------------------------------------- |
-| `key`          | `issue.key`                | e.g., "CNV-12345"                     |
-| `summary`      | `fields.summary`           | plain text                            |
-| `description`  | `fields.description`       | markdown; empty string if null        |
-| `story_points` | `fields.customfield_10028` | number                                |
-| `issuetype`    | `fields.issuetype.name`    | e.g., "Story", "Bug", "Task"          |
-| `priority`     | `fields.priority.name`     | e.g., "Major", "Critical"             |
-| `labels`       | `fields.labels`            | array of strings; empty array if none |
-| `components`   | `fields.components[].name` | array of strings; empty array if none |
-| `status`       | `fields.status.name`       | e.g., "Closed"                        |
-| `resolution`   | `fields.resolution.name`   | e.g., "Done"                          |
-
-Write current ISO-8601 timestamp to `agents/jira-story-points/data/cache/last-updated.txt`.
-
-Display: `[2/7] Synced {count} reference tickets to cache.`
-
-### Validation Checkpoint
-
-After data collection, verify:
-
-- Check the Jira query succeeded (no errors). If the query returned 0 tickets: display "No reference tickets found. Check the reference_jql in config." STOP.
-- If the MCP call returned an error: display the error, STOP, ask user how to proceed.
-- If fewer than 20 reference tickets: display warning — estimation accuracy may be low.
+Display: `[2/7] Reference cache synced.`
 
 ## Step 3: Build Reference Summary
 
@@ -146,64 +85,27 @@ Display: `[3/7] Built reference summary ({count} tickets, SP distribution comput
 
 ## Step 4: Identify Target Tickets
 
+Run the data-fetching script to fetch target tickets and their linked PR context.
+
 **If a ticket key was provided** (`/jira-story-points CNV-12345`):
 
-Fetch that specific ticket:
-
-```
-mcp__atlassian__getJiraIssue:
-  cloudId: "redhat.atlassian.net"
-  issueIdOrKey: "{ticket_key}"
-  fields: ["summary", "description", "issuetype", "priority", "labels", "components", "status", "customfield_10028"]
-  responseContentFormat: "markdown"
+```bash
+npx tsx agents/jira-story-points/scripts/fetch-data.ts --ticket {ticket_key}
 ```
 
-Check: if `customfield_10028` is set AND >= 2, display "Ticket {key} already has {SP} story points. Skipping." STOP. If SP is set but < 2, treat it as a legacy value that needs re-estimation — proceed.
+If the ticket already has SP >= 2, the script prints a message and exits 0. STOP.
 
 **If no ticket key was provided:**
 
-Fetch unpointed tickets from the backlog:
-
-```
-mcp__atlassian__searchJiraIssuesUsingJql:
-  cloudId: "redhat.atlassian.net"
-  jql: '{backlog_jql from config}'
-  maxResults: 10
-  fields: ["summary", "description", "issuetype", "priority", "labels", "components", "status", "customfield_10028"]
-  responseContentFormat: "markdown"
+```bash
+npx tsx agents/jira-story-points/scripts/fetch-data.ts --backlog
 ```
 
-If 0 tickets found: display "No unpointed tickets in the backlog." STOP.
+If 0 tickets found, the script prints a message and exits 0. STOP.
 
-### Resolution Filter
+Required env vars: `JIRA_API_TOKEN`, `JIRA_EMAIL`, `GITHUB_PAT`.
 
-After fetching target tickets, filter out any with resolution other than "Done" or "Done-Errata" (e.g., skip "Duplicate", "Won't Fix", "Cannot Reproduce", "Not a Bug"). Only estimate tickets that were actually resolved with real work. Display skipped tickets: `Skipped {key}: resolution is {resolution}.`
-
-Display: `[4/7] Found {count} unpointed ticket(s) to estimate (Batch {batch_num}).`
-
-## Step 4.5: Fetch PR Context
-
-For each target ticket, fetch its linked GitHub PRs to enrich the estimation with actual implementation evidence.
-
-Launch ALL remote link fetches in a single parallel tool call — one per ticket:
-
-```
-mcp__atlassian__getJiraIssueRemoteIssueLinks:
-  cloudId: "redhat.atlassian.net"
-  issueIdOrKey: "{ticket_key}"
-```
-
-Parse remote links for GitHub PR URLs matching `https://github.com/{owner}/{repo}/pull/{number}`. For each PR found, fetch file stats:
-
-```
-mcp__github__pull_request_read:
-  owner: "{owner}"
-  repo: "{repo}"
-  pullNumber: {number}
-  method: "get_files"
-```
-
-Record per ticket: total files changed, total additions, total deletions across all linked PRs.
+The script saves target tickets with PR context to `agents/jira-story-points/data/cache/target-tickets.json`. Read this file to get the target ticket data for estimation.
 
 PR size guidelines (signal, not final answer):
 
@@ -212,9 +114,9 @@ PR size guidelines (signal, not final answer):
 - 10-20 files, 200-500 lines → likely 8 SP
 - 20+ files, 500+ lines → likely 13 SP
 
-**Important:** PR size is one signal among many. Investigation-heavy bugs may have small PRs but high effort. Weigh PR stats alongside description complexity, not instead of it. If a ticket has no linked PRs, proceed with description-only estimation.
+**Important:** PR size is one signal among many. Investigation-heavy bugs may have small PRs but high effort. Weigh PR stats alongside description complexity, not instead of it.
 
-Display: `[4.5/7] Fetched PR context for {count} ticket(s) ({pr_count} PRs found).`
+Display: `[4/7] Found {count} unpointed ticket(s) to estimate (Batch {batch_num}).`
 
 ## Step 5: Estimate Story Points
 
@@ -378,8 +280,8 @@ After the script completes, display its output to the user.
 
 After Step 7 completes (or if the user aborted in Step 6), check whether more unpointed tickets remain:
 
-1. Re-fetch using `backlog_jql` with `maxResults: 10` (same query as Step 4).
-2. **If 0 tickets returned**: display "All unpointed tickets estimated. Done." STOP.
+1. Re-run `npx tsx agents/jira-story-points/scripts/fetch-data.ts --backlog` to fetch the next batch.
+2. **If 0 tickets returned** (script prints "No unpointed tickets"): display "All unpointed tickets estimated. Done." STOP.
 3. **If tickets found**: display `--- Batch {N+1} ---` and continue from Step 4, incrementing the batch counter. Steps 1–3 do NOT re-run (config and reference cache are already loaded).
 
 If the user aborted in Step 6, still check for remaining tickets and ask:
@@ -391,12 +293,8 @@ Only proceed if they say yes.
 ## Rules
 
 1. **NEVER update a ticket without explicit user approval.** The preview and confirmation in Step 6 is non-negotiable.
-2. **NEVER overwrite existing story points >= 2.** If a ticket has SP < 2 (legacy value), treat it as unpointed and re-estimate. If SP >= 2, skip it and display a message.
-3. **Only suggest values from the Fibonacci scale: 2, 5, 8, 13, 21.** Never suggest 1, 3, or other values. If a reference ticket has a legacy SP value below 2 (e.g., 0.42, 1), treat it as 2 SP. The `build-reference.ts` script normalizes these automatically.
-4. Never hardcode JQL, field IDs, or project keys — read from `agents/jira-story-points/data/config.json`.
-5. Jira `cloudId` is always `"redhat.atlassian.net"`.
-6. Story point custom field: `customfield_10028`. Set it as a number, not a string.
-7. If a Jira update fails, log the error, continue with remaining tickets — do not STOP.
-8. Process updates sequentially to avoid rate limits.
-9. If the reference cache is stale (>7 days), re-sync before estimating.
-10. For 21 SP suggestions, always add a note recommending the ticket be broken down.
+2. **NEVER overwrite existing story points >= 2.** If a ticket has SP < 2 (legacy value), treat it as unpointed and re-estimate.
+3. **Only suggest values from the Fibonacci scale: 2, 5, 8, 13, 21.** The `build-reference.ts` script normalizes legacy values automatically.
+4. If a Jira update fails, log the error, continue with remaining tickets — do not STOP.
+5. For 21 SP suggestions, always add a note recommending the ticket be broken down.
+6. Follow the approval flow and sequential processing conventions from AGENTS.md.

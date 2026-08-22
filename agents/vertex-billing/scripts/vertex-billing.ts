@@ -72,6 +72,7 @@ function parseArgs(argv: string[]): Record<string, string> {
           "  --project   GCP project ID (default: from config.json)",
           "  --budget    Monthly budget cap in dollars (default: from config.json)",
           "  --output    Output markdown path (default: data/output/billing-report.md)",
+          "  --actual    Actual GCP billing amount — used to estimate extended thinking cost",
           "",
           "Requires: gcloud CLI authenticated with access to the target project.",
         ].join("\n"),
@@ -166,9 +167,30 @@ interface TokenBreakdown {
   cacheRead: number;
   inputCached: number;
   outputCached: number;
+  thinkingEst: number;
 }
 
-function classifyTokens(tokensByKey: Map<string, number>): TokenBreakdown {
+const KNOWN_TOKEN_KEYS = new Set([
+  "false:input",
+  "false:output",
+  "true:cache_write_input",
+  "true:cache_write_1h_input",
+  "true:cache_read_input",
+  "true:input",
+  "true:output",
+]);
+
+function classifyTokens(
+  tokensByKey: Map<string, number>,
+  model?: string,
+): TokenBreakdown {
+  for (const [key, tokens] of tokensByKey) {
+    if (!KNOWN_TOKEN_KEYS.has(key) && tokens > 0) {
+      console.warn(
+        `  Unknown token type "${key}" for ${model ?? "?"}: ${fmtTokens(tokens)} tokens (not included in cost)`,
+      );
+    }
+  }
   return {
     inputNocache: tokensByKey.get("false:input") ?? 0,
     outputNocache: tokensByKey.get("false:output") ?? 0,
@@ -177,6 +199,7 @@ function classifyTokens(tokensByKey: Map<string, number>): TokenBreakdown {
     cacheRead: tokensByKey.get("true:cache_read_input") ?? 0,
     inputCached: tokensByKey.get("true:input") ?? 0,
     outputCached: tokensByKey.get("true:output") ?? 0,
+    thinkingEst: 0,
   };
 }
 
@@ -376,7 +399,7 @@ async function main() {
       tokensByKey.set(key, (tokensByKey.get(key) ?? 0) + s.tokens);
     }
 
-    const bd = classifyTokens(tokensByKey);
+    const bd = classifyTokens(tokensByKey, model);
 
     const addItem = (label: string, tokens: number, rate: number) => {
       if (tokens > 0) {
@@ -426,8 +449,8 @@ async function main() {
     });
   }
 
-  // Cross-validate with consumed_token_throughput
-  let cttWarning: string | null = null;
+  // Estimate extended thinking tokens from CTT divergence
+  let thinkingEstTotal = 0;
   if (cttSeries.length > 0 && modelSummaries.length > 0) {
     for (const ms of modelSummaries) {
       if (ms.subtotal < 1) continue;
@@ -436,12 +459,54 @@ async function main() {
         .filter((ts) => ts.resource.labels.model_user_id === ms.model)
         .reduce((sum, ts) => sum + sumPoints(ts.points), 0);
 
-      if (actual > 0 && expected > 0) {
-        const divergence = Math.abs(actual - expected) / expected;
+      if (actual > expected && expected > 0) {
+        const divergence = (actual - expected) / expected;
         if (divergence > 0.05) {
-          cttWarning = `CTT cross-check: ${ms.model} diverges ${(divergence * 100).toFixed(1)}% from expected (actual ${fmtTokens(actual)} vs expected ${fmtTokens(expected)}). Untracked tokens (e.g. extended thinking) may be contributing.`;
+          const untrackedTokens = Math.round((actual - expected) / 5);
+          const pricing = config.pricing[ms.model];
+          if (pricing && untrackedTokens > 0) {
+            const thinkingCost = tokenCost(untrackedTokens, pricing.output);
+            ms.breakdown.thinkingEst = untrackedTokens;
+            ms.items.push({
+              model: ms.model,
+              label: "Extended thinking (est.)",
+              tokens: untrackedTokens,
+              rate: pricing.output,
+              cost: thinkingCost,
+            });
+            ms.subtotal += thinkingCost;
+            grandTotal += thinkingCost;
+            totalOutputTokens += untrackedTokens;
+            thinkingEstTotal += thinkingCost;
+          }
         }
       }
+    }
+  }
+
+  // Estimate thinking tokens from user-supplied actual GCP billing
+  const actualBilling = args.actual ? parseFloat(args.actual) : null;
+  if (actualBilling !== null && actualBilling > grandTotal) {
+    const gap = actualBilling - grandTotal;
+    // Attribute gap to the highest-spend model's thinking tokens
+    const topModel = modelSummaries.reduce((a, b) =>
+      a.subtotal > b.subtotal ? a : b,
+    );
+    const pricing = config.pricing[topModel.model];
+    if (pricing) {
+      const thinkingTokens = Math.round((gap / pricing.output) * 1_000_000);
+      topModel.breakdown.thinkingEst = thinkingTokens;
+      topModel.items.push({
+        model: topModel.model,
+        label: "Extended thinking (est.)",
+        tokens: thinkingTokens,
+        rate: pricing.output,
+        cost: gap,
+      });
+      topModel.subtotal += gap;
+      grandTotal += gap;
+      totalOutputTokens += thinkingTokens;
+      thinkingEstTotal += gap;
     }
   }
 
@@ -572,19 +637,23 @@ async function main() {
     `  Caching savings:          ${fmtDollars(savings)} (${hypotheticalNoCacheCost > 0 ? ((savings / hypotheticalNoCacheCost) * 100).toFixed(0) : 0}% reduction)`,
   );
 
-  if (cttWarning) {
-    lines.push("");
-    lines.push(`⚠ ${cttWarning}`);
-  }
-
   lines.push("");
-  lines.push(
-    "NOTE: Metered total is a lower bound. Monitoring metrics can lag ~24 hours,",
-  );
-  lines.push(
-    "and extended thinking tokens (Opus) may not be tracked. Both contribute to",
-  );
-  lines.push("a gap between this total and your actual bill.");
+  if (thinkingEstTotal > 0) {
+    lines.push(
+      `NOTE: Total includes ${fmtDollars(thinkingEstTotal)} estimated extended thinking cost`,
+    );
+    lines.push(
+      "(derived from CTT divergence). Monitoring metrics can lag ~24 hours.",
+    );
+  } else {
+    lines.push(
+      "NOTE: Metered total is a lower bound. Monitoring metrics can lag ~24 hours,",
+    );
+    lines.push(
+      "and extended thinking tokens (Opus) may not be tracked. Both contribute to",
+    );
+    lines.push("a gap between this total and your actual bill.");
+  }
 
   const output = lines.join("\n");
   console.log(output);
@@ -613,7 +682,7 @@ async function main() {
       projectedMonthEnd,
       totalDaysInMonth,
     },
-    cttWarning,
+    thinkingEstTotal,
   );
   writeFileSync(outputPath, md);
   console.log(`\nReport written to ${outputPath}`);
@@ -643,7 +712,7 @@ function generateMarkdown(
     projectedMonthEnd: number;
     totalDaysInMonth: number;
   },
-  cttWarning: string | null,
+  thinkingEstTotal: number,
 ): string {
   const lines: string[] = [];
 
@@ -741,18 +810,19 @@ function generateMarkdown(
   );
   lines.push("");
 
-  if (cttWarning) {
-    lines.push(`> ⚠ ${cttWarning}`);
-    lines.push("");
+  if (thinkingEstTotal > 0) {
+    lines.push(
+      `> **Note:** Total includes ~${fmtDollars(thinkingEstTotal)} estimated extended thinking cost (derived from CTT divergence). Monitoring metrics can lag ~24 hours.`,
+    );
+  } else {
+    lines.push(
+      "> **Note:** Metered total is a lower bound. Monitoring metrics can lag ~24 hours,",
+    );
+    lines.push(
+      "> and extended thinking tokens (Opus) may not be tracked. Both contribute to a",
+    );
+    lines.push("> gap between this total and your actual bill.");
   }
-
-  lines.push(
-    "> **Note:** Metered total is a lower bound. Monitoring metrics can lag ~24 hours,",
-  );
-  lines.push(
-    "> and extended thinking tokens (Opus) may not be tracked. Both contribute to a",
-  );
-  lines.push("> gap between this total and your actual bill.");
   lines.push("");
 
   return lines.join("\n");

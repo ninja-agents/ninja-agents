@@ -1045,7 +1045,7 @@ export function formatInProgressSection(
     }
   }
 
-  return lines.join("\n");
+  return lines.join("\n").trimEnd();
 }
 
 // ---------------------------------------------------------------------------

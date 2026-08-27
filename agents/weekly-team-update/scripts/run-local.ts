@@ -13,7 +13,7 @@ const OUTPUT_PATH = resolve(
 );
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "http://localhost:1234/v1";
-const LLM_MODEL = process.env.LLM_MODEL ?? "prism-ml/bonsai-27b";
+const LLM_MODEL = process.env.LLM_MODEL ?? "qwen2.5-coder-7b-instruct";
 
 const SUMMARY_SYSTEM_PROMPT = `You are a technical writer for a software engineering team's weekly status report.
 Write one "### ProductName" sub-heading per product with one rich paragraph each covering:

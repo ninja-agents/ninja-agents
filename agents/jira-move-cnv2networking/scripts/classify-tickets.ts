@@ -72,20 +72,6 @@ function matchesKeyword(text: string, keywords: string[]): string | null {
   return null;
 }
 
-function isWeakListMatch(text: string, keyword: string): boolean {
-  // Check if keyword appears in a comma-separated list of 5+ items
-  const parts = text.split(",").map((s) => s.trim());
-  if (parts.length < 5) return false;
-
-  const keywordLower = keyword.toLowerCase();
-  const matchingParts = parts.filter((p) =>
-    p.toLowerCase().includes(keywordLower),
-  );
-
-  // If only one part contains the keyword and there are many other unrelated parts, it's weak
-  return matchingParts.length === 1 && parts.length >= 5;
-}
-
 function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
   const summary = issue.fields.summary || "";
   const description = issue.fields.description || "";
@@ -93,6 +79,7 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
   const status = issue.fields.status.name;
 
   let target_project = "";
+  // eslint-disable-next-line no-useless-assignment
   let target_component = "";
   let reason = "";
   let review_flag = "";
@@ -524,8 +511,10 @@ if (args.length < 2) {
 const issuesFile = args[0];
 const configFile = args[1];
 
-const issuesData = JSON.parse(readFileSync(issuesFile, "utf-8"));
-const config: Config = JSON.parse(readFileSync(configFile, "utf-8"));
+const issuesData = JSON.parse(readFileSync(issuesFile, "utf-8")) as {
+  issues: { nodes: JiraIssue[] };
+};
+const config = JSON.parse(readFileSync(configFile, "utf-8")) as Config;
 
 const issues: JiraIssue[] = issuesData.issues.nodes;
 

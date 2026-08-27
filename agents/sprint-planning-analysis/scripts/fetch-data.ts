@@ -405,6 +405,10 @@ async function fetchVelocityFromJira(
     }
   >();
 
+  const qeAccountIds = new Set(
+    config.engineers.filter((e) => e.role === "qe").map((e) => e.jira_account_id),
+  );
+
   for (const issue of issues) {
     const f = issue.fields ?? {};
     const sp = (f[config.jira.story_point_field] as number) || 0;
@@ -419,35 +423,37 @@ async function fetchVelocityFromJira(
       completedSp += sp;
     }
 
+    const accumulate = (engName: string) => {
+      const entry = engineerMap.get(engName) ?? {
+        assigned: 0,
+        completed: 0,
+        sp_completed: 0,
+        sp_remaining: 0,
+      };
+      entry.assigned++;
+      if (isDone) {
+        entry.completed++;
+        entry.sp_completed += sp;
+      } else {
+        entry.sp_remaining += sp;
+      }
+      engineerMap.set(engName, entry);
+    };
+
     // Map to engineer by assignee or QA contact
     const assignee = f.assignee as Record<string, unknown> | null;
     const qaContact = f.customfield_10470 as Record<string, unknown> | null;
     const assigneeId = str(assignee?.accountId);
     const qaContactId = str(qaContact?.accountId);
 
-    const matchEngIds = [assigneeId, qaContactId].filter(Boolean);
-    for (const engId of matchEngIds) {
-      const configEng = config.engineers.find(
-        (e) => e.jira_account_id === engId,
-      );
-      if (!configEng) continue;
-      const entry = engineerMap.get(configEng.name) ?? {
-        assigned: 0,
-        completed: 0,
-        sp_completed: 0,
-        sp_remaining: 0,
-      };
+    // Credit assignee
+    const assigneeEng = config.engineers.find((e) => e.jira_account_id === assigneeId);
+    if (assigneeEng) accumulate(assigneeEng.name);
 
-      if (engId === assigneeId) {
-        entry.assigned++;
-        if (isDone) {
-          entry.completed++;
-          entry.sp_completed += sp;
-        } else {
-          entry.sp_remaining += sp;
-        }
-      }
-      engineerMap.set(configEng.name, entry);
+    // Credit QA contact if they are a QE and not already the assignee
+    if (qaContactId && qaContactId !== assigneeId && qeAccountIds.has(qaContactId)) {
+      const qaEng = config.engineers.find((e) => e.jira_account_id === qaContactId);
+      if (qaEng) accumulate(qaEng.name);
     }
   }
 
@@ -597,7 +603,7 @@ async function main(): Promise<void> {
   const prevSprintNames = previousSprintNames(
     config.sprint_name_prefix,
     sprintNumber,
-    3,
+    4,
   );
   console.log(
     `  Previous sprints to check: ${prevSprintNames.join(", ") || "none"}`,

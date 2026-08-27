@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 
-import { readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, writeFileSync } from "fs";
+import { join } from "path";
 
 interface Config {
   jira: {
@@ -74,26 +74,28 @@ function matchesKeyword(text: string, keywords: string[]): string | null {
 
 function isWeakListMatch(text: string, keyword: string): boolean {
   // Check if keyword appears in a comma-separated list of 5+ items
-  const parts = text.split(',').map(s => s.trim());
+  const parts = text.split(",").map((s) => s.trim());
   if (parts.length < 5) return false;
 
   const keywordLower = keyword.toLowerCase();
-  const matchingParts = parts.filter(p => p.toLowerCase().includes(keywordLower));
+  const matchingParts = parts.filter((p) =>
+    p.toLowerCase().includes(keywordLower),
+  );
 
   // If only one part contains the keyword and there are many other unrelated parts, it's weak
   return matchingParts.length === 1 && parts.length >= 5;
 }
 
 function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
-  const summary = issue.fields.summary || '';
-  const description = issue.fields.description || '';
+  const summary = issue.fields.summary || "";
+  const description = issue.fields.description || "";
   const issuetype = issue.fields.issuetype.name;
   const status = issue.fields.status.name;
 
-  let target_project = '';
-  let target_component = '';
-  let reason = '';
-  let review_flag = '';
+  let target_project = "";
+  let target_component = "";
+  let reason = "";
+  let review_flag = "";
 
   // Gate 1: CI/Tooling Exclusion
   if (config.source.manualExcludeKeys.includes(issue.key)) {
@@ -103,11 +105,11 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
       summary,
       issuetype,
       status,
-      target_project: '',
-      target_component: '',
-      reason: 'Manually excluded: not a networking ticket',
-      review_flag: 'ci-excluded',
-      possible_duplicate: '',
+      target_project: "",
+      target_component: "",
+      reason: "Manually excluded: not a networking ticket",
+      review_flag: "ci-excluded",
+      possible_duplicate: "",
     };
   }
 
@@ -119,20 +121,20 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
         summary,
         issuetype,
         status,
-        target_project: '',
-        target_component: '',
+        target_project: "",
+        target_component: "",
         reason: `CI/tooling ticket excluded: ${pattern}`,
-        review_flag: 'ci-excluded',
-        possible_duplicate: '',
+        review_flag: "ci-excluded",
+        possible_duplicate: "",
       };
     }
   }
 
   // Gate 3: Bug-as-RFE Detection (before routing)
-  if (issuetype === 'Bug') {
+  if (issuetype === "Bug") {
     for (const pattern of config.source.rfeTypeWatchPatterns) {
       if (summary.toLowerCase().includes(pattern.toLowerCase())) {
-        review_flag = 'type-mismatch-suspect';
+        review_flag = "type-mismatch-suspect";
         reason = ` [TYPE SUSPECT: summary pattern '${pattern}' suggests this may be a Feature Request]`;
         break;
       }
@@ -140,17 +142,20 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
   }
 
   // Gate 4: Feature Request Routing
-  if (issuetype === 'Feature Request') {
+  if (issuetype === "Feature Request") {
     // Check summary for nmstate keywords
-    const nmstateSummaryMatch = matchesKeyword(summary, config.source.bugKeywords.nmstate);
+    const nmstateSummaryMatch = matchesKeyword(
+      summary,
+      config.source.bugKeywords.nmstate,
+    );
     if (nmstateSummaryMatch) {
       target_project = config.targets.rfes.project;
-      target_component = config.targets.rfes.nmstateComponents.join(', ');
+      target_component = config.targets.rfes.nmstateComponents.join(", ");
       reason = `Feature Request → RFE; nmstate keyword '${nmstateSummaryMatch}' in summary`;
 
       // Gate 2: In-Flight Status (after routing)
       if (config.source.inFlightStatuses.includes(status)) {
-        review_flag = 'review-required';
+        review_flag = "review-required";
         reason += ` [IN-FLIGHT: status=${status} — requires manual approval before move]`;
       }
 
@@ -164,19 +169,22 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
         target_component,
         reason,
         review_flag,
-        possible_duplicate: '',
+        possible_duplicate: "",
       };
     }
 
     // Check summary for networking keywords
-    const networkingSummaryMatch = matchesKeyword(summary, config.source.bugKeywords.networking);
+    const networkingSummaryMatch = matchesKeyword(
+      summary,
+      config.source.bugKeywords.networking,
+    );
     if (networkingSummaryMatch) {
       target_project = config.targets.rfes.project;
-      target_component = config.targets.rfes.networkingComponents.join(', ');
+      target_component = config.targets.rfes.networkingComponents.join(", ");
       reason = `Feature Request → RFE; networking keyword '${networkingSummaryMatch}' in summary`;
 
       if (config.source.inFlightStatuses.includes(status)) {
-        review_flag = 'review-required';
+        review_flag = "review-required";
         reason += ` [IN-FLIGHT: status=${status} — requires manual approval before move]`;
       }
 
@@ -190,19 +198,22 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
         target_component,
         reason,
         review_flag,
-        possible_duplicate: '',
+        possible_duplicate: "",
       };
     }
 
     // Check summary for nmstateSummaryOnly keywords
-    const nmstateSummaryOnlyMatch = matchesKeyword(summary, config.source.bugKeywords.nmstateSummaryOnly);
+    const nmstateSummaryOnlyMatch = matchesKeyword(
+      summary,
+      config.source.bugKeywords.nmstateSummaryOnly,
+    );
     if (nmstateSummaryOnlyMatch) {
       target_project = config.targets.rfes.project;
-      target_component = config.targets.rfes.nmstateComponents.join(', ');
+      target_component = config.targets.rfes.nmstateComponents.join(", ");
       reason = `Feature Request → RFE; nmstate keyword '${nmstateSummaryOnlyMatch}' in summary`;
 
       if (config.source.inFlightStatuses.includes(status)) {
-        review_flag = 'review-required';
+        review_flag = "review-required";
         reason += ` [IN-FLIGHT: status=${status} — requires manual approval before move]`;
       }
 
@@ -216,19 +227,22 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
         target_component,
         reason,
         review_flag,
-        possible_duplicate: '',
+        possible_duplicate: "",
       };
     }
 
     // Check summary for networkingSummaryOnly keywords
-    const networkingSummaryOnlyMatch = matchesKeyword(summary, config.source.bugKeywords.networkingSummaryOnly);
+    const networkingSummaryOnlyMatch = matchesKeyword(
+      summary,
+      config.source.bugKeywords.networkingSummaryOnly,
+    );
     if (networkingSummaryOnlyMatch) {
       target_project = config.targets.rfes.project;
-      target_component = config.targets.rfes.networkingComponents.join(', ');
+      target_component = config.targets.rfes.networkingComponents.join(", ");
       reason = `Feature Request → RFE; networking keyword '${networkingSummaryOnlyMatch}' in summary (summary-only)`;
 
       if (config.source.inFlightStatuses.includes(status)) {
-        review_flag = 'review-required';
+        review_flag = "review-required";
         reason += ` [IN-FLIGHT: status=${status} — requires manual approval before move]`;
       }
 
@@ -242,23 +256,29 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
         target_component,
         reason,
         review_flag,
-        possible_duplicate: '',
+        possible_duplicate: "",
       };
     }
 
     // Description-only match (excluding summary-only keywords)
-    const nmstateDescMatch = matchesKeyword(description, config.source.bugKeywords.nmstate);
-    const networkingDescMatch = matchesKeyword(description, config.source.bugKeywords.networking);
+    const nmstateDescMatch = matchesKeyword(
+      description,
+      config.source.bugKeywords.nmstate,
+    );
+    const networkingDescMatch = matchesKeyword(
+      description,
+      config.source.bugKeywords.networking,
+    );
 
     if (nmstateDescMatch || networkingDescMatch) {
-      review_flag = 'review-required';
+      review_flag = "review-required";
       target_project = config.targets.rfes.project;
 
       if (nmstateDescMatch) {
-        target_component = config.targets.rfes.nmstateComponents.join(', ');
+        target_component = config.targets.rfes.nmstateComponents.join(", ");
         reason = `Feature Request → RFE; keyword '${nmstateDescMatch}' in description only [REVIEW REQUIRED: confirm this belongs to networking team]`;
       } else {
-        target_component = config.targets.rfes.networkingComponents.join(', ');
+        target_component = config.targets.rfes.networkingComponents.join(", ");
         reason = `Feature Request → RFE; keyword '${networkingDescMatch}' in description only [REVIEW REQUIRED: confirm this belongs to networking team]`;
       }
 
@@ -276,14 +296,14 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
         target_component,
         reason,
         review_flag,
-        possible_duplicate: '',
+        possible_duplicate: "",
       };
     }
 
     // No keyword match
-    review_flag = 'unclassified';
+    review_flag = "unclassified";
     if (config.source.inFlightStatuses.includes(status)) {
-      review_flag = 'in-flight-no-action';
+      review_flag = "in-flight-no-action";
     }
 
     return {
@@ -292,16 +312,17 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
       summary,
       issuetype,
       status,
-      target_project: '',
-      target_component: '',
-      reason: 'Feature Request: no networking or nmstate keyword in summary or description — stays in CNV',
+      target_project: "",
+      target_component: "",
+      reason:
+        "Feature Request: no networking or nmstate keyword in summary or description — stays in CNV",
       review_flag,
-      possible_duplicate: '',
+      possible_duplicate: "",
     };
   }
 
   // Gate 5: Bug Component Routing
-  if (issuetype === 'Bug') {
+  if (issuetype === "Bug") {
     // Step A: Check summary for nmstate keywords
     const nmstateSummaryMatch = matchesKeyword(summary, [
       ...config.source.bugKeywords.nmstate,
@@ -309,14 +330,21 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
     ]);
 
     // Step B: Check summary for networking keywords
-    const networkingSummaryMatch = matchesKeyword(summary, config.source.bugKeywords.networking);
+    const networkingSummaryMatch = matchesKeyword(
+      summary,
+      config.source.bugKeywords.networking,
+    );
 
     // Step C: Dual-keyword conflict
     if (nmstateSummaryMatch && networkingSummaryMatch) {
-      review_flag = review_flag ? `${review_flag},review-required` : 'review-required';
+      review_flag = review_flag
+        ? `${review_flag},review-required`
+        : "review-required";
       target_project = config.targets.bugs.project;
-      target_component = 'Networking / networking-console-plugin';
-      reason = `Bug: dual-keyword conflict in summary (nmstate: '${nmstateSummaryMatch}' vs networking: '${networkingSummaryMatch}') [REVIEW REQUIRED: networking keyword wins by default]` + reason;
+      target_component = "Networking / networking-console-plugin";
+      reason =
+        `Bug: dual-keyword conflict in summary (nmstate: '${nmstateSummaryMatch}' vs networking: '${networkingSummaryMatch}') [REVIEW REQUIRED: networking keyword wins by default]` +
+        reason;
 
       if (config.source.inFlightStatuses.includes(status)) {
         reason += ` [IN-FLIGHT: status=${status} — requires manual approval before move]`;
@@ -332,18 +360,22 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
         target_component,
         reason,
         review_flag,
-        possible_duplicate: '',
+        possible_duplicate: "",
       };
     }
 
     // Step D: nmstate wins
     if (nmstateSummaryMatch) {
       target_project = config.targets.bugs.project;
-      target_component = 'Networking / nmstate-console-plugin';
-      reason = `Bug: nmstate keyword '${nmstateSummaryMatch}' matched in summary` + reason;
+      target_component = "Networking / nmstate-console-plugin";
+      reason =
+        `Bug: nmstate keyword '${nmstateSummaryMatch}' matched in summary` +
+        reason;
 
       if (config.source.inFlightStatuses.includes(status)) {
-        review_flag = review_flag ? `${review_flag},review-required` : 'review-required';
+        review_flag = review_flag
+          ? `${review_flag},review-required`
+          : "review-required";
         reason += ` [IN-FLIGHT: status=${status} — requires manual approval before move]`;
       }
 
@@ -357,18 +389,22 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
         target_component,
         reason,
         review_flag,
-        possible_duplicate: '',
+        possible_duplicate: "",
       };
     }
 
     // Step E: networking wins
     if (networkingSummaryMatch) {
       target_project = config.targets.bugs.project;
-      target_component = 'Networking / networking-console-plugin';
-      reason = `Bug: networking keyword '${networkingSummaryMatch}' matched in summary` + reason;
+      target_component = "Networking / networking-console-plugin";
+      reason =
+        `Bug: networking keyword '${networkingSummaryMatch}' matched in summary` +
+        reason;
 
       if (config.source.inFlightStatuses.includes(status)) {
-        review_flag = review_flag ? `${review_flag},review-required` : 'review-required';
+        review_flag = review_flag
+          ? `${review_flag},review-required`
+          : "review-required";
         reason += ` [IN-FLIGHT: status=${status} — requires manual approval before move]`;
       }
 
@@ -382,25 +418,37 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
         target_component,
         reason,
         review_flag,
-        possible_duplicate: '',
+        possible_duplicate: "",
       };
     }
 
     // Step F: Description-only keyword match (only unrestricted keywords)
-    const nmstateDescMatch = matchesKeyword(description, config.source.bugKeywords.nmstate);
-    const networkingDescMatch = matchesKeyword(description, config.source.bugKeywords.networking);
+    const nmstateDescMatch = matchesKeyword(
+      description,
+      config.source.bugKeywords.nmstate,
+    );
+    const networkingDescMatch = matchesKeyword(
+      description,
+      config.source.bugKeywords.networking,
+    );
 
     if (nmstateDescMatch || networkingDescMatch) {
-      review_flag = review_flag ? `${review_flag},review-required` : 'review-required';
+      review_flag = review_flag
+        ? `${review_flag},review-required`
+        : "review-required";
       target_project = config.targets.bugs.project;
 
       if (networkingDescMatch) {
         // networking wins in dual description match
-        target_component = 'Networking / networking-console-plugin';
-        reason = `Bug: keyword '${networkingDescMatch}' in description only — proposed move to ${target_project}/${target_component} pending manual approval [REVIEW REQUIRED: summary gives no ownership signal]` + reason;
+        target_component = "Networking / networking-console-plugin";
+        reason =
+          `Bug: keyword '${networkingDescMatch}' in description only — proposed move to ${target_project}/${target_component} pending manual approval [REVIEW REQUIRED: summary gives no ownership signal]` +
+          reason;
       } else {
-        target_component = 'Networking / nmstate-console-plugin';
-        reason = `Bug: keyword '${nmstateDescMatch}' in description only — proposed move to ${target_project}/${target_component} pending manual approval [REVIEW REQUIRED: summary gives no ownership signal]` + reason;
+        target_component = "Networking / nmstate-console-plugin";
+        reason =
+          `Bug: keyword '${nmstateDescMatch}' in description only — proposed move to ${target_project}/${target_component} pending manual approval [REVIEW REQUIRED: summary gives no ownership signal]` +
+          reason;
       }
 
       if (config.source.inFlightStatuses.includes(status)) {
@@ -417,14 +465,14 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
         target_component,
         reason,
         review_flag,
-        possible_duplicate: '',
+        possible_duplicate: "",
       };
     }
 
     // Step G: No keyword match
-    review_flag = review_flag || 'unclassified';
+    review_flag = review_flag || "unclassified";
     if (config.source.inFlightStatuses.includes(status) && !target_project) {
-      review_flag = 'in-flight-no-action';
+      review_flag = "in-flight-no-action";
     }
 
     return {
@@ -433,11 +481,12 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
       summary,
       issuetype,
       status,
-      target_project: '',
-      target_component: '',
-      reason: 'Bug: no networking or nmstate keyword in summary or description — stays in CNV',
+      target_project: "",
+      target_component: "",
+      reason:
+        "Bug: no networking or nmstate keyword in summary or description — stays in CNV",
       review_flag,
-      possible_duplicate: '',
+      possible_duplicate: "",
     };
   }
 
@@ -448,16 +497,16 @@ function classifyTicket(issue: JiraIssue, config: Config): ClassifiedTicket {
     summary,
     issuetype,
     status,
-    target_project: '',
-    target_component: '',
-    reason: 'Unknown issue type',
-    review_flag: 'unclassified',
-    possible_duplicate: '',
+    target_project: "",
+    target_component: "",
+    reason: "Unknown issue type",
+    review_flag: "unclassified",
+    possible_duplicate: "",
   };
 }
 
 function escapeCsvField(field: string): string {
-  if (field.includes(',') || field.includes('"') || field.includes('\n')) {
+  if (field.includes(",") || field.includes('"') || field.includes("\n")) {
     return `"${field.replace(/"/g, '""')}"`;
   }
   return field;
@@ -466,25 +515,30 @@ function escapeCsvField(field: string): string {
 // Main
 const args = process.argv.slice(2);
 if (args.length < 2) {
-  console.error('Usage: classify-tickets.ts <issues-json-file> <config-json-file>');
+  console.error(
+    "Usage: classify-tickets.ts <issues-json-file> <config-json-file>",
+  );
   process.exit(1);
 }
 
 const issuesFile = args[0];
 const configFile = args[1];
 
-const issuesData = JSON.parse(readFileSync(issuesFile, 'utf-8'));
-const config: Config = JSON.parse(readFileSync(configFile, 'utf-8'));
+const issuesData = JSON.parse(readFileSync(issuesFile, "utf-8"));
+const config: Config = JSON.parse(readFileSync(configFile, "utf-8"));
 
 const issues: JiraIssue[] = issuesData.issues.nodes;
 
 console.log(`[3/7] Classifying ${issues.length} tickets...`);
 
-const classified: ClassifiedTicket[] = issues.map((issue) => classifyTicket(issue, config));
+const classified: ClassifiedTicket[] = issues.map((issue) =>
+  classifyTicket(issue, config),
+);
 
 // Save to CSV
-const csvPath = join(import.meta.dirname, '../data/cache/tickets.csv');
-const header = 'key,numeric_id,summary,issuetype,status,target_project,target_component,reason,review_flag,possible_duplicate';
+const csvPath = join(import.meta.dirname, "../data/cache/tickets.csv");
+const header =
+  "key,numeric_id,summary,issuetype,status,target_project,target_component,reason,review_flag,possible_duplicate";
 const rows = classified.map((ticket) => {
   return [
     escapeCsvField(ticket.key),
@@ -497,19 +551,23 @@ const rows = classified.map((ticket) => {
     escapeCsvField(ticket.reason),
     escapeCsvField(ticket.review_flag),
     escapeCsvField(ticket.possible_duplicate),
-  ].join(',');
+  ].join(",");
 });
 
-writeFileSync(csvPath, [header, ...rows].join('\n'), 'utf-8');
+writeFileSync(csvPath, [header, ...rows].join("\n"), "utf-8");
 
 console.log(`Saved ${classified.length} classified tickets to ${csvPath}`);
 
 // Print summary
 const confirmed = classified.filter((t) => !t.review_flag && t.target_project);
-const flagged = classified.filter((t) => t.review_flag && t.review_flag.includes('review-required'));
-const excluded = classified.filter((t) => t.review_flag === 'ci-excluded');
-const unclassified = classified.filter((t) => t.review_flag === 'unclassified');
-const inFlightNoAction = classified.filter((t) => t.review_flag === 'in-flight-no-action');
+const flagged = classified.filter(
+  (t) => t.review_flag && t.review_flag.includes("review-required"),
+);
+const excluded = classified.filter((t) => t.review_flag === "ci-excluded");
+const unclassified = classified.filter((t) => t.review_flag === "unclassified");
+const inFlightNoAction = classified.filter(
+  (t) => t.review_flag === "in-flight-no-action",
+);
 
 console.log(`\nSummary:`);
 console.log(`  Confirmed moves: ${confirmed.length}`);

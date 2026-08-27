@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 const __dirname = import.meta.dirname;
 
-const LOOKBACK_SPRINTS = 3;
+const LOOKBACK_SPRINTS = 4;
 
 const GREEN = "\x1b[32m";
 const YELLOW = "\x1b[33m";
@@ -1304,29 +1304,14 @@ export function formatReport(
     ln();
     for (const p of report.engineerProposals) {
       if (p.avg_sp === null) continue;
-      const delta = Math.round(p.target_sp - p.avg_sp);
-      const direction = delta > 0 ? "Remove" : "Add";
-      const absDelta = Math.abs(delta);
       const targetSp = Math.round(p.avg_sp);
-      const roleLabel = p.role === "qe" ? "QA coverage" : "work";
 
       ln("---");
       ln();
-      ln(`**${p.name}** — ${direction} ~${absDelta} SP`);
-      const avgLabel = `${velCount}-sprint average`;
-      if (delta > 0) {
-        ln(
-          `> Hey ${p.name.split(" ")[0]}, looking at sprint planning — you're currently loaded with ${p.target_items} items / ${p.target_sp} SP, but your ${avgLabel} is ${targetSp} SP. I'd recommend trimming ~${absDelta} SP to get closer to your capacity. Target: ~${targetSp} SP of ${roleLabel}.`,
-        );
-      } else if (delta < 0) {
-        ln(
-          `> Hey ${p.name.split(" ")[0]}, you're planned for ${p.target_sp} SP / ${p.target_items} items, under your ${avgLabel} of ${targetSp} SP. You have headroom to pick up ~${absDelta} SP if capacity allows. Your call — just flagging the room.`,
-        );
-      } else {
-        ln(
-          `> Hey ${p.name.split(" ")[0]}, your ${p.target_sp} SP / ${p.target_items} items matches your ${avgLabel} of ${targetSp} SP. Load looks right.`,
-        );
-      }
+      ln(`**${p.name}**`);
+      ln(
+        `> From the planning agent, looks like your avg. SP is ${targetSp} let's plan accordingly, thanks!`,
+      );
       ln();
     }
   }

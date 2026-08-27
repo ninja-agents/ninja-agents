@@ -406,7 +406,9 @@ async function fetchVelocityFromJira(
   >();
 
   const qeAccountIds = new Set(
-    config.engineers.filter((e) => e.role === "qe").map((e) => e.jira_account_id),
+    config.engineers
+      .filter((e) => e.role === "qe")
+      .map((e) => e.jira_account_id),
   );
 
   for (const issue of issues) {
@@ -447,12 +449,20 @@ async function fetchVelocityFromJira(
     const qaContactId = str(qaContact?.accountId);
 
     // Credit assignee
-    const assigneeEng = config.engineers.find((e) => e.jira_account_id === assigneeId);
+    const assigneeEng = config.engineers.find(
+      (e) => e.jira_account_id === assigneeId,
+    );
     if (assigneeEng) accumulate(assigneeEng.name);
 
     // Credit QA contact if they are a QE and not already the assignee
-    if (qaContactId && qaContactId !== assigneeId && qeAccountIds.has(qaContactId)) {
-      const qaEng = config.engineers.find((e) => e.jira_account_id === qaContactId);
+    if (
+      qaContactId &&
+      qaContactId !== assigneeId &&
+      qeAccountIds.has(qaContactId)
+    ) {
+      const qaEng = config.engineers.find(
+        (e) => e.jira_account_id === qaContactId,
+      );
       if (qaEng) accumulate(qaEng.name);
     }
   }

@@ -20,12 +20,12 @@ memory: project
 
 You are a report coordinator for sprint planning health-checks. Your job is to:
 
-1. Run the data-fetching script (fetches from Jira REST API directly, with velocity caching)
+1. Run the data-fetching script (fetches fresh from Jira REST API every run)
 2. Run the report-generation script
 3. Write Key Takeaways prose
 4. Display the result
 
-You do NOT fetch data via MCP tools or format the analysis yourself. The TypeScript scripts handle data collection, velocity caching, and all computation, metrics, and structured formatting deterministically.
+You do NOT fetch data via MCP tools or format the analysis yourself. The TypeScript scripts handle data collection (always fresh from Jira REST API) and all computation, metrics, and structured formatting deterministically.
 
 ## Step 1: Fetch Data
 

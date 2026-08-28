@@ -1,28 +1,15 @@
 #!/usr/bin/env npx tsx
 /**
- * Fetch sprint planning data from Jira and sprint-review reports.
+ * Fetch sprint planning data from Jira REST API.
  * Populates CSV + velocity JSON for generate-sprint-planning-analysis.ts.
  */
 
-import {
-  readFileSync,
-  writeFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-} from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 const SCRIPT_DIR = import.meta.dirname;
 const AGENT_DIR = resolve(SCRIPT_DIR, "..");
 const CACHE_DIR = resolve(AGENT_DIR, "data", "cache");
-const SPRINT_REVIEW_OUTPUT_DIR = resolve(
-  AGENT_DIR,
-  "..",
-  "sprint-review",
-  "data",
-  "output",
-);
 const CONFIG_PATH = resolve(
   AGENT_DIR,
   "..",
@@ -181,6 +168,53 @@ async function jiraSearchPaginated(
   return allIssues;
 }
 
+async function fetchDoneTransitionDate(
+  config: SprintConfig,
+  issueKey: string,
+): Promise<string> {
+  const auth = jiraAuth(config);
+  const url = `https://${config.jira.cloud_id}/rest/api/3/issue/${issueKey}?expand=changelog&fields=summary`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${auth}`,
+        Accept: "application/json",
+      },
+    });
+    if (!res.ok) return "";
+    const data = (await res.json()) as {
+      changelog?: {
+        histories?: Array<{
+          created?: string;
+          items?: Array<{
+            field?: string;
+            toString?: string;
+          }>;
+        }>;
+      };
+    };
+    const doneStatuses = new Set(
+      config.statuses.done.map((s) => s.toLowerCase()),
+    );
+    const histories = data.changelog?.histories ?? [];
+    for (let i = histories.length - 1; i >= 0; i--) {
+      const h = histories[i];
+      for (const item of h.items ?? []) {
+        if (
+          item.field === "status" &&
+          item.toString &&
+          doneStatuses.has(item.toString.toLowerCase())
+        ) {
+          return (h.created ?? "").slice(0, 10);
+        }
+      }
+    }
+  } catch {
+    // fall through
+  }
+  return "";
+}
+
 // --- Sprint discovery ---
 
 async function discoverSprint(
@@ -234,130 +268,7 @@ function previousSprintNames(
   return names;
 }
 
-// --- Velocity from sprint-review reports ---
-
-function findSprintReviewReport(sprintName: string): string | null {
-  if (!existsSync(SPRINT_REVIEW_OUTPUT_DIR)) return null;
-
-  const files = readdirSync(SPRINT_REVIEW_OUTPUT_DIR).filter(
-    (f) => f.startsWith("sprint-review-") && f.endsWith(".md"),
-  );
-
-  for (const file of files.reverse()) {
-    const path = resolve(SPRINT_REVIEW_OUTPUT_DIR, file);
-    const content = readFileSync(path, "utf-8");
-    if (content.includes(sprintName)) return path;
-  }
-  return null;
-}
-
-function parseReportVelocity(
-  reportPath: string,
-  sprintName: string,
-  config: SprintConfig,
-): VelocitySummary | null {
-  const content = readFileSync(reportPath, "utf-8");
-  const lines = content.split("\n");
-
-  let totalIssues = 0;
-  let completedIssues = 0;
-  let totalSp = 0;
-  let completedSp = 0;
-
-  // Parse Sprint Summary table
-  for (const line of lines) {
-    const match = line.match(/^\|\s*(.+?)\s*\|\s*(.+?)\s*\|$/);
-    if (!match) continue;
-    const [, key, value] = match;
-    const cleanKey = key.trim();
-    const numMatch = value.trim().match(/^([\d.]+)/);
-    if (!numMatch) continue;
-    const num = parseFloat(numMatch[1]);
-
-    if (cleanKey === "Total Issues") totalIssues = num;
-    else if (cleanKey === "Completed") completedIssues = num;
-    else if (cleanKey === "Story Points Planned") totalSp = num;
-    else if (cleanKey === "Story Points Completed") completedSp = num;
-  }
-
-  if (totalIssues === 0) return null;
-
-  // Parse By Engineer table
-  const byEngineer: EngineerVelocity[] = [];
-  let inEngineerTable = false;
-  for (const line of lines) {
-    if (line.includes("| Engineer") && line.includes("| Assigned")) {
-      inEngineerTable = true;
-      continue;
-    }
-    if (inEngineerTable && line.match(/^\|[-\s|]+\|$/)) continue;
-    if (inEngineerTable && line.startsWith("|")) {
-      const cols = line
-        .split("|")
-        .map((c) => c.trim())
-        .filter((c) => c.length > 0);
-      if (cols.length >= 5) {
-        const displayName = cols[0];
-        const configEng = config.engineers.find(
-          (e) =>
-            e.name === displayName ||
-            e.jira_display_names.includes(displayName),
-        );
-        byEngineer.push({
-          name: configEng?.name ?? displayName,
-          assigned: parseInt(cols[1], 10) || 0,
-          completed: parseInt(cols[2], 10) || 0,
-          sp_completed: parseFloat(cols[4]) || 0,
-          sp_remaining: parseFloat(cols[5]) || 0,
-        });
-      }
-    } else if (inEngineerTable) {
-      inEngineerTable = false;
-    }
-  }
-
-  // Parse carryover keys from Carryover Risk section
-  const carryoverKeys: string[] = [];
-  let inCarryover = false;
-  for (const line of lines) {
-    if (line.startsWith("## Carryover Risk")) {
-      inCarryover = true;
-      continue;
-    }
-    if (inCarryover && line.startsWith("## ")) break;
-    if (inCarryover) {
-      const keyMatch = line.match(/\[([A-Z]+-\d+)/);
-      if (keyMatch) carryoverKeys.push(keyMatch[1]);
-    }
-  }
-
-  // Parse retro recommendations from "What do we want to try next?" section
-  const retroRecs: string[] = [];
-  let inRetro = false;
-  for (const line of lines) {
-    if (line.includes("What do we want to try next?")) {
-      inRetro = true;
-      continue;
-    }
-    if (inRetro && line.startsWith("## ")) break;
-    if (inRetro && line.startsWith("- ")) {
-      retroRecs.push(line.slice(2).trim());
-    }
-  }
-
-  return {
-    sprint_name: sprintName,
-    total_issues: totalIssues,
-    completed_issues: completedIssues,
-    total_sp: totalSp,
-    completed_sp: completedSp,
-    by_engineer: byEngineer,
-    carryover_keys: carryoverKeys,
-    retro_recommendations: retroRecs,
-  };
-}
-
-// --- Velocity from Jira (fallback) ---
+// --- Velocity from Jira ---
 
 async function fetchVelocityFromJira(
   config: SprintConfig,
@@ -370,8 +281,11 @@ async function fetchVelocityFromJira(
     "status",
     "assignee",
     "resolution",
+    "resolutiondate",
+    "updated",
     "issuetype",
     "priority",
+    config.jira.sprint_field,
     config.jira.story_point_field,
     "customfield_10470",
   ];
@@ -389,6 +303,23 @@ async function fetchVelocityFromJira(
       carryover_keys: [],
       retro_recommendations: [],
     };
+  }
+
+  // Extract sprint end date from issue data to scope completions
+  let sprintEndDate = "";
+  for (const issue of issues) {
+    const sprintField = issue.fields?.[config.jira.sprint_field];
+    if (!Array.isArray(sprintField)) continue;
+    const match = (sprintField as SprintObject[]).find(
+      (s) => s.name === sprintName,
+    );
+    if (match?.endDate) {
+      sprintEndDate = match.endDate.slice(0, 10);
+      break;
+    }
+  }
+  if (sprintEndDate) {
+    console.log(`    Sprint end date: ${sprintEndDate}`);
   }
 
   let totalSp = 0;
@@ -411,13 +342,50 @@ async function fetchVelocityFromJira(
       .map((e) => e.jira_account_id),
   );
 
+  // Pre-fetch changelog transition dates for done issues missing resolutiondate
+  const transitionDates = new Map<string, string>();
+  if (sprintEndDate) {
+    const needChangelog = issues.filter((issue) => {
+      const f = issue.fields ?? {};
+      const resolution = str(
+        (f.resolution as Record<string, unknown> | null)?.name,
+      );
+      const statusName = str(
+        (f.status as Record<string, unknown> | null)?.name,
+      );
+      const doneByStatus =
+        resolution === "Done" || config.statuses.done.includes(statusName);
+      return doneByStatus && !str(f.resolutiondate);
+    });
+    if (needChangelog.length > 0) {
+      console.log(
+        `    Fetching changelogs for ${needChangelog.length} issues without resolutiondate...`,
+      );
+      for (const issue of needChangelog) {
+        const date = await fetchDoneTransitionDate(config, issue.key);
+        if (date) transitionDates.set(issue.key, date);
+      }
+    }
+  }
+
   for (const issue of issues) {
     const f = issue.fields ?? {};
     const sp = (f[config.jira.story_point_field] as number) || 0;
     const resolution = str(
       (f.resolution as Record<string, unknown> | null)?.name,
     );
-    const isDone = resolution === "Done" || resolution === "Done-Errata";
+    const statusName = str((f.status as Record<string, unknown> | null)?.name);
+    const doneByStatus =
+      resolution === "Done" || config.statuses.done.includes(statusName);
+
+    let isDone = doneByStatus;
+    if (isDone && sprintEndDate) {
+      const resDate = str(f.resolutiondate).slice(0, 10);
+      const doneDate = resDate || transitionDates.get(issue.key) || "";
+      if (doneDate && doneDate > sprintEndDate) {
+        isDone = false;
+      }
+    }
 
     totalSp += sp;
     if (isDone) {
@@ -480,23 +448,6 @@ async function fetchVelocityFromJira(
     carryover_keys: [],
     retro_recommendations: [],
   };
-}
-
-// --- Velocity history management ---
-
-function loadVelocityHistory(): VelocityHistory {
-  if (!existsSync(VELOCITY_HISTORY_PATH)) return { sprints: {} };
-  try {
-    return JSON.parse(
-      readFileSync(VELOCITY_HISTORY_PATH, "utf-8"),
-    ) as VelocityHistory;
-  } catch {
-    return { sprints: {} };
-  }
-}
-
-function saveVelocityHistory(history: VelocityHistory): void {
-  writeFileSync(VELOCITY_HISTORY_PATH, JSON.stringify(history, null, 2) + "\n");
 }
 
 // --- CSV writing ---
@@ -619,34 +570,12 @@ async function main(): Promise<void> {
     `  Previous sprints to check: ${prevSprintNames.join(", ") || "none"}`,
   );
 
-  // Steps 2-4: Velocity baselines
+  // Steps 2-4: Velocity baselines (always fresh from Jira)
   console.log("\n=== Steps 2-4: Velocity Baselines ===");
-  const history = loadVelocityHistory();
+  const history: VelocityHistory = { sprints: {} };
 
   for (const prevName of prevSprintNames) {
-    if (history.sprints[prevName]) {
-      console.log(`  ${prevName}: cached`);
-      continue;
-    }
-
-    console.log(`  ${prevName}: not cached, fetching...`);
-
-    // Option A: sprint-review report
-    const reportPath = findSprintReviewReport(prevName);
-    if (reportPath) {
-      console.log(`    Found sprint-review report: ${reportPath}`);
-      const velocity = parseReportVelocity(reportPath, prevName, config);
-      if (velocity && velocity.total_issues > 0) {
-        history.sprints[prevName] = velocity;
-        console.log(
-          `    Parsed: ${velocity.completed_issues}/${velocity.total_issues} issues, ${velocity.completed_sp}/${velocity.total_sp} SP`,
-        );
-        continue;
-      }
-      console.log("    Could not parse report, falling back to Jira...");
-    }
-
-    // Option B: Jira fallback
+    console.log(`  ${prevName}: fetching from Jira...`);
     const velocity = await fetchVelocityFromJira(config, prevName);
     history.sprints[prevName] = velocity;
     console.log(
@@ -654,7 +583,7 @@ async function main(): Promise<void> {
     );
   }
 
-  saveVelocityHistory(history);
+  writeFileSync(VELOCITY_HISTORY_PATH, JSON.stringify(history, null, 2) + "\n");
   console.log("  Velocity history saved.");
 
   // Write velocity-summary.json (N-1 sprint data)

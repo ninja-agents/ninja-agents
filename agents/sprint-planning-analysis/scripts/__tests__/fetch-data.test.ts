@@ -74,113 +74,13 @@ interface SprintConfig {
   engineers: Engineer[];
 }
 
-// Re-implement parseReportVelocity locally for testing
-function parseReportVelocity(
-  content: string,
-  sprintName: string,
-  config: SprintConfig,
-): VelocitySummary | null {
-  const lines = content.split("\n");
-
-  let totalIssues = 0;
-  let completedIssues = 0;
-  let totalSp = 0;
-  let completedSp = 0;
-
-  for (const line of lines) {
-    const match = line.match(/^\|\s*(.+?)\s*\|\s*(.+?)\s*\|$/);
-    if (!match) continue;
-    const [, key, value] = match;
-    const cleanKey = key.trim();
-    const numMatch = value.trim().match(/^([\d.]+)/);
-    if (!numMatch) continue;
-    const num = parseFloat(numMatch[1]);
-
-    if (cleanKey === "Total Issues") totalIssues = num;
-    else if (cleanKey === "Completed") completedIssues = num;
-    else if (cleanKey === "Story Points Planned") totalSp = num;
-    else if (cleanKey === "Story Points Completed") completedSp = num;
-  }
-
-  if (totalIssues === 0) return null;
-
-  const byEngineer: EngineerVelocity[] = [];
-  let inEngineerTable = false;
-  for (const line of lines) {
-    if (line.includes("| Engineer") && line.includes("| Assigned")) {
-      inEngineerTable = true;
-      continue;
-    }
-    if (inEngineerTable && line.match(/^\|[-\s|]+\|$/)) continue;
-    if (inEngineerTable && line.startsWith("|")) {
-      const cols = line
-        .split("|")
-        .map((c) => c.trim())
-        .filter((c) => c.length > 0);
-      if (cols.length >= 5) {
-        const displayName = cols[0];
-        const configEng = config.engineers.find(
-          (e) =>
-            e.name === displayName ||
-            e.jira_display_names.includes(displayName),
-        );
-        byEngineer.push({
-          name: configEng?.name ?? displayName,
-          assigned: parseInt(cols[1], 10) || 0,
-          completed: parseInt(cols[2], 10) || 0,
-          sp_completed: parseFloat(cols[4]) || 0,
-          sp_remaining: parseFloat(cols[5]) || 0,
-        });
-      }
-    } else if (inEngineerTable) {
-      inEngineerTable = false;
-    }
-  }
-
-  const carryoverKeys: string[] = [];
-  let inCarryover = false;
-  for (const line of lines) {
-    if (line.startsWith("## Carryover Risk")) {
-      inCarryover = true;
-      continue;
-    }
-    if (inCarryover && line.startsWith("## ")) break;
-    if (inCarryover) {
-      const keyMatch = line.match(/\[([A-Z]+-\d+)/);
-      if (keyMatch) carryoverKeys.push(keyMatch[1]);
-    }
-  }
-
-  const retroRecs: string[] = [];
-  let inRetro = false;
-  for (const line of lines) {
-    if (line.includes("What do we want to try next?")) {
-      inRetro = true;
-      continue;
-    }
-    if (inRetro && line.startsWith("## ")) break;
-    if (inRetro && line.startsWith("- ")) {
-      retroRecs.push(line.slice(2).trim());
-    }
-  }
-
-  return {
-    sprint_name: sprintName,
-    total_issues: totalIssues,
-    completed_issues: completedIssues,
-    total_sp: totalSp,
-    completed_sp: completedSp,
-    by_engineer: byEngineer,
-    carryover_keys: carryoverKeys,
-    retro_recommendations: retroRecs,
-  };
-}
-
 // Re-implement computeVelocityFromJira logic locally
 function computeVelocityFromJira(
   issues: Array<{ key: string; fields?: Record<string, unknown> }>,
   sprintName: string,
   config: SprintConfig,
+  sprintEndDate?: string,
+  transitionDates?: Map<string, string>,
 ): VelocitySummary {
   let totalSp = 0;
   let completedSp = 0;
@@ -202,7 +102,18 @@ function computeVelocityFromJira(
     const resolution = str(
       (f.resolution as Record<string, unknown> | null)?.name,
     );
-    const isDone = resolution === "Done" || resolution === "Done-Errata";
+    const statusName = str((f.status as Record<string, unknown> | null)?.name);
+    const doneByStatus =
+      resolution === "Done" || config.statuses.done.includes(statusName);
+
+    let isDone = doneByStatus;
+    if (isDone && sprintEndDate) {
+      const resDate = str(f.resolutiondate).slice(0, 10);
+      const doneDate = resDate || transitionDates?.get(issue.key) || "";
+      if (doneDate && doneDate > sprintEndDate) {
+        isDone = false;
+      }
+    }
 
     totalSp += sp;
     if (isDone) {
@@ -384,131 +295,6 @@ describe("previousSprintNames", () => {
   });
 });
 
-// --- Report velocity parsing ---
-
-const MOCK_REPORT = `# Sprint Review — MIG-NET-Frontend Sprint 3
-
-## Sprint Summary
-
-| Metric | Value |
-|--------|-------|
-| Total Issues | 71 |
-| Completed | 58 (82%) |
-| Story Points Planned | 314.84 |
-| Story Points Completed | 228.84 (73%) |
-
-## By Engineer
-
-| Engineer | Assigned | Completed | Remaining | SP Completed | SP Remaining |
-|----------|----------|-----------|-----------|--------------|--------------|
-| Leon Kladnitsky | 34 | 30 | 4 | 92.84 | 14 |
-| Phillip Rhodes | 10 | 8 | 2 | 40 | 10 |
-| Aviv Turgeman | 20 | 15 | 5 | 60 | 20 |
-
-## Carryover Risk
-
-- [CNV-12345 - Fix network tab](https://redhat.atlassian.net/browse/CNV-12345)
-- [MTV-6789 - Update wizard](https://redhat.atlassian.net/browse/MTV-6789)
-
-## What do we want to try next?
-
-- Break down large stories before sprint planning
-- Add acceptance criteria to all stories before pulling into sprint
-- Review carryover items during standup
-`;
-
-describe("parseReportVelocity", () => {
-  it("parses Sprint Summary table", () => {
-    const result = parseReportVelocity(
-      MOCK_REPORT,
-      "MIG-NET-Frontend Sprint 3",
-      testConfig,
-    );
-    expect(result).not.toBeNull();
-    expect(result!.total_issues).toBe(71);
-    expect(result!.completed_issues).toBe(58);
-    expect(result!.total_sp).toBe(314.84);
-    expect(result!.completed_sp).toBe(228.84);
-  });
-
-  it("parses By Engineer table", () => {
-    const result = parseReportVelocity(
-      MOCK_REPORT,
-      "MIG-NET-Frontend Sprint 3",
-      testConfig,
-    );
-    expect(result!.by_engineer).toHaveLength(3);
-    expect(result!.by_engineer[0]).toEqual({
-      name: "Leon Kladnitsky",
-      assigned: 34,
-      completed: 30,
-      sp_completed: 92.84,
-      sp_remaining: 14,
-    });
-  });
-
-  it("maps display names to config names", () => {
-    const result = parseReportVelocity(
-      MOCK_REPORT,
-      "MIG-NET-Frontend Sprint 3",
-      testConfig,
-    );
-    const phillip = result!.by_engineer.find(
-      (e) => e.name === "Phillip Bailey",
-    );
-    expect(phillip).toBeDefined();
-    expect(phillip!.assigned).toBe(10);
-  });
-
-  it("extracts carryover keys", () => {
-    const result = parseReportVelocity(
-      MOCK_REPORT,
-      "MIG-NET-Frontend Sprint 3",
-      testConfig,
-    );
-    expect(result!.carryover_keys).toEqual(["CNV-12345", "MTV-6789"]);
-  });
-
-  it("extracts retro recommendations", () => {
-    const result = parseReportVelocity(
-      MOCK_REPORT,
-      "MIG-NET-Frontend Sprint 3",
-      testConfig,
-    );
-    expect(result!.retro_recommendations).toEqual([
-      "Break down large stories before sprint planning",
-      "Add acceptance criteria to all stories before pulling into sprint",
-      "Review carryover items during standup",
-    ]);
-  });
-
-  it("returns null for empty content", () => {
-    const result = parseReportVelocity("", "Sprint 3", testConfig);
-    expect(result).toBeNull();
-  });
-
-  it("returns null when no Sprint Summary table found", () => {
-    const result = parseReportVelocity(
-      "# Some report\n\nNo tables here.",
-      "Sprint 3",
-      testConfig,
-    );
-    expect(result).toBeNull();
-  });
-
-  it("handles missing carryover and retro sections", () => {
-    const minimal = `| Total Issues | 10 |
-| Completed | 8 (80%) |
-| Story Points Planned | 50 |
-| Story Points Completed | 40 (80%) |`;
-    const result = parseReportVelocity(minimal, "Sprint 3", testConfig);
-    expect(result).not.toBeNull();
-    expect(result!.carryover_keys).toEqual([]);
-    expect(result!.retro_recommendations).toEqual([]);
-    expect(result!.by_engineer).toEqual([]);
-  });
-});
-
 // --- Velocity from Jira ---
 
 describe("computeVelocityFromJira", () => {
@@ -544,6 +330,42 @@ describe("computeVelocityFromJira", () => {
     expect(result.total_issues).toBe(3);
     expect(result.completed_issues).toBe(1);
     expect(result.total_sp).toBe(16);
+    expect(result.completed_sp).toBe(5);
+  });
+
+  it("counts issues in done statuses even without resolution", () => {
+    const issues = [
+      {
+        key: "MTV-1",
+        fields: {
+          resolution: null,
+          status: { name: "Verified" },
+          customfield_10028: 2,
+          assignee: { accountId: "5e9ff58b", displayName: "Aviv Turgeman" },
+        },
+      },
+      {
+        key: "MTV-2",
+        fields: {
+          resolution: null,
+          status: { name: "Closed" },
+          customfield_10028: 3,
+          assignee: { accountId: "5e9ff58b", displayName: "Aviv Turgeman" },
+        },
+      },
+      {
+        key: "MTV-3",
+        fields: {
+          resolution: null,
+          status: { name: "In Progress" },
+          customfield_10028: 5,
+          assignee: { accountId: "5e9ff58b", displayName: "Aviv Turgeman" },
+        },
+      },
+    ];
+
+    const result = computeVelocityFromJira(issues, "Sprint 3", testConfig);
+    expect(result.completed_issues).toBe(2);
     expect(result.completed_sp).toBe(5);
   });
 
@@ -606,6 +428,103 @@ describe("computeVelocityFromJira", () => {
     const result = computeVelocityFromJira(issues, "Sprint 3", testConfig);
     expect(result.by_engineer[0].sp_remaining).toBe(8);
     expect(result.by_engineer[0].sp_completed).toBe(0);
+  });
+
+  it("excludes issues resolved after sprint end date", () => {
+    const issues = [
+      {
+        key: "CNV-1",
+        fields: {
+          resolution: { name: "Done" },
+          resolutiondate: "2026-08-10T10:00:00.000+0000",
+          customfield_10028: 5,
+          assignee: { accountId: "5e9ff58b", displayName: "Aviv" },
+        },
+      },
+      {
+        key: "CNV-2",
+        fields: {
+          resolution: { name: "Done" },
+          resolutiondate: "2026-08-20T10:00:00.000+0000",
+          customfield_10028: 3,
+          assignee: { accountId: "5e9ff58b", displayName: "Aviv" },
+        },
+      },
+    ];
+
+    const result = computeVelocityFromJira(
+      issues,
+      "Sprint 3",
+      testConfig,
+      "2026-08-15",
+    );
+    expect(result.completed_issues).toBe(1);
+    expect(result.completed_sp).toBe(5);
+  });
+
+  it("uses changelog transition date when resolutiondate is null", () => {
+    const issues = [
+      {
+        key: "CNV-1",
+        fields: {
+          resolution: null,
+          status: { name: "Verified" },
+          customfield_10028: 5,
+          assignee: { accountId: "5e9ff58b", displayName: "Aviv" },
+        },
+      },
+      {
+        key: "CNV-2",
+        fields: {
+          resolution: null,
+          status: { name: "Closed" },
+          customfield_10028: 3,
+          assignee: { accountId: "5e9ff58b", displayName: "Aviv" },
+        },
+      },
+    ];
+
+    const transitionDates = new Map([
+      ["CNV-1", "2026-08-10"],
+      ["CNV-2", "2026-08-20"],
+    ]);
+
+    const result = computeVelocityFromJira(
+      issues,
+      "Sprint 3",
+      testConfig,
+      "2026-08-15",
+      transitionDates,
+    );
+    expect(result.completed_issues).toBe(1);
+    expect(result.completed_sp).toBe(5);
+  });
+
+  it("counts all done issues when no sprint end date provided", () => {
+    const issues = [
+      {
+        key: "CNV-1",
+        fields: {
+          resolution: { name: "Done" },
+          resolutiondate: "2026-08-10T10:00:00.000+0000",
+          customfield_10028: 5,
+          assignee: { accountId: "5e9ff58b", displayName: "Aviv" },
+        },
+      },
+      {
+        key: "CNV-2",
+        fields: {
+          resolution: { name: "Done" },
+          resolutiondate: "2026-08-20T10:00:00.000+0000",
+          customfield_10028: 3,
+          assignee: { accountId: "5e9ff58b", displayName: "Aviv" },
+        },
+      },
+    ];
+
+    const result = computeVelocityFromJira(issues, "Sprint 3", testConfig);
+    expect(result.completed_issues).toBe(2);
+    expect(result.completed_sp).toBe(8);
   });
 });
 

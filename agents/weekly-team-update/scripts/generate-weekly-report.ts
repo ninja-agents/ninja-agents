@@ -46,6 +46,7 @@ export interface JiraItem {
   url: string;
   role: "assignee" | "qa_contact";
   sprint_name: string;
+  resolved_by: string;
   nested_prs: PRItem[];
   customer_cases: CustomerCase[];
 }
@@ -85,6 +86,7 @@ interface TeamConfig {
     jira_display_names: string[];
     role: string;
   }[];
+  bot_accounts?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -391,6 +393,7 @@ export function loadJiraTickets(
       url,
       role,
       sprint_name: r.sprint_name ?? "",
+      resolved_by: r.resolved_by ?? "",
       nested_prs: [],
       customer_cases: [],
     });
@@ -524,6 +527,24 @@ export function filterCompletedJira(
       filterDate <= windowEnd
     );
   });
+}
+
+export function filterBotClosedTickets(
+  tickets: JiraItem[],
+  botAccounts: string[],
+): { kept: JiraItem[]; removed: JiraItem[] } {
+  if (botAccounts.length === 0) return { kept: tickets, removed: [] };
+  const botNames = new Set(botAccounts.map((n) => n.toLowerCase()));
+  const kept: JiraItem[] = [];
+  const removed: JiraItem[] = [];
+  for (const t of tickets) {
+    if (t.resolved_by && botNames.has(t.resolved_by.toLowerCase())) {
+      removed.push(t);
+    } else {
+      kept.push(t);
+    }
+  }
+  return { kept, removed };
 }
 
 export function filterGithubSyncedTickets(
@@ -1414,11 +1435,20 @@ export function main(argv: string[] = process.argv): void {
   const completedPrs = filterCompletedPrs(allPrs, windowStart, windowEnd);
   const prCutoff = new Date(reportDate.getTime() - 30 * 24 * 60 * 60 * 1000);
   const openPrs = filterOpenPrs(allPrs, prCutoff);
-  const completedJira = filterCompletedJira(
+  const completedJiraAll = filterCompletedJira(
     jiraTickets,
     windowStart,
     windowEnd,
   );
+  const { kept: completedJira, removed: botClosed } = filterBotClosedTickets(
+    completedJiraAll,
+    config.bot_accounts ?? [],
+  );
+  if (botClosed.length > 0) {
+    console.log(
+      `  Excluded ${botClosed.length} bot-closed ticket(s): ${botClosed.map((t) => t.key).join(", ")}`,
+    );
+  }
   const sprintPattern = config.sprint_name_pattern
     ? new RegExp(config.sprint_name_pattern)
     : undefined;

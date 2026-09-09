@@ -65,6 +65,7 @@ interface JiraTicket {
   qa_contact_id: string;
   qa_contact_name: string;
   sprint_name: string;
+  resolved_by: string;
   issuelinks: JiraIssueLink[];
 }
 
@@ -187,6 +188,68 @@ async function jiraRequest(
   }
 }
 
+async function jiraGetIssue(
+  key: string,
+  expand: string,
+  fields: string[],
+): Promise<Record<string, unknown>> {
+  const auth = Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString(
+    "base64",
+  );
+  const base = `https://${jiraConfig.cloud_id}/rest/api/3/issue/${key}`;
+  const params = new URLSearchParams({
+    expand,
+    fields: fields.join(","),
+  });
+  const url = `${base}?${params}`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${auth}`,
+        Accept: "application/json",
+      },
+    });
+    if (!res.ok) {
+      const body = (await res.text()).slice(0, 200);
+      console.error(`  Jira issue error ${res.status} for ${key}: ${body}`);
+      return {};
+    }
+    return (await res.json()) as Record<string, unknown>;
+  } catch (e) {
+    console.error(`  Jira issue error for ${key}: ${String(e)}`);
+    return {};
+  }
+}
+
+interface ChangelogHistory {
+  created?: string;
+  author?: { displayName?: string; accountId?: string };
+  items?: Array<{
+    field?: string;
+    toString?: string;
+  }>;
+}
+
+function extractResolvedBy(
+  changelog: { histories?: ChangelogHistory[] } | undefined,
+): string {
+  if (!changelog?.histories) return "";
+  const doneStatuses = new Set(["done", "closed"]);
+  for (let i = changelog.histories.length - 1; i >= 0; i--) {
+    const history = changelog.histories[i];
+    for (const item of history.items ?? []) {
+      if (
+        item.field === "status" &&
+        item.toString &&
+        doneStatuses.has(item.toString.toLowerCase())
+      ) {
+        return history.author?.displayName ?? "";
+      }
+    }
+  }
+  return "";
+}
+
 // --- CSV helpers ---
 
 function str(value: unknown): string {
@@ -262,6 +325,7 @@ function parseJiraIssue(
     qa_contact_id: str(qaContact?.accountId),
     qa_contact_name: str(qaContact?.displayName),
     sprint_name: sprintName || fallbackSprint || "",
+    resolved_by: "",
     issuelinks: (f.issuelinks ?? []) as JiraIssueLink[],
   };
 }
@@ -442,8 +506,30 @@ async function main(): Promise<void> {
 
   console.log(`  Final Jira ticket count: ${jiraTickets.size}`);
 
+  // Fetch changelog for resolved tickets to determine who resolved them
+  const resolvedKeys = [...jiraTickets.entries()]
+    .filter(([, t]) => t.resolution === "Done")
+    .map(([k]) => k);
+  console.log(
+    `\n=== Fetching Changelogs for ${resolvedKeys.length} Resolved Tickets ===`,
+  );
+  for (const key of resolvedKeys) {
+    const data = await jiraGetIssue(key, "changelog", ["summary"]);
+    const changelog = data.changelog as
+      | { histories?: ChangelogHistory[] }
+      | undefined;
+    const resolvedBy = extractResolvedBy(changelog);
+    const ticket = jiraTickets.get(key);
+    if (ticket) {
+      ticket.resolved_by = resolvedBy;
+    }
+    if (resolvedBy) {
+      console.log(`  ${key}: resolved by "${resolvedBy}"`);
+    }
+  }
+
   const jiraCsvLines = [
-    "key,summary,status,resolution,resolutiondate,statuscategorychangedate,issuetype,priority,assignee_id,assignee_name,qa_contact_id,qa_contact_name,sprint_name",
+    "key,summary,status,resolution,resolutiondate,statuscategorychangedate,issuetype,priority,assignee_id,assignee_name,qa_contact_id,qa_contact_name,sprint_name,resolved_by",
   ];
   for (const ticket of jiraTickets.values()) {
     jiraCsvLines.push(
@@ -452,7 +538,8 @@ async function main(): Promise<void> {
         `${ticket.statuscategorychangedate},${ticket.issuetype},` +
         `${ticket.priority},${ticket.assignee_id},` +
         `${csvEscape(ticket.assignee_name)},${ticket.qa_contact_id},` +
-        `${csvEscape(ticket.qa_contact_name)},${ticket.sprint_name}`,
+        `${csvEscape(ticket.qa_contact_name)},${ticket.sprint_name},` +
+        `${csvEscape(ticket.resolved_by)}`,
     );
   }
   writeFileSync(

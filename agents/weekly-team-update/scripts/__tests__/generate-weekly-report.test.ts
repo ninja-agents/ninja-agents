@@ -26,6 +26,7 @@ import {
   filterCompletedPrs,
   filterOpenPrs,
   filterCompletedJira,
+  filterBotClosedTickets,
   filterGithubSyncedTickets,
   filterInProgressJira,
   extractTicketIds,
@@ -764,7 +765,7 @@ describe("determineProduct", () => {
     const prefixToProduct = buildPrefixToProduct(config!);
     const ocpbugsRe = buildOcpbugsSummaryRepoRe(config!);
     const ticketIdRe = buildTicketIdRe(config!);
-    const ticket = makeJira({ key: "CNV-123", summary: "A ticket" });
+    const ticket = makeJira({ key: "MTV-123", summary: "A ticket" });
     expect(
       determineProduct(
         ticket,
@@ -774,7 +775,7 @@ describe("determineProduct", () => {
         ocpbugsRe,
         ticketIdRe,
       ),
-    ).toBe("CNV");
+    ).toBe("MTV");
   });
 
   it.skipIf(!config)("maps OCPBUGS by repo name in summary", () => {
@@ -1446,9 +1447,9 @@ describe("config helpers", () => {
   it.skipIf(!config)("buildTicketIdRe matches known prefixes", () => {
     const re = buildTicketIdRe(config!);
     re.lastIndex = 0;
-    const m = re.exec("CNV-12345");
+    const m = re.exec("MTV-12345");
     expect(m).not.toBeNull();
-    expect(m![1]).toBe("CNV-12345");
+    expect(m![1]).toBe("MTV-12345");
   });
 
   it.skipIf(!config)("buildRepoToProduct maps repos", () => {
@@ -1499,10 +1500,14 @@ describe("end-to-end", () => {
         reportDate.getTime() - 30 * 24 * 60 * 60 * 1000,
       );
       const openPrs = filterOpenPrs(allPrs, prCutoff);
-      const completedJira = filterCompletedJira(
+      const completedJiraAll = filterCompletedJira(
         jiraTickets,
         windowStart,
         windowEnd,
+      );
+      const { kept: completedJira } = filterBotClosedTickets(
+        completedJiraAll,
+        config!.bot_accounts ?? [],
       );
       const sprintPattern = config!.sprint_name_pattern
         ? new RegExp(config!.sprint_name_pattern)

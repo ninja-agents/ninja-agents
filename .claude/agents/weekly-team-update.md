@@ -81,45 +81,52 @@ The script outputs a placeholder in the Summary section. Replace it with one ric
 
 ### Summary Format
 
-Write one `### ProductName` sub-heading per configured product, always — every product gets a paragraph regardless of volume. Each product gets one rich paragraph covering:
-
-- What shipped this week (outcomes, not ticket IDs)
-- What's actively in progress
-- Any CVEs fixed, blockers, or notable items
-- Any customer-impacting bugs — name the affected customers (from the "Customer-impacting" lines in the Highlight Context)
+Write one `### ProductName` sub-heading per configured product, always — every product gets a bullet list regardless of volume. Use one bullet per logical item (a shipped feature, a bug fix, a CVE remediation, an in-progress item, a customer-impacting callout).
 
 **Rules:**
 
-- **Every configured product gets a paragraph, always.** If a product had no completed work, describe what is actively in progress. If it was quiet, note that briefly.
+- **Every configured product gets a sub-heading with bullets, always.** If a product had no completed work, list what is actively in progress. If it was quiet, note that briefly in a single bullet.
 - Active voice, past tense for completed work ("Shipped", "Fixed", "Delivered")
-- Present tense for in-progress ("Storage access mode selection is in review")
+- Present tense for in-progress items — prefix with "In progress:" ("In progress: storage access mode selection is in review")
 - Quantify when possible ("8 bug fixes", "two features")
-- Do NOT include markdown links or Jira ticket IDs — the detailed sections have those
+- Do NOT include markdown links or Jira ticket IDs — the detailed sections have those. **Exception:** resolved customer-impacting bugs must include the Jira key as a markdown link (see below)
 - Every claim must trace to an item in the report — never invent work
-- Be thorough — one substantive paragraph per product
-- **Customer-impacting bugs must be called out** with the customer names. Use the format: "Three customer-impacting bugs are tracked: a React error affecting Acme Corp and Globex Inc, a NetworkPolicy creation error affecting Contoso Ltd, and a localnet NAD builder issue affecting Initech and Widget Co."
+- Group related items into a single bullet when natural (e.g. multiple CVEs in one bullet, multiple related bug fixes in one bullet)
+- **CVE IDs must always be included** when mentioning CVE remediations — extract them from the "Notable" lines in the Highlight Context (e.g. "Remediated CVE-2026-13676 and CVE-2026-13149 on the 5.0 branch")
+- **Customer-impacting bugs must be called out** with the customer names. For **in-progress** bugs: "Customer-impacting: a React error affecting Acme Corp and Globex Inc". For **resolved** bugs, include the Jira key as a markdown link using data from the "Resolved customer-impacting" lines in the Highlight Context: "Resolved [OCPBUGS-12345](https://issues.redhat.com/browse/OCPBUGS-12345) — a React rendering error affecting LEE KUM KEE and IBM"
 
 **Good example:**
 
 ```
 ### MTV (Migration Toolkit for Virtualization)
-Shipped storage access mode selection, LUKS secret specification, migration alerts integration, and ASAP cutover option. Added clustered Hyper-V and CSV support with a backport to 2.12. Migrated to React 18 and React Router 7. Six patches covering bug fixes and UI improvements are in review.
+- Shipped storage access mode selection, LUKS secret specification, migration alerts integration, and ASAP cutover option
+- Added clustered Hyper-V and CSV support with a backport to 2.12
+- Migrated to React 18 and React Router 7
+- In progress: six patches covering bug fixes and UI improvements are in review
 
 ### MTA (Migration Toolkit for Applications)
-Fixed branding regressions including logo alignment and title overflow, with hub-side login page and favicon support shipped. Two merged PRs landed this week; modal and DualListSelector PF5 migration, Dockerfile improvements, and lint cleanup continue in progress.
+- Fixed branding regressions including logo alignment and title overflow
+- Shipped hub-side login page and favicon support
+- In progress: modal and DualListSelector PF5 migration, Dockerfile improvements, and lint cleanup
 
 ### CNV (Container-Native Virtualization)
-No features shipped this week — the team completed quarterly connection sessions and course work. Hot-cluster CI infrastructure setup for networking and nmstate console plugins is underway, along with VM network details with clickable NAD/UDN/CUDN links.
+- Completed quarterly connection sessions and course work
+- In progress: hot-cluster CI infrastructure setup for networking and nmstate console plugins
+- In progress: VM network details with clickable NAD/UDN/CUDN links
 
 ### Networking Console Plugins
-Remediated CVE-2026-13676 (fast-uri security bypass) and CVE-2026-13149 (brace-expansion DoS) on the 5.0 branch with backports across four release streams. Completed 5.0 ART image update. VM tab for NAD/UDN/CUDN detail pages is in progress.
+- Remediated CVE-2026-13676 (fast-uri security bypass) and CVE-2026-13149 (brace-expansion DoS) on the 5.0 branch with backports across four release streams
+- Completed 5.0 ART image update
+- Resolved [OCPBUGS-85606](https://issues.redhat.com/browse/OCPBUGS-85606) — a React rendering error affecting LEE KUM KEE, TOKAI CORP., HITACHI, and IBM
+- In progress: VM tab for NAD/UDN/CUDN detail pages
+- Customer-impacting: a network config policy tab error affecting IBM
 ```
 
 ### Self-check before proceeding:
 
-- Every configured product has a `### ProductName` sub-heading with a paragraph
+- Every configured product has a `### ProductName` sub-heading with a bullet list
 - All sentences use active voice
-- No markdown links or ticket IDs in the summary
+- No markdown links or ticket IDs in the summary (except resolved customer bugs)
 - Every fact matches an item in the report
 - Placeholder marker is removed from the file
 

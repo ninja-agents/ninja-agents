@@ -1282,6 +1282,7 @@ describe("formatHighlightContext", () => {
       features: new Map([["PROJ", ["feature 1", "feature 2"]]]),
       bugs: new Map([["TEAM", ["bug fix 1"]]]),
       customerTickets: new Map(),
+      resolvedCustomerTickets: new Map(),
     };
     const output = formatHighlightContext(data);
     expect(output).toContain(
@@ -1299,6 +1300,7 @@ describe("formatHighlightContext", () => {
       features: new Map<string, string[]>(),
       bugs: new Map<string, string[]>(),
       customerTickets: new Map(),
+      resolvedCustomerTickets: new Map(),
     };
     const output = formatHighlightContext(data);
     expect(output).toBe("--- Highlight Context ---");
@@ -1311,6 +1313,7 @@ describe("formatHighlightContext", () => {
       features: new Map<string, string[]>(),
       bugs: new Map<string, string[]>(),
       customerTickets: new Map(),
+      resolvedCustomerTickets: new Map(),
     };
     const sections = new Map<string, Map<string, EngineerBlock>>([
       [
@@ -1378,6 +1381,7 @@ describe("formatHighlightContext", () => {
       features: new Map<string, string[]>(),
       bugs: new Map<string, string[]>(),
       customerTickets: new Map(),
+      resolvedCustomerTickets: new Map(),
     };
     const sections = new Map<string, Map<string, EngineerBlock>>([
       [

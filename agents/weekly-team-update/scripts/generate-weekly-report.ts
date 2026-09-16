@@ -1113,6 +1113,8 @@ function extractCveLibs(texts: string[]): string[] {
 }
 
 export interface CustomerHighlight {
+  key: string;
+  url: string;
   summary: string;
   customers: string[];
 }
@@ -1123,6 +1125,7 @@ export interface HighlightData {
   features: Map<string, string[]>;
   bugs: Map<string, string[]>;
   customerTickets: Map<string, CustomerHighlight[]>;
+  resolvedCustomerTickets: Map<string, CustomerHighlight[]>;
 }
 
 export function computeHighlightData(
@@ -1135,6 +1138,7 @@ export function computeHighlightData(
   const features = new Map<string, string[]>();
   const bugs = new Map<string, string[]>();
   const customerTickets = new Map<string, CustomerHighlight[]>();
+  const resolvedCustomerTickets = new Map<string, CustomerHighlight[]>();
 
   for (const [pk, engineers] of sections) {
     for (const [, block] of engineers) {
@@ -1147,6 +1151,8 @@ export function computeHighlightData(
             ),
           ];
           customerTickets.get(pk)!.push({
+            key: t.key,
+            url: t.url,
             summary: cleanSummary(t.summary),
             customers: names,
           });
@@ -1154,6 +1160,22 @@ export function computeHighlightData(
       }
 
       for (const t of block.completed_tickets) {
+        if (t.customer_cases.length > 0) {
+          if (!resolvedCustomerTickets.has(pk))
+            resolvedCustomerTickets.set(pk, []);
+          const names = [
+            ...new Set(
+              t.customer_cases.map((c) => c.customer_name || c.case_id),
+            ),
+          ];
+          resolvedCustomerTickets.get(pk)!.push({
+            key: t.key,
+            url: t.url,
+            summary: cleanSummary(t.summary),
+            customers: names,
+          });
+        }
+
         const isTest = /^\[(?:TIER|POST|STAGE)/i.test(t.summary);
         const isCve = t.summary.toUpperCase().includes("CVE");
         if (isTest) {
@@ -1203,6 +1225,7 @@ export function computeHighlightData(
     features,
     bugs,
     customerTickets,
+    resolvedCustomerTickets,
   };
 }
 
@@ -1283,6 +1306,17 @@ export function formatHighlightContext(
       );
       lines.push(
         `Customer-impacting (${custEntries.length}): ${parts.join("; ")}`,
+      );
+    }
+
+    const resolvedCustEntries = data.resolvedCustomerTickets.get(pk);
+    if (resolvedCustEntries && resolvedCustEntries.length > 0) {
+      const parts = resolvedCustEntries.map(
+        (e) =>
+          `[${e.key}](${e.url}) ${e.summary} (${e.customers.join(", ")})`,
+      );
+      lines.push(
+        `Resolved customer-impacting (${resolvedCustEntries.length}): ${parts.join("; ")}`,
       );
     }
   }

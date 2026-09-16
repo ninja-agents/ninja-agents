@@ -8,6 +8,10 @@
     "base_url": "https://your-site.atlassian.net/browse",
     "projects": ["Project Alpha", "Project Beta"]
   },
+  "backport": {
+    "supported_versions": ["4.19.z", "4.20.z", "4.21.z"],
+    "main_target_version": "5.0.0"
+  },
   "products": [
     {
       "key": "ALPHA",

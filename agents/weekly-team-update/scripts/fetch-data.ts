@@ -66,14 +66,20 @@ interface JiraTicket {
   qa_contact_name: string;
   sprint_name: string;
   resolved_by: string;
+  affected_versions: string;
+  fix_versions: string;
   issuelinks: JiraIssueLink[];
 }
 
 interface JiraIssueLink {
-  type?: { name?: string };
+  type?: { name?: string; inward?: string };
   outwardIssue?: {
     key?: string;
-    fields?: { summary?: string };
+    fields?: { summary?: string; status?: { statusCategory?: { key?: string } } };
+  };
+  inwardIssue?: {
+    key?: string;
+    fields?: { summary?: string; status?: { statusCategory?: { key?: string } } };
   };
 }
 
@@ -82,6 +88,13 @@ interface CustomerCase {
   case_id: string;
   case_url: string;
   customer_name: string;
+}
+
+interface CloneLink {
+  parent_key: string;
+  clone_key: string;
+  clone_status_category: string;
+  clone_fix_versions: string;
 }
 
 interface GitLabMr {
@@ -311,6 +324,17 @@ function parseJiraIssue(
   const qaContact = (f.customfield_10470 ?? {}) as Record<string, unknown>;
   const sprintName = extractSprintName(f.customfield_10020);
 
+  const versionsArr = Array.isArray(f.versions)
+    ? (f.versions as Array<Record<string, unknown>>)
+        .map((v) => str(v.name))
+        .filter(Boolean)
+    : [];
+  const fixVersionsArr = Array.isArray(f.fixVersions)
+    ? (f.fixVersions as Array<Record<string, unknown>>)
+        .map((v) => str(v.name))
+        .filter(Boolean)
+    : [];
+
   return {
     key: issue.key,
     summary: str(f.summary),
@@ -326,6 +350,8 @@ function parseJiraIssue(
     qa_contact_name: str(qaContact?.displayName),
     sprint_name: sprintName || fallbackSprint || "",
     resolved_by: "",
+    affected_versions: versionsArr.join("|"),
+    fix_versions: fixVersionsArr.join("|"),
     issuelinks: (f.issuelinks ?? []) as JiraIssueLink[],
   };
 }
@@ -458,6 +484,8 @@ async function main(): Promise<void> {
     "customfield_10470",
     "customfield_10020",
     "issuelinks",
+    "versions",
+    "fixVersions",
   ];
 
   for (const eng of engineers) {
@@ -529,7 +557,7 @@ async function main(): Promise<void> {
   }
 
   const jiraCsvLines = [
-    "key,summary,status,resolution,resolutiondate,statuscategorychangedate,issuetype,priority,assignee_id,assignee_name,qa_contact_id,qa_contact_name,sprint_name,resolved_by",
+    "key,summary,status,resolution,resolutiondate,statuscategorychangedate,issuetype,priority,assignee_id,assignee_name,qa_contact_id,qa_contact_name,sprint_name,resolved_by,affected_versions,fix_versions",
   ];
   for (const ticket of jiraTickets.values()) {
     jiraCsvLines.push(
@@ -539,7 +567,8 @@ async function main(): Promise<void> {
         `${ticket.priority},${ticket.assignee_id},` +
         `${csvEscape(ticket.assignee_name)},${ticket.qa_contact_id},` +
         `${csvEscape(ticket.qa_contact_name)},${ticket.sprint_name},` +
-        `${csvEscape(ticket.resolved_by)}`,
+        `${csvEscape(ticket.resolved_by)},${csvEscape(ticket.affected_versions)},` +
+        `${csvEscape(ticket.fix_versions)}`,
     );
   }
   writeFileSync(
@@ -584,6 +613,67 @@ async function main(): Promise<void> {
   writeFileSync(
     resolve(CACHE_DIR, "customer-cases.csv"),
     customerCsvLines.join("\n") + "\n",
+  );
+
+  // --- CLONE LINKS (for backport detection) ---
+
+  console.log("\n=== Extracting Clone Links for Backport Detection ===");
+  const cloneLinks: CloneLink[] = [];
+  const cloneKeysToFetch = new Set<string>();
+
+  for (const [key, ticket] of jiraTickets) {
+    if (ticket.issuetype !== "Bug") continue;
+    if (!ticket.affected_versions) continue;
+    for (const link of ticket.issuelinks) {
+      if (link.type?.name !== "Cloners") continue;
+      const clone = link.inwardIssue ?? link.outwardIssue;
+      if (!clone?.key) continue;
+      const statusCategory =
+        clone.fields?.status?.statusCategory?.key ?? "";
+      cloneLinks.push({
+        parent_key: key,
+        clone_key: clone.key,
+        clone_status_category: statusCategory,
+        clone_fix_versions: "",
+      });
+      cloneKeysToFetch.add(clone.key);
+    }
+  }
+
+  if (cloneKeysToFetch.size > 0) {
+    console.log(
+      `  Found ${cloneLinks.length} clone links, fetching fix versions for ${cloneKeysToFetch.size} clones...`,
+    );
+    const cloneFixVersions = new Map<string, string>();
+    for (const cloneKey of cloneKeysToFetch) {
+      const data = await jiraGetIssue(cloneKey, "", ["fixVersions"]);
+      const fields = (data.fields ?? {}) as Record<string, unknown>;
+      const fv = Array.isArray(fields.fixVersions)
+        ? (fields.fixVersions as Array<Record<string, unknown>>)
+            .map((v) => str(v.name))
+            .filter(Boolean)
+            .join("|")
+        : "";
+      cloneFixVersions.set(cloneKey, fv);
+    }
+    for (const cl of cloneLinks) {
+      cl.clone_fix_versions = cloneFixVersions.get(cl.clone_key) ?? "";
+    }
+  } else {
+    console.log("  No clone links found for bugs with affected versions");
+  }
+
+  const cloneCsvLines = [
+    "parent_key,clone_key,clone_status_category,clone_fix_versions",
+  ];
+  for (const cl of cloneLinks) {
+    cloneCsvLines.push(
+      `${cl.parent_key},${cl.clone_key},${cl.clone_status_category},${csvEscape(cl.clone_fix_versions)}`,
+    );
+  }
+  writeFileSync(
+    resolve(CACHE_DIR, "clone-links.csv"),
+    cloneCsvLines.join("\n") + "\n",
   );
 
   // --- GITLAB ---
@@ -678,6 +768,7 @@ async function main(): Promise<void> {
   console.log(`Jira Tickets: ${jiraTickets.size}`);
   console.log(`GitLab MRs: ${gitlabMrs.length}`);
   console.log(`Customer Accounts: ${customerCases.length}`);
+  console.log(`Clone Links: ${cloneLinks.length}`);
   console.log(`Active Sprint: ${activeSprintName || "not found"}`);
   console.log(`Cache saved to: ${CACHE_DIR}`);
 }

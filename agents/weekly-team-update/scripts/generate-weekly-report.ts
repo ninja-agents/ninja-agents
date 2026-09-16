@@ -25,6 +25,8 @@ export interface PRItem {
   source: "github" | "gitlab";
   issue_refs: string[];
   ticket_id?: string;
+  customer_cases: CustomerCase[];
+  backport_needed: string[];
 }
 
 export interface CustomerCase {
@@ -47,8 +49,11 @@ export interface JiraItem {
   role: "assignee" | "qa_contact";
   sprint_name: string;
   resolved_by: string;
+  affected_versions: string[];
+  fix_versions: string[];
   nested_prs: PRItem[];
   customer_cases: CustomerCase[];
+  backport_needed: string[];
 }
 
 export interface EngineerBlock {
@@ -59,10 +64,21 @@ export interface EngineerBlock {
   in_progress_prs: PRItem[];
 }
 
+export interface CloneLink {
+  parent_key: string;
+  clone_key: string;
+  clone_status_category: string;
+  clone_fix_versions: string[];
+}
+
 interface TeamConfig {
   team_name: string;
   report_title: string;
   sprint_name_pattern?: string;
+  backport?: {
+    supported_versions: string[];
+    main_target_version: string;
+  };
   jira: {
     cloud_id: string;
     team_filter_id: string;
@@ -302,6 +318,8 @@ export function loadGithubPrs(cacheDir: string): PRItem[] {
         url: r.html_url ?? "",
         source: "github",
         issue_refs: refs,
+        customer_cases: [],
+        backport_needed: [],
       });
     } catch (e: unknown) {
       process.stderr.write(
@@ -328,6 +346,8 @@ export function loadGitlabMrs(cacheDir: string): PRItem[] {
         url: r.web_url ?? "",
         source: "gitlab",
         issue_refs: [],
+        customer_cases: [],
+        backport_needed: [],
       });
     } catch (e: unknown) {
       process.stderr.write(
@@ -394,8 +414,13 @@ export function loadJiraTickets(
       role,
       sprint_name: r.sprint_name ?? "",
       resolved_by: r.resolved_by ?? "",
+      affected_versions: (r.affected_versions ?? "")
+        .split("|")
+        .filter(Boolean),
+      fix_versions: (r.fix_versions ?? "").split("|").filter(Boolean),
       nested_prs: [],
       customer_cases: [],
+      backport_needed: [],
     });
   }
   return items;
@@ -430,6 +455,30 @@ export function mergeCustomerCases(
     const cc = cases.get(t.key);
     if (cc) t.customer_cases = cc;
   }
+}
+
+export function loadCloneLinks(
+  cacheDir: string,
+): Map<string, CloneLink[]> {
+  const rows = loadCsvFile(resolve(cacheDir, "clone-links.csv"));
+  const map = new Map<string, CloneLink[]>();
+  for (const r of rows) {
+    const parentKey = r.parent_key ?? "";
+    if (!parentKey) continue;
+    const entry: CloneLink = {
+      parent_key: parentKey,
+      clone_key: r.clone_key ?? "",
+      clone_status_category: r.clone_status_category ?? "",
+      clone_fix_versions: (r.clone_fix_versions ?? "")
+        .split("|")
+        .filter(Boolean),
+    };
+    if (!entry.clone_key) continue;
+    const list = map.get(parentKey) ?? [];
+    list.push(entry);
+    map.set(parentKey, list);
+  }
+  return map;
 }
 
 // ---------------------------------------------------------------------------
@@ -757,6 +806,146 @@ export function shouldConsolidateTestTasks(tickets: JiraItem[]): {
 }
 
 // ---------------------------------------------------------------------------
+// Backport detection
+// ---------------------------------------------------------------------------
+
+export function normalizeVersionStream(version: string): string {
+  const v = version.replace(/^openshift-/i, "").trim();
+  if (/^\d+\.\d+\.z$/.test(v)) return v;
+  const m = v.match(/^(\d+\.\d+)(?:\.\d+)?$/);
+  if (m) return `${m[1]}.z`;
+  return "";
+}
+
+export function parseVersionStream(stream: string): [number, number] | null {
+  const m = stream.match(/^(\d+)\.(\d+)\.z$/);
+  if (!m) return null;
+  return [parseInt(m[1], 10), parseInt(m[2], 10)];
+}
+
+export function compareVersionStreams(a: string, b: string): number {
+  const pa = parseVersionStream(a);
+  const pb = parseVersionStream(b);
+  if (!pa || !pb) return 0;
+  if (pa[0] !== pb[0]) return pa[0] - pb[0];
+  return pa[1] - pb[1];
+}
+
+export function extractReleaseBranchFromTitle(title: string): string[] {
+  const streams: string[] = [];
+  const re = /\[release-(\d+\.\d+)\]/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(title)) !== null) {
+    streams.push(`${m[1]}.z`);
+  }
+  return streams;
+}
+
+export function computeBackportNeeds(
+  ticket: JiraItem,
+  cloneLinks: Map<string, CloneLink[]>,
+  supportedVersions: string[],
+  mainTargetVersion: string,
+): string[] {
+  if (ticket.issuetype !== "Bug") return [];
+  if (ticket.affected_versions.length === 0) return [];
+
+  const affectedStreams = new Set(
+    ticket.affected_versions.map(normalizeVersionStream).filter(Boolean),
+  );
+  if (affectedStreams.size === 0) return [];
+
+  const coveredStreams = new Set<string>();
+
+  // Clone bugs with done status category cover their fix version streams
+  const clones = cloneLinks.get(ticket.key) ?? [];
+  for (const clone of clones) {
+    if (clone.clone_status_category === "done") {
+      for (const fv of clone.clone_fix_versions) {
+        const stream = normalizeVersionStream(fv);
+        if (stream) coveredStreams.add(stream);
+      }
+    }
+  }
+
+  // Nested PRs with [release-X.Y] in title cover those streams
+  for (const pr of ticket.nested_prs) {
+    for (const stream of extractReleaseBranchFromTitle(pr.title)) {
+      coveredStreams.add(stream);
+    }
+  }
+
+  // A main-branch PR (no release prefix) covers the main target version
+  const mainStream = normalizeVersionStream(mainTargetVersion);
+  const hasMainPr = ticket.nested_prs.some(
+    (pr) => extractReleaseBranchFromTitle(pr.title).length === 0,
+  );
+  if (hasMainPr && mainStream) {
+    coveredStreams.add(mainStream);
+  }
+
+  const affectedSorted = [...affectedStreams].sort(compareVersionStreams);
+  const lowestAffected = affectedSorted[0];
+
+  const needed: string[] = [];
+  for (const sv of supportedVersions) {
+    if (compareVersionStreams(sv, lowestAffected) < 0) continue;
+    if (coveredStreams.has(sv)) continue;
+    needed.push(sv);
+  }
+
+  return needed.sort(compareVersionStreams);
+}
+
+export function applyBackportDetection(
+  tickets: JiraItem[],
+  cloneLinks: Map<string, CloneLink[]>,
+  config: TeamConfig,
+): void {
+  const backportConfig = config.backport;
+  if (!backportConfig) return;
+
+  for (const t of tickets) {
+    t.backport_needed = computeBackportNeeds(
+      t,
+      cloneLinks,
+      backportConfig.supported_versions,
+      backportConfig.main_target_version,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Customer case & backport propagation to orphan PRs
+// ---------------------------------------------------------------------------
+
+export function propagateToOrphanPrs(
+  orphanPrs: PRItem[],
+  allTickets: JiraItem[],
+  ticketIdRe: RegExp,
+): void {
+  const ticketMap = new Map(allTickets.map((t) => [t.key, t]));
+
+  for (const pr of orphanPrs) {
+    const ids = extractTicketIds(pr.title, ticketIdRe);
+    for (const tid of ids) {
+      const ticket = ticketMap.get(tid);
+      if (!ticket) continue;
+      if (ticket.customer_cases.length > 0 && pr.customer_cases.length === 0) {
+        pr.customer_cases = [...ticket.customer_cases];
+      }
+      if (
+        ticket.backport_needed.length > 0 &&
+        pr.backport_needed.length === 0
+      ) {
+        pr.backport_needed = [...ticket.backport_needed];
+      }
+      break;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Organization
 // ---------------------------------------------------------------------------
 
@@ -908,6 +1097,11 @@ export function fmtReportDate(d: Date): string {
   return `${month} ${day}, ${year}`;
 }
 
+function fmtBackportNeeded(versions: string[]): string {
+  if (versions.length === 0) return "";
+  return ` — Backport needed: ${versions.join(", ")}`;
+}
+
 export function fmtPrLink(pr: PRItem, indent: number = 0): string {
   const prefix = "  ".repeat(indent) + "- ";
   const label = pr.source === "github" ? "PR" : "MR";
@@ -915,7 +1109,9 @@ export function fmtPrLink(pr: PRItem, indent: number = 0): string {
   const mergedStr = pr.merged_at
     ? ` (merged ${fmtDate(pr.merged_at)})`
     : ` (opened ${fmtDate(pr.created_at)})`;
-  return `${prefix}[${label} ${num} - ${pr.title}](${pr.url})${mergedStr}`;
+  const ccStr = fmtCustomerCases(pr.customer_cases);
+  const bpStr = fmtBackportNeeded(pr.backport_needed);
+  return `${prefix}[${label} ${num} - ${pr.title}](${pr.url})${mergedStr}${ccStr}${bpStr}`;
 }
 
 function fmtCustomerCases(cases: CustomerCase[]): string {
@@ -928,15 +1124,16 @@ function fmtCustomerCases(cases: CustomerCase[]): string {
 export function fmtTicketLink(t: JiraItem, completed: boolean = true): string {
   const qaTag = t.role === "qa_contact" ? " (QA)" : "";
   const ccStr = fmtCustomerCases(t.customer_cases);
+  const bpStr = fmtBackportNeeded(t.backport_needed);
   if (completed) {
-    return `- [${t.key} - ${t.summary}](${t.url}) (resolved ${fmtDate(t.resolutiondate)})${qaTag}${ccStr}`;
+    return `- [${t.key} - ${t.summary}](${t.url}) (resolved ${fmtDate(t.resolutiondate)})${qaTag}${ccStr}${bpStr}`;
   }
   const statusStr = t.status;
   const prioritySuffix =
     t.priority === "Blocker" || t.priority === "Critical"
       ? `, ${t.priority} priority`
       : "";
-  return `- [${t.key} - ${t.summary}](${t.url}) (${statusStr}${prioritySuffix})${qaTag}${ccStr}`;
+  return `- [${t.key} - ${t.summary}](${t.url}) (${statusStr}${prioritySuffix})${qaTag}${ccStr}${bpStr}`;
 }
 
 export function fmtTestTaskSummary(testTickets: JiraItem[]): string {
@@ -1119,6 +1316,13 @@ export interface CustomerHighlight {
   customers: string[];
 }
 
+export interface BackportHighlight {
+  key: string;
+  url: string;
+  summary: string;
+  needed: string[];
+}
+
 export interface HighlightData {
   cve: { count: number; products: string[]; libraries: string[] } | null;
   testing: { versions: string[] } | null;
@@ -1126,6 +1330,7 @@ export interface HighlightData {
   bugs: Map<string, string[]>;
   customerTickets: Map<string, CustomerHighlight[]>;
   resolvedCustomerTickets: Map<string, CustomerHighlight[]>;
+  backports: Map<string, BackportHighlight[]>;
 }
 
 export function computeHighlightData(
@@ -1139,6 +1344,7 @@ export function computeHighlightData(
   const bugs = new Map<string, string[]>();
   const customerTickets = new Map<string, CustomerHighlight[]>();
   const resolvedCustomerTickets = new Map<string, CustomerHighlight[]>();
+  const backports = new Map<string, BackportHighlight[]>();
 
   for (const [pk, engineers] of sections) {
     for (const [, block] of engineers) {
@@ -1176,6 +1382,16 @@ export function computeHighlightData(
           });
         }
 
+        if (t.backport_needed.length > 0) {
+          if (!backports.has(pk)) backports.set(pk, []);
+          backports.get(pk)!.push({
+            key: t.key,
+            url: t.url,
+            summary: cleanSummary(t.summary),
+            needed: t.backport_needed,
+          });
+        }
+
         const isTest = /^\[(?:TIER|POST|STAGE)/i.test(t.summary);
         const isCve = t.summary.toUpperCase().includes("CVE");
         if (isTest) {
@@ -1207,6 +1423,17 @@ export function computeHighlightData(
           cveProducts.add(pk);
           cveTexts.push(pr.title);
         }
+        if (pr.backport_needed.length > 0) {
+          if (!backports.has(pk)) backports.set(pk, []);
+          const ticketIds = pr.title.match(/[A-Z]+-\d+/);
+          const key = ticketIds ? ticketIds[0] : `PR #${pr.number}`;
+          backports.get(pk)!.push({
+            key,
+            url: pr.url,
+            summary: cleanSummary(pr.title),
+            needed: pr.backport_needed,
+          });
+        }
       }
     }
   }
@@ -1226,6 +1453,7 @@ export function computeHighlightData(
     bugs,
     customerTickets,
     resolvedCustomerTickets,
+    backports,
   };
 }
 
@@ -1317,6 +1545,17 @@ export function formatHighlightContext(
       );
       lines.push(
         `Resolved customer-impacting (${resolvedCustEntries.length}): ${parts.join("; ")}`,
+      );
+    }
+
+    const bpEntries = data.backports.get(pk);
+    if (bpEntries && bpEntries.length > 0) {
+      const parts = bpEntries.map(
+        (e) =>
+          `[${e.key}](${e.url}) ${e.summary} (needs: ${e.needed.join(", ")})`,
+      );
+      lines.push(
+        `Backport needed (${bpEntries.length}): ${parts.join("; ")}`,
       );
     }
   }
@@ -1441,12 +1680,14 @@ export function main(argv: string[] = process.argv): void {
   const jiraTickets = loadJiraTickets(cacheDir, config);
   const customerCases = loadCustomerCases(cacheDir);
   mergeCustomerCases(jiraTickets, customerCases);
+  const cloneLinks = loadCloneLinks(cacheDir);
   const allPrs = [...githubPrs, ...gitlabMrs];
 
   console.log(`  GitHub PRs: ${githubPrs.length} rows`);
   console.log(`  GitLab MRs: ${gitlabMrs.length} rows`);
   console.log(`  Jira tickets: ${jiraTickets.length} rows`);
   console.log(`  Customer cases: ${customerCases.size} tickets with cases`);
+  console.log(`  Clone links: ${cloneLinks.size} tickets with clones`);
 
   // Validate
   const { warnings, errors } = validateData(
@@ -1510,6 +1751,11 @@ export function main(argv: string[] = process.argv): void {
     ipJira,
     ticketIdRe,
   );
+
+  // Backport detection and customer/backport propagation to orphan PRs
+  applyBackportDetection(jiraTickets, cloneLinks, config);
+  propagateToOrphanPrs(completedOrphanPrs, jiraTickets, ticketIdRe);
+  propagateToOrphanPrs(ipOrphanPrs, jiraTickets, ticketIdRe);
 
   const visibleCompletedTickets = filterGithubSyncedTickets(
     completedTickets,

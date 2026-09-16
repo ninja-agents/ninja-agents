@@ -48,10 +48,18 @@ import {
   validateData,
   loadCustomerCases,
   mergeCustomerCases,
+  loadCloneLinks,
+  normalizeVersionStream,
+  compareVersionStreams,
+  extractReleaseBranchFromTitle,
+  computeBackportNeeds,
+  applyBackportDetection,
+  propagateToOrphanPrs,
   type PRItem,
   type JiraItem,
   type EngineerBlock,
   type CustomerCase,
+  type CloneLink,
 } from "../generate-weekly-report.js";
 
 const AGENT_ROOT = resolve(import.meta.dirname, "../..");
@@ -70,6 +78,8 @@ function makePR(overrides: Partial<PRItem> = {}): PRItem {
     url: "https://github.com/org/repo/pull/1",
     source: "github",
     issue_refs: [],
+    customer_cases: [],
+    backport_needed: [],
     ...overrides,
   };
 }
@@ -88,8 +98,11 @@ function makeJira(overrides: Partial<JiraItem> = {}): JiraItem {
     url: "https://test.atlassian.net/browse/TEST-123",
     role: "assignee",
     sprint_name: "",
+    affected_versions: [],
+    fix_versions: [],
     nested_prs: [],
     customer_cases: [],
+    backport_needed: [],
     ...overrides,
   };
 }
@@ -1283,6 +1296,7 @@ describe("formatHighlightContext", () => {
       bugs: new Map([["TEAM", ["bug fix 1"]]]),
       customerTickets: new Map(),
       resolvedCustomerTickets: new Map(),
+      backports: new Map(),
     };
     const output = formatHighlightContext(data);
     expect(output).toContain(
@@ -1301,6 +1315,7 @@ describe("formatHighlightContext", () => {
       bugs: new Map<string, string[]>(),
       customerTickets: new Map(),
       resolvedCustomerTickets: new Map(),
+      backports: new Map(),
     };
     const output = formatHighlightContext(data);
     expect(output).toBe("--- Highlight Context ---");
@@ -1314,6 +1329,7 @@ describe("formatHighlightContext", () => {
       bugs: new Map<string, string[]>(),
       customerTickets: new Map(),
       resolvedCustomerTickets: new Map(),
+      backports: new Map(),
     };
     const sections = new Map<string, Map<string, EngineerBlock>>([
       [
@@ -1382,6 +1398,7 @@ describe("formatHighlightContext", () => {
       bugs: new Map<string, string[]>(),
       customerTickets: new Map(),
       resolvedCustomerTickets: new Map(),
+      backports: new Map(),
     };
     const sections = new Map<string, Map<string, EngineerBlock>>([
       [
@@ -1518,6 +1535,8 @@ describe("end-to-end", () => {
         : undefined;
       const ipJira = filterInProgressJira(jiraTickets, sprintPattern);
 
+      const cloneLinks = loadCloneLinks(CACHE_DIR);
+
       const { tickets: completedTickets, orphanPrs: completedOrphanPrs } =
         nestPrsUnderTickets(completedPrs, completedJira, ticketIdRe);
       const { tickets: ipTickets, orphanPrs: ipOrphanPrs } = nestInProgress(
@@ -1525,6 +1544,10 @@ describe("end-to-end", () => {
         ipJira,
         ticketIdRe,
       );
+
+      applyBackportDetection(jiraTickets, cloneLinks, config!);
+      propagateToOrphanPrs(completedOrphanPrs, jiraTickets, ticketIdRe);
+      propagateToOrphanPrs(ipOrphanPrs, jiraTickets, ticketIdRe);
 
       const visibleCompletedTickets = filterGithubSyncedTickets(
         completedTickets,
@@ -1580,4 +1603,353 @@ describe("end-to-end", () => {
       expect(stripHighlights(reportText)).toBe(stripHighlights(expected));
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// normalizeVersionStream
+// ---------------------------------------------------------------------------
+
+describe("normalizeVersionStream", () => {
+  it("normalizes X.Y to X.Y.z (short affects format)", () => {
+    expect(normalizeVersionStream("4.20")).toBe("4.20.z");
+    expect(normalizeVersionStream("4.22")).toBe("4.22.z");
+  });
+
+  it("normalizes X.Y.Z to X.Y.z", () => {
+    expect(normalizeVersionStream("4.22.0")).toBe("4.22.z");
+    expect(normalizeVersionStream("5.1.0")).toBe("5.1.z");
+  });
+
+  it("passes through X.Y.z unchanged", () => {
+    expect(normalizeVersionStream("4.22.z")).toBe("4.22.z");
+    expect(normalizeVersionStream("5.0.z")).toBe("5.0.z");
+  });
+
+  it("strips openshift- prefix", () => {
+    expect(normalizeVersionStream("openshift-4.22")).toBe("4.22.z");
+  });
+
+  it("returns empty for unrecognized formats", () => {
+    expect(normalizeVersionStream("")).toBe("");
+    expect(normalizeVersionStream("latest")).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// compareVersionStreams
+// ---------------------------------------------------------------------------
+
+describe("compareVersionStreams", () => {
+  it("compares version streams correctly", () => {
+    expect(compareVersionStreams("4.20.z", "4.22.z")).toBeLessThan(0);
+    expect(compareVersionStreams("4.22.z", "4.20.z")).toBeGreaterThan(0);
+    expect(compareVersionStreams("4.22.z", "4.22.z")).toBe(0);
+    expect(compareVersionStreams("4.23.z", "5.0.z")).toBeLessThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractReleaseBranchFromTitle
+// ---------------------------------------------------------------------------
+
+describe("extractReleaseBranchFromTitle", () => {
+  it("extracts single release branch", () => {
+    expect(
+      extractReleaseBranchFromTitle("[release-4.22] OCPBUGS-123: Fix bug"),
+    ).toEqual(["4.22.z"]);
+  });
+
+  it("extracts multiple release branches", () => {
+    expect(
+      extractReleaseBranchFromTitle("[release-4.22] [release-5.0] Fix"),
+    ).toEqual(["4.22.z", "5.0.z"]);
+  });
+
+  it("returns empty for no release branch", () => {
+    expect(extractReleaseBranchFromTitle("OCPBUGS-123: Fix bug")).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeBackportNeeds
+// ---------------------------------------------------------------------------
+
+describe("computeBackportNeeds", () => {
+  const supported = [
+    "4.19.z",
+    "4.20.z",
+    "4.21.z",
+    "4.22.z",
+    "4.23.z",
+    "5.0.z",
+  ];
+  const mainTarget = "5.1.0";
+  const emptyClones = new Map<string, CloneLink[]>();
+
+  it("returns empty for non-Bug types", () => {
+    const ticket = makeJira({
+      issuetype: "Story",
+      affected_versions: ["4.22"],
+    });
+    expect(
+      computeBackportNeeds(ticket, emptyClones, supported, mainTarget),
+    ).toEqual([]);
+  });
+
+  it("returns empty when no affected versions", () => {
+    const ticket = makeJira({
+      issuetype: "Bug",
+      affected_versions: [],
+    });
+    expect(
+      computeBackportNeeds(ticket, emptyClones, supported, mainTarget),
+    ).toEqual([]);
+  });
+
+  it("flags all supported versions when only main has fix", () => {
+    const ticket = makeJira({
+      key: "OCPBUGS-100",
+      issuetype: "Bug",
+      resolution: "Done",
+      affected_versions: ["4.22"],
+      nested_prs: [makePR({ title: "OCPBUGS-100: Fix crash" })],
+    });
+    const result = computeBackportNeeds(
+      ticket,
+      emptyClones,
+      supported,
+      mainTarget,
+    );
+    expect(result).toEqual(["4.22.z", "4.23.z", "5.0.z"]);
+  });
+
+  it("excludes versions covered by clone bugs with done status", () => {
+    const ticket = makeJira({
+      key: "OCPBUGS-100",
+      issuetype: "Bug",
+      affected_versions: ["4.20"],
+      nested_prs: [makePR({ title: "OCPBUGS-100: Fix crash" })],
+    });
+    const clones = new Map<string, CloneLink[]>([
+      [
+        "OCPBUGS-100",
+        [
+          {
+            parent_key: "OCPBUGS-100",
+            clone_key: "OCPBUGS-200",
+            clone_status_category: "done",
+            clone_fix_versions: ["4.22.z"],
+          },
+        ],
+      ],
+    ]);
+    const result = computeBackportNeeds(
+      ticket,
+      clones,
+      supported,
+      mainTarget,
+    );
+    expect(result).not.toContain("4.22.z");
+    expect(result).toContain("4.20.z");
+    expect(result).toContain("4.21.z");
+  });
+
+  it("excludes versions covered by release-branch PRs", () => {
+    const ticket = makeJira({
+      key: "OCPBUGS-100",
+      issuetype: "Bug",
+      affected_versions: ["4.22"],
+      nested_prs: [
+        makePR({ title: "[release-4.22] OCPBUGS-100: Fix crash" }),
+        makePR({ title: "OCPBUGS-100: Fix crash" }),
+      ],
+    });
+    const result = computeBackportNeeds(
+      ticket,
+      emptyClones,
+      supported,
+      mainTarget,
+    );
+    expect(result).not.toContain("4.22.z");
+    expect(result).toContain("4.23.z");
+    expect(result).toContain("5.0.z");
+  });
+
+  it("returns empty when all versions are covered", () => {
+    const ticket = makeJira({
+      key: "OCPBUGS-100",
+      issuetype: "Bug",
+      affected_versions: ["4.22"],
+      nested_prs: [
+        makePR({ title: "[release-4.22] OCPBUGS-100: Fix" }),
+        makePR({ title: "[release-4.23] OCPBUGS-100: Fix" }),
+        makePR({ title: "[release-5.0] OCPBUGS-100: Fix" }),
+        makePR({ title: "OCPBUGS-100: Fix" }),
+      ],
+    });
+    const result = computeBackportNeeds(
+      ticket,
+      emptyClones,
+      supported,
+      mainTarget,
+    );
+    expect(result).toEqual([]);
+  });
+
+  it("does not flag versions older than the lowest affected", () => {
+    const ticket = makeJira({
+      key: "OCPBUGS-100",
+      issuetype: "Bug",
+      affected_versions: ["4.22"],
+      nested_prs: [makePR({ title: "OCPBUGS-100: Fix crash" })],
+    });
+    const result = computeBackportNeeds(
+      ticket,
+      emptyClones,
+      supported,
+      mainTarget,
+    );
+    expect(result).not.toContain("4.19.z");
+    expect(result).not.toContain("4.20.z");
+    expect(result).not.toContain("4.21.z");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyBackportDetection
+// ---------------------------------------------------------------------------
+
+describe("applyBackportDetection", () => {
+  it("populates backport_needed on bug tickets", () => {
+    const config = loadConfig(
+      resolve(AGENT_ROOT, "data/team-config.json"),
+    );
+    const tickets = [
+      makeJira({
+        issuetype: "Bug",
+        affected_versions: ["4.22"],
+        nested_prs: [makePR({ title: "Fix crash" })],
+      }),
+    ];
+    applyBackportDetection(tickets, new Map(), config);
+    expect(tickets[0].backport_needed).toContain("4.22.z");
+  });
+
+  it("is a no-op when config has no backport section", () => {
+    const config = { backport: undefined } as ReturnType<typeof loadConfig>;
+    const tickets = [
+      makeJira({
+        issuetype: "Bug",
+        affected_versions: ["4.22"],
+      }),
+    ];
+    applyBackportDetection(tickets, new Map(), config);
+    expect(tickets[0].backport_needed).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// propagateToOrphanPrs
+// ---------------------------------------------------------------------------
+
+describe("propagateToOrphanPrs", () => {
+  it("propagates customer cases from tickets to orphan PRs", () => {
+    const tickets = [
+      makeJira({
+        key: "OCPBUGS-100",
+        customer_cases: [
+          { case_id: "CIPOE-100", url: "", customer_name: "Acme Corp" },
+        ],
+      }),
+    ];
+    const orphanPrs = [
+      makePR({ title: "OCPBUGS-100: Fix crash" }),
+    ];
+    const ticketIdRe = /\b(OCPBUGS-\d+)\b/g;
+    propagateToOrphanPrs(orphanPrs, tickets, ticketIdRe);
+    expect(orphanPrs[0].customer_cases).toHaveLength(1);
+    expect(orphanPrs[0].customer_cases[0].customer_name).toBe("Acme Corp");
+  });
+
+  it("propagates backport_needed from tickets to orphan PRs", () => {
+    const tickets = [
+      makeJira({
+        key: "OCPBUGS-100",
+        backport_needed: ["4.22.z", "4.23.z"],
+      }),
+    ];
+    const orphanPrs = [
+      makePR({ title: "OCPBUGS-100: Fix crash" }),
+    ];
+    const ticketIdRe = /\b(OCPBUGS-\d+)\b/g;
+    propagateToOrphanPrs(orphanPrs, tickets, ticketIdRe);
+    expect(orphanPrs[0].backport_needed).toEqual(["4.22.z", "4.23.z"]);
+  });
+
+  it("does not overwrite existing customer cases on PR", () => {
+    const tickets = [
+      makeJira({
+        key: "OCPBUGS-100",
+        customer_cases: [
+          { case_id: "CIPOE-200", url: "", customer_name: "Other" },
+        ],
+      }),
+    ];
+    const orphanPrs = [
+      makePR({
+        title: "OCPBUGS-100: Fix crash",
+        customer_cases: [
+          { case_id: "CIPOE-100", url: "", customer_name: "Existing" },
+        ],
+      }),
+    ];
+    const ticketIdRe = /\b(OCPBUGS-\d+)\b/g;
+    propagateToOrphanPrs(orphanPrs, tickets, ticketIdRe);
+    expect(orphanPrs[0].customer_cases).toHaveLength(1);
+    expect(orphanPrs[0].customer_cases[0].customer_name).toBe("Existing");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fmtPrLink with customer/backport info
+// ---------------------------------------------------------------------------
+
+describe("fmtPrLink with propagated data", () => {
+  it("appends customer cases to orphan PR", () => {
+    const pr = makePR({
+      customer_cases: [
+        { case_id: "CIPOE-100", url: "", customer_name: "Acme Corp" },
+      ],
+    });
+    const result = fmtPrLink(pr);
+    expect(result).toContain("Customer: Acme Corp");
+  });
+
+  it("appends backport info to orphan PR", () => {
+    const pr = makePR({
+      backport_needed: ["4.20.z", "4.21.z"],
+    });
+    const result = fmtPrLink(pr);
+    expect(result).toContain("Backport needed: 4.20.z, 4.21.z");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fmtTicketLink with backport info
+// ---------------------------------------------------------------------------
+
+describe("fmtTicketLink with backport", () => {
+  it("appends backport info when backport_needed is non-empty", () => {
+    const t = makeJira({
+      backport_needed: ["4.20.z", "4.21.z"],
+    });
+    const result = fmtTicketLink(t, true);
+    expect(result).toContain("Backport needed: 4.20.z, 4.21.z");
+  });
+
+  it("shows no backport info when backport_needed is empty", () => {
+    const t = makeJira({ backport_needed: [] });
+    const result = fmtTicketLink(t, true);
+    expect(result).not.toContain("Backport");
+  });
 });

@@ -94,6 +94,7 @@ Write one `### ProductName` sub-heading per configured product, always — every
 - Group related items into a single bullet when natural (e.g. multiple CVEs in one bullet, multiple related bug fixes in one bullet)
 - **CVE IDs must always be included** when mentioning CVE remediations — extract them from the "Notable" lines in the Highlight Context (e.g. "Remediated CVE-2026-13676 and CVE-2026-13149 on the 5.0 branch")
 - **Customer-impacting bugs must be called out** with the customer names. For **in-progress** bugs: "Customer-impacting: a React error affecting Acme Corp and Globex Inc". For **resolved** bugs, include the Jira key as a markdown link using data from the "Resolved customer-impacting" lines in the Highlight Context: "Resolved [OCPBUGS-12345](https://issues.redhat.com/browse/OCPBUGS-12345) — a React rendering error affecting LEE KUM KEE and IBM"
+- **Backport needs must be mentioned** when the Highlight Context contains "Backport needed" lines. Include the Jira key, a brief description, and the list of versions needing backport: "Backport needed: [OCPBUGS-105358](https://issues.redhat.com/browse/OCPBUGS-105358) — NAD form config fix needs backport to 4.20.z, 4.21.z, 4.22.z, 4.23.z, 5.0.z"
 
 **Good example:**
 

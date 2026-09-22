@@ -15,6 +15,21 @@ const OUTPUT_PATH = resolve(
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "http://localhost:1234/v1";
 const LLM_MODEL = process.env.LLM_MODEL ?? "qwen2.5-coder-7b-instruct";
 
+const EXEC_SUMMARY_SYSTEM_PROMPT = `You are a senior engineering leader writing an executive summary for a weekly status report.
+Write 2-4 bullets (150-200 words max) covering only the most impactful completed milestones.
+
+Rules:
+- Each bullet: "- **Bold lead-in:** description ([KEY](url))"
+- Only completed milestones; no in-progress items or future plans
+- Frame by business impact: who benefits, what risk is reduced, what customer pain is resolved
+- Order: customer-visible milestones first, then quality, then strategic decisions, then releases
+- No promotional adjectives ("critical", "major", "significant")
+- No em dashes; use colons, semicolons, or parentheses
+- Peer-VP test: would a peer VP mention this? If no, cut it.
+- Cut: routine z-stream releases, internal tooling, CI fixes, routine bug fixes, meetings
+
+Output ONLY the 2-4 bullets, nothing else.`;
+
 const SUMMARY_SYSTEM_PROMPT = `You are a technical writer for a software engineering team's weekly status report.
 Write one "### ProductName" sub-heading per product with one rich paragraph each covering:
 - What shipped this week (outcomes, not ticket IDs) — active voice, past tense
@@ -54,6 +69,7 @@ function run(cmd: string, label: string): string {
 async function callLlm(
   highlightContext: string,
   reportBody: string,
+  systemPrompt: string = SUMMARY_SYSTEM_PROMPT,
 ): Promise<string> {
   const completedMatch = reportBody.match(
     /## Completed This Week[\s\S]*?(?=## In Progress)/,
@@ -78,7 +94,7 @@ async function callLlm(
     body: JSON.stringify({
       model: LLM_MODEL,
       messages: [
-        { role: "system", content: SUMMARY_SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         { role: "user", content: userContent },
       ],
       max_tokens: 1024,
@@ -123,21 +139,35 @@ async function main(): Promise<void> {
   const hcStart = genOutput.indexOf("--- Highlight Context ---");
   const highlightContext = hcStart >= 0 ? genOutput.slice(hcStart) : genOutput;
 
-  // Step 3: Read report and call LLM for summary
-  const report = readFileSync(OUTPUT_PATH, "utf-8");
+  // Step 3: Read report and call LLM for VME Executive Summary and Summary
+  let report = readFileSync(OUTPUT_PATH, "utf-8");
 
-  if (!report.includes("<!-- SUMMARY_PLACEHOLDER -->")) {
-    console.log(
-      "No placeholder found — summary may already exist, skipping LLM call",
+  if (report.includes("<!-- VME_EXEC_SUMMARY_PLACEHOLDER -->")) {
+    const execSummary = await callLlm(
+      highlightContext,
+      report,
+      EXEC_SUMMARY_SYSTEM_PROMPT,
     );
-  } else {
+    report = report.replace(
+      /<!-- VME_EXEC_SUMMARY_PLACEHOLDER -->\n- \(executive summary pending\)/,
+      execSummary,
+    );
+    writeFileSync(OUTPUT_PATH, report);
+    console.log("\n=> VME Executive Summary written");
+  }
+
+  if (report.includes("<!-- SUMMARY_PLACEHOLDER -->")) {
     const summary = await callLlm(highlightContext, report);
-    const patched = report.replace(
+    report = report.replace(
       /<!-- SUMMARY_PLACEHOLDER -->\n- \(summary pending\)/,
       summary,
     );
-    writeFileSync(OUTPUT_PATH, patched);
+    writeFileSync(OUTPUT_PATH, report);
     console.log("\n=> Summary written");
+  } else {
+    console.log(
+      "No placeholder found — summary may already exist, skipping LLM call",
+    );
   }
 
   // Step 4: Validate links

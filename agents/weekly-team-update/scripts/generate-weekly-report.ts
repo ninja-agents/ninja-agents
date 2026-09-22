@@ -1561,6 +1561,42 @@ export function formatHighlightContext(
     }
   }
 
+  lines.push("");
+  lines.push("--- VME Executive Summary Context ---");
+  lines.push(
+    "Write 2-4 bullets (150-200 words max) for ## VME Executive Summary.",
+  );
+  lines.push(
+    "Only completed milestones. Peer-VP test: would a peer VP mention this?",
+  );
+  if (data.cve) {
+    lines.push(
+      `  CVE batch: ${data.cve.count} fixes across ${data.cve.products.join(", ")}`,
+    );
+  }
+  for (const [pk, items] of data.features) {
+    if (items.length > 0)
+      lines.push(
+        `  ${pk} features (${items.length}): ${items.slice(0, 3).join("; ")}`,
+      );
+  }
+  for (const [, entries] of data.resolvedCustomerTickets) {
+    for (const e of entries) {
+      lines.push(
+        `  Resolved customer issue: [${e.key}](${e.url}) ${e.summary} (${e.customers.join(", ")})`,
+      );
+    }
+  }
+  for (const [, entries] of data.backports) {
+    for (const e of entries) {
+      if (e.needed.length >= 3) {
+        lines.push(
+          `  Backport risk: [${e.key}](${e.url}) ${e.summary} (needs: ${e.needed.join(", ")})`,
+        );
+      }
+    }
+  }
+
   return lines.join("\n");
 }
 
@@ -1790,6 +1826,10 @@ export function main(argv: string[] = process.argv): void {
   const reportLines: string[] = [
     `# ${config.report_title}`,
     fmtReportDate(reportDate),
+    "",
+    "## VME Executive Summary",
+    "<!-- VME_EXEC_SUMMARY_PLACEHOLDER -->",
+    "- (executive summary pending)",
     "",
     "## Summary",
     "<!-- SUMMARY_PLACEHOLDER -->",

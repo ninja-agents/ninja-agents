@@ -69,15 +69,65 @@ Handle exit codes:
 - **Exit 2**: Data quality problem. Display the error. Ask user to retry data collection or proceed.
 - **Exit 3**: Warnings present. Report was generated. Note the warnings and proceed.
 
-## Step 3: Write Summary
+## Step 3: Write VME Executive Summary and Summary
 
-The script outputs a placeholder in the Summary section. Replace it with one rich paragraph per product.
+The script outputs placeholders for two LLM-written sections. Fill both using the structured context printed to stdout.
 
 1. Read the report at `agents/weekly-team-update/data/output/weekly-update-{today}.md`
 2. Study the **Completed This Week** and **In Progress** sections
-3. Use the **Highlight Context** printed by the script — it provides per-product breakdowns of completed items, in-progress counts, and notable items (CVEs, etc.)
-4. Write a per-product summary (see format below)
-5. Replace everything between `## Summary` and the next `##` heading with your summaries (remove the `<!-- SUMMARY_PLACEHOLDER -->` marker)
+3. Use the **VME Executive Summary Context** and **Highlight Context** blocks printed by the script
+4. Write the VME Executive Summary (see format below), then write the per-product Summary
+5. Replace both placeholder markers
+
+### VME Executive Summary Format
+
+Write 2-4 bullets, 150-200 words max. This is an executive briefing, not a technical changelog.
+
+**Rules:**
+
+- Each bullet: `- **Bold lead-in:** description ([KEY](url))`
+- Inline Jira links (not reference-style)
+- Single-line bullets (no wrapping)
+- No em dashes; use colons, semicolons, or parentheses
+- Only completed milestones and realized outcomes; no in-progress items or future plans
+- **The peer-VP test:** "Would a peer VP mention this in their own status report?" If no, cut it.
+- Must articulate a business consequence: who benefits, what risk is reduced, what customer pain is resolved
+
+**Impact framing sequence** (ask in order until one produces a concrete answer):
+
+1. What can a customer now do that they couldn't before?
+2. What risk does this eliminate (security, data loss, compliance)?
+3. What was previously blocked or slower that is now unblocked or faster?
+
+**Bullet ordering by priority:**
+
+1. Customer-visible operational milestones and deployment unblocks
+2. Quality improvements and metrics
+3. Strategic decisions with broad organizational impact
+4. New releases and capabilities
+
+**NOT exec-worthy (cut these):**
+
+- Routine z-stream/patch releases (unless new customer capabilities or resolves a strategic risk)
+- Routine bug fixes without customer escalation
+- Internal tooling, CI/test infrastructure fixes
+- Meetings, syncs, presentations
+- Incremental progress ("work continued", "investigation ongoing")
+- Items that summarize as "activity without a decision, deliverable, or measurable outcome"
+- No promotional adjectives ("critical", "major", "significant"); no flourish verbs ("spearheaded", "championed")
+
+**Good example:**
+
+```
+- **Customer migration unblocked for PAYCHEX:** Fixed provider VM pagination and Hyper-V inventory counts, restoring migration plan workflows ([MTV-6556](https://redhat.atlassian.net/browse/MTV-6556))
+- **Security posture hardened across 4.20-5.1:** Resolved 10 CVEs including baseline-browser-mapping DoS and fast-uri SSRF vulnerabilities ([OCPBUGS-122214](https://redhat.atlassian.net/browse/OCPBUGS-122214))
+```
+
+Replace `<!-- VME_EXEC_SUMMARY_PLACEHOLDER -->` and the pending line with your bullets.
+
+### Summary Format
+
+Write the per-product Summary as before. Replace `<!-- SUMMARY_PLACEHOLDER -->` and the pending line.
 
 ### Summary Format
 
@@ -146,6 +196,6 @@ Read and display `agents/weekly-team-update/data/output/weekly-update-{today}.md
 
 ## Rules
 
-1. Never write report sections yourself EXCEPT the Summary — the TypeScript script generates all other sections. You write only the Summary paragraphs following the style guide in Step 3.
+1. Never write report sections yourself EXCEPT the VME Executive Summary and Summary — the TypeScript script generates all other sections.
 2. If the fetch script fails (exit 1), display the error and STOP. Do not proceed with empty data.
-3. Every claim in the Summary must trace to an item in the generated report — never invent work.
+3. Every claim must trace to an item in the generated report — never invent work.

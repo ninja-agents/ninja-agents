@@ -9,8 +9,10 @@
     "projects": ["Project Alpha", "Project Beta"]
   },
   "backport": {
-    "supported_versions": ["4.19.z", "4.20.z", "4.21.z"],
-    "main_target_version": "5.0.0"
+    "ALPHA": {
+      "supported_versions": ["1.0.z", "1.1.z"],
+      "main_target_version": "2.0.0"
+    }
   },
   "products": [
     {

@@ -1706,10 +1706,25 @@ describe("computeBackportNeeds", () => {
     ).toEqual([]);
   });
 
+  it("returns empty for Normal bug without customer cases", () => {
+    const ticket = makeJira({
+      key: "OCPBUGS-100",
+      issuetype: "Bug",
+      priority: "Normal",
+      affected_versions: ["4.22"],
+      customer_cases: [],
+      nested_prs: [makePR({ title: "OCPBUGS-100: Fix crash" })],
+    });
+    expect(
+      computeBackportNeeds(ticket, emptyClones, supported, mainTarget),
+    ).toEqual([]);
+  });
+
   it("flags all supported versions when only main has fix", () => {
     const ticket = makeJira({
       key: "OCPBUGS-100",
       issuetype: "Bug",
+      priority: "Critical",
       resolution: "Done",
       affected_versions: ["4.22"],
       nested_prs: [makePR({ title: "OCPBUGS-100: Fix crash" })],
@@ -1727,6 +1742,7 @@ describe("computeBackportNeeds", () => {
     const ticket = makeJira({
       key: "OCPBUGS-100",
       issuetype: "Bug",
+      priority: "Blocker",
       affected_versions: ["4.20"],
       nested_prs: [makePR({ title: "OCPBUGS-100: Fix crash" })],
     });
@@ -1758,6 +1774,9 @@ describe("computeBackportNeeds", () => {
     const ticket = makeJira({
       key: "OCPBUGS-100",
       issuetype: "Bug",
+      customer_cases: [
+        { case_id: "CIPOE-100", url: "", customer_name: "Acme" },
+      ],
       affected_versions: ["4.22"],
       nested_prs: [
         makePR({ title: "[release-4.22] OCPBUGS-100: Fix crash" }),
@@ -1779,6 +1798,7 @@ describe("computeBackportNeeds", () => {
     const ticket = makeJira({
       key: "OCPBUGS-100",
       issuetype: "Bug",
+      priority: "Critical",
       affected_versions: ["4.22"],
       nested_prs: [
         makePR({ title: "[release-4.22] OCPBUGS-100: Fix" }),
@@ -1800,6 +1820,7 @@ describe("computeBackportNeeds", () => {
     const ticket = makeJira({
       key: "OCPBUGS-100",
       issuetype: "Bug",
+      priority: "Blocker",
       affected_versions: ["4.22"],
       nested_prs: [makePR({ title: "OCPBUGS-100: Fix crash" })],
     });
@@ -1820,13 +1841,15 @@ describe("computeBackportNeeds", () => {
 // ---------------------------------------------------------------------------
 
 describe("applyBackportDetection", () => {
-  it("populates backport_needed on bug tickets", () => {
+  it("populates backport_needed on bug tickets using prefix config", () => {
     const config = loadConfig(
       resolve(AGENT_ROOT, "data/team-config.json"),
     );
     const tickets = [
       makeJira({
+        key: "OCPBUGS-100",
         issuetype: "Bug",
+        priority: "Critical",
         affected_versions: ["4.22"],
         nested_prs: [makePR({ title: "Fix crash" })],
       }),
@@ -1835,10 +1858,47 @@ describe("applyBackportDetection", () => {
     expect(tickets[0].backport_needed).toContain("4.22.z");
   });
 
+  it("uses MTV versions for MTV-prefixed tickets", () => {
+    const config = loadConfig(
+      resolve(AGENT_ROOT, "data/team-config.json"),
+    );
+    const tickets = [
+      makeJira({
+        key: "MTV-3116",
+        issuetype: "Bug",
+        customer_cases: [
+          { case_id: "CIPOE-100", url: "", customer_name: "Acme" },
+        ],
+        affected_versions: ["2.11"],
+        nested_prs: [makePR({ title: "MTV-3116: Fix crash" })],
+      }),
+    ];
+    applyBackportDetection(tickets, new Map(), config);
+    expect(tickets[0].backport_needed).toContain("2.11.z");
+    expect(tickets[0].backport_needed).toContain("2.12.z");
+    expect(tickets[0].backport_needed).not.toContain("4.22.z");
+  });
+
+  it("skips tickets whose prefix has no backport config", () => {
+    const config = loadConfig(
+      resolve(AGENT_ROOT, "data/team-config.json"),
+    );
+    const tickets = [
+      makeJira({
+        key: "CNV-12345",
+        issuetype: "Bug",
+        affected_versions: ["4.22"],
+      }),
+    ];
+    applyBackportDetection(tickets, new Map(), config);
+    expect(tickets[0].backport_needed).toEqual([]);
+  });
+
   it("is a no-op when config has no backport section", () => {
     const config = { backport: undefined } as ReturnType<typeof loadConfig>;
     const tickets = [
       makeJira({
+        key: "OCPBUGS-100",
         issuetype: "Bug",
         affected_versions: ["4.22"],
       }),

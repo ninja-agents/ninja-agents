@@ -75,10 +75,10 @@ interface TeamConfig {
   team_name: string;
   report_title: string;
   sprint_name_pattern?: string;
-  backport?: {
-    supported_versions: string[];
-    main_target_version: string;
-  };
+  backport?: Record<
+    string,
+    { supported_versions: string[]; main_target_version: string }
+  >;
   jira: {
     cloud_id: string;
     team_filter_id: string;
@@ -848,6 +848,11 @@ export function computeBackportNeeds(
   mainTargetVersion: string,
 ): string[] {
   if (ticket.issuetype !== "Bug") return [];
+  const isHighPriority =
+    ticket.priority === "Blocker" ||
+    ticket.priority === "Critical" ||
+    ticket.priority === "Major";
+  if (ticket.customer_cases.length === 0 && !isHighPriority) return [];
   if (ticket.affected_versions.length === 0) return [];
 
   const affectedStreams = new Set(
@@ -902,15 +907,18 @@ export function applyBackportDetection(
   cloneLinks: Map<string, CloneLink[]>,
   config: TeamConfig,
 ): void {
-  const backportConfig = config.backport;
-  if (!backportConfig) return;
+  const backportMap = config.backport;
+  if (!backportMap) return;
 
   for (const t of tickets) {
+    const prefix = t.key.includes("-") ? t.key.split("-")[0] : "";
+    const prefixConfig = backportMap[prefix];
+    if (!prefixConfig) continue;
     t.backport_needed = computeBackportNeeds(
       t,
       cloneLinks,
-      backportConfig.supported_versions,
-      backportConfig.main_target_version,
+      prefixConfig.supported_versions,
+      prefixConfig.main_target_version,
     );
   }
 }

@@ -36,6 +36,23 @@ export interface SprintIssue {
   qa_contact_name: string;
 }
 
+export interface PTOEntry {
+  name: string;
+  dates: string;
+  workdays_out: number;
+  workdays_available: number;
+}
+
+export interface SprintPTO {
+  normal_sprint_workdays: number;
+  actual_sprint_workdays: number;
+  engineer_pto: PTOEntry[];
+}
+
+export interface PTOConfig {
+  [sprintName: string]: SprintPTO;
+}
+
 export interface SprintConfig {
   board_id: number;
   sprint_name_prefix: string;
@@ -66,6 +83,8 @@ export interface SprintConfig {
     jira_display_names: string[];
     role: "dev" | "qe";
   }[];
+  tech_leads?: Record<string, string[]>;
+  pto?: PTOConfig;
 }
 
 export interface EngineerCompletion {
@@ -142,6 +161,8 @@ export interface LoadDistributionEntry {
   load_ratio: number | null;
   risk: "ok" | "heavy" | "extreme" | "absent" | "new";
   baseline_sprints: number;
+  capacity_pct: number;
+  pto_details?: string;
 }
 
 export interface RetroComplianceItem {
@@ -521,6 +542,39 @@ export function computeCapacityVsVelocity(
   };
 }
 
+export function calculateCapacityAdjustment(
+  sprintName: string,
+  engineerName: string,
+  config: SprintConfig,
+): { capacity_pct: number; pto_details?: string } {
+  if (!config.pto || !config.pto[sprintName]) {
+    return { capacity_pct: 1.0 };
+  }
+
+  const sprintPTO = config.pto[sprintName];
+  const normalWorkdays = sprintPTO.normal_sprint_workdays;
+  const actualWorkdays = sprintPTO.actual_sprint_workdays;
+
+  const engineerPTO = sprintPTO.engineer_pto.find(
+    (e) => e.name === engineerName,
+  );
+
+  if (!engineerPTO) {
+    // No individual PTO, but sprint may be shorter
+    const capacityPct = actualWorkdays / normalWorkdays;
+    return { capacity_pct: capacityPct };
+  }
+
+  // Engineer has PTO
+  const availableWorkdays = engineerPTO.workdays_available;
+  const capacityPct = availableWorkdays / normalWorkdays;
+
+  return {
+    capacity_pct: capacityPct,
+    pto_details: `${engineerPTO.workdays_out}d out of ${actualWorkdays}d sprint`,
+  };
+}
+
 export function computeLoadDistribution(
   issues: SprintIssue[],
   velocity: VelocitySummary,
@@ -543,13 +597,27 @@ export function computeLoadDistribution(
 
   const roleMap = new Map(config.engineers.map((e) => [e.name, e.role]));
 
+  // Get sprint name from first issue (all issues in same sprint)
+  const sprintName = issues.length > 0 ? issues[0].sprint_name : "";
+
   return targetLoad.map((t) => {
     const prev = velByEngineer.get(t.name);
     const avg = avgByName?.get(t.name);
-    const baselineSp = avg?.avg_sp_completed ?? prev?.sp_completed ?? 0;
+    const rawBaselineSp = avg?.avg_sp_completed ?? prev?.sp_completed ?? 0;
     const baselineCompleted = avg?.avg_items_completed ?? prev?.completed ?? 0;
     const baselineSprints = avg?.sprints_available ?? (prev ? 1 : 0);
     const totalTargetSp = t.sp_completed + t.sp_remaining;
+
+    // Calculate capacity adjustment for PTO
+    const capacityData = calculateCapacityAdjustment(
+      sprintName,
+      t.name,
+      config,
+    );
+    const capacityPct = capacityData.capacity_pct;
+
+    // Adjust baseline SP by capacity percentage
+    const baselineSp = round2(rawBaselineSp * capacityPct);
 
     let loadRatio: number | null = null;
     if (baselineSp > 0) {
@@ -565,9 +633,9 @@ export function computeLoadDistribution(
       risk = "new";
     } else if (baselineSp === 0 && totalTargetSp > 0) {
       risk = "extreme";
-    } else if (loadRatio !== null && loadRatio > 3) {
+    } else if (loadRatio !== null && loadRatio > 2.5) {
       risk = "extreme";
-    } else if (loadRatio !== null && loadRatio > 1.5) {
+    } else if (loadRatio !== null && loadRatio > 1.3) {
       risk = "heavy";
     } else {
       risk = "ok";
@@ -579,10 +647,12 @@ export function computeLoadDistribution(
       target_assigned: t.assigned,
       target_sp: totalTargetSp,
       prev_completed: baselineCompleted,
-      prev_sp_completed: baselineSp,
+      prev_sp_completed: rawBaselineSp,
       load_ratio: loadRatio,
       risk,
       baseline_sprints: baselineSprints,
+      capacity_pct: capacityPct,
+      pto_details: capacityData.pto_details,
     };
   });
 }
@@ -1075,14 +1145,25 @@ export function formatReport(
     0,
   );
   const baselineLabel = maxBaseline >= 2 ? "Avg" : "Prev";
+  const hasPTO = report.load.some((l) => l.capacity_pct < 1.0);
+
   ln("## Load Distribution");
   ln();
-  ln(
-    `| Engineer | Role | Target Items | Target SP | ${baselineLabel} Completed | ${baselineLabel} SP | Load Ratio | Risk |`,
-  );
-  ln(
-    "|----------|------|-------------|-----------|---------------|---------|-----------|------|",
-  );
+  if (hasPTO) {
+    ln(
+      `| Engineer | Role | Target Items | Target SP | ${baselineLabel} SP | Capacity | Adj. Load Ratio | Risk |`,
+    );
+    ln(
+      "|----------|------|-------------|-----------|---------|----------|-----------------|------|",
+    );
+  } else {
+    ln(
+      `| Engineer | Role | Target Items | Target SP | ${baselineLabel} Completed | ${baselineLabel} SP | Load Ratio | Risk |`,
+    );
+    ln(
+      "|----------|------|-------------|-----------|---------------|---------|-----------|------|",
+    );
+  }
   for (const l of report.load) {
     const ratioStr = l.load_ratio !== null ? `${l.load_ratio}x` : "no baseline";
     const riskStr =
@@ -1095,9 +1176,17 @@ export function formatReport(
             : l.risk === "absent"
               ? "**ABSENT**"
               : "New";
-    ln(
-      `| ${l.name} | ${l.role.toUpperCase()} | ${l.target_assigned} | ${l.target_sp} | ${l.prev_completed} | ${l.prev_sp_completed} | ${ratioStr} | ${riskStr} |`,
-    );
+    const capacityStr = `${Math.round(l.capacity_pct * 100)}%`;
+
+    if (hasPTO) {
+      ln(
+        `| ${l.name} | ${l.role.toUpperCase()} | ${l.target_assigned} | ${l.target_sp} | ${l.prev_sp_completed} | ${capacityStr} | ${ratioStr} | ${riskStr} |`,
+      );
+    } else {
+      ln(
+        `| ${l.name} | ${l.role.toUpperCase()} | ${l.target_assigned} | ${l.target_sp} | ${l.prev_completed} | ${l.prev_sp_completed} | ${ratioStr} | ${riskStr} |`,
+      );
+    }
   }
   ln();
   if (velCount >= 2) {
@@ -1112,6 +1201,19 @@ export function formatReport(
     );
   }
   ln();
+
+  // PTO details section
+  if (hasPTO) {
+    const ptoEngineers = report.load.filter((l) => l.pto_details);
+    if (ptoEngineers.length > 0) {
+      ln("**PTO / Reduced Availability:**");
+      ln();
+      for (const l of ptoEngineers) {
+        ln(`- **${l.name}**: ${l.pto_details}`);
+      }
+      ln();
+    }
+  }
 
   // Individual Velocity
   if (report.individualVelocity.length > 0 && velCount > 0) {
@@ -1296,6 +1398,32 @@ export function formatReport(
 
   // Individual DM Recommendations
   if (report.engineerProposals.length > 0) {
+    const loadByName = new Map(report.load.map((l) => [l.name, l]));
+    const velByName = new Map(
+      report.individualVelocity.map((v) => [v.name, v]),
+    );
+
+    // Compute per-engineer dead SP so DMs show effective planned SP
+    const deadSpByEngineer = new Map<string, number>();
+    for (const h of report.hygiene) {
+      if (h.kind !== "already_done" || !h.assignee) continue;
+      const sp = deadSpByEngineer.get(h.assignee) ?? 0;
+      const itemSp =
+        report.capacity.dead_items.find((d) => d.key === h.key)
+          ?.story_points ?? 0;
+      deadSpByEngineer.set(h.assignee, sp + itemSp);
+    }
+
+    const spBreakdown = (name: string): string => {
+      const vel = velByName.get(name);
+      if (!vel || vel.per_sprint_sp.length === 0) return "";
+      const vals = [...vel.per_sprint_sp]
+        .reverse()
+        .map((sp) => (sp !== null ? String(Math.round(sp)) : "-"))
+        .join(", ");
+      return ` (${vals})`;
+    };
+
     ln("## Individual DM Recommendations");
     ln();
     ln(
@@ -1304,14 +1432,61 @@ export function formatReport(
     ln();
     for (const p of report.engineerProposals) {
       if (p.avg_sp === null) continue;
-      const targetSp = Math.round(p.avg_sp);
+      const avgSp = Math.round(p.avg_sp);
+      const loadEntry = loadByName.get(p.name);
+      const hasPto = loadEntry && loadEntry.capacity_pct < 1.0;
+      const adjustedSp = hasPto
+        ? Math.round(p.avg_sp * loadEntry.capacity_pct)
+        : avgSp;
+
+      const deadSp = deadSpByEngineer.get(p.name) ?? 0;
+      const plannedSp = p.target_sp - deadSp;
 
       ln("---");
       ln();
       ln(`**${p.name}**`);
-      ln(
-        `> From the planning agent, looks like your avg. SP is ${targetSp} let's plan accordingly, thanks!`,
-      );
+      const breakdown = spBreakdown(p.name);
+      if (hasPto && loadEntry.pto_details) {
+        ln(
+          `> From the planning agent, you currently have **${plannedSp} SP planned**. Your avg. SP is ${avgSp}${breakdown} but with PTO (${loadEntry.pto_details}) your effective capacity is ~${adjustedSp} SP this sprint, let's plan accordingly, thanks!`,
+        );
+      } else if (hasPto) {
+        ln(
+          `> From the planning agent, you currently have **${plannedSp} SP planned**. Your avg. SP is ${avgSp}${breakdown} but with the shorter sprint (${Math.round(loadEntry.capacity_pct * 100)}% capacity) your effective target is ~${adjustedSp} SP, let's plan accordingly, thanks!`,
+        );
+      } else {
+        ln(
+          `> From the planning agent, you currently have **${plannedSp} SP planned**. Your avg. SP is ${avgSp}${breakdown}, let's plan accordingly, thanks!`,
+        );
+      }
+
+      // Tech lead: append direct reports summary
+      const reports = config.tech_leads?.[p.name];
+      if (reports && reports.length > 0) {
+        ln(">");
+        ln("> Additional info you should be aware of:");
+        for (const reportName of reports) {
+          const rl = loadByName.get(reportName);
+          if (!rl) continue;
+          const rAvgSp = rl.prev_sp_completed;
+          const rCapacity = Math.round(rl.capacity_pct * 100);
+          const rRatio =
+            rl.load_ratio !== null ? `${rl.load_ratio}x` : "no baseline";
+          const rRisk =
+            rl.risk === "ok"
+              ? "OK"
+              : rl.risk === "heavy"
+                ? "HIGH"
+                : rl.risk === "extreme"
+                  ? "EXTREME"
+                  : rl.risk;
+          const rBreakdown = spBreakdown(reportName);
+          ln(
+            `> - ${reportName}: ${rl.target_sp} SP assigned, avg ${rAvgSp} SP${rBreakdown}, ${rCapacity}% capacity → ${rRatio} (${rRisk})`,
+          );
+        }
+      }
+
       ln();
     }
   }
@@ -1438,7 +1613,7 @@ function main() {
 
   const configPath =
     args.config ??
-    resolve(__dirname, "../../sprint-review/data/sprint-config.json");
+    resolve(__dirname, "../data/sprint-config.json");
   const targetCsv =
     args["target-csv"] ?? resolve(__dirname, "../data/cache/sprint-issues.csv");
   const velocityFile =

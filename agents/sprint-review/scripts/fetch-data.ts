@@ -10,7 +10,14 @@ import { resolve } from "node:path";
 const SCRIPT_DIR = import.meta.dirname;
 const DATA_DIR = resolve(SCRIPT_DIR, "..", "data");
 const CACHE_DIR = resolve(DATA_DIR, "cache");
-const CONFIG_PATH = resolve(DATA_DIR, "sprint-config.json");
+const CONFIG_PATH = resolve(
+  SCRIPT_DIR,
+  "..",
+  "..",
+  "sprint-planning-analysis",
+  "data",
+  "sprint-config.json",
+);
 
 // --- Types ---
 

@@ -13,6 +13,7 @@ agents/jira-bugs-missing-qe/data/config.json
 agents/jira-move-cnv2networking/data/config.json
 agents/jira-fix-version/data/config.json
 agents/vertex-billing/data/config.json
+agents/sprint-planning-analysis/data/sprint-config.json
 
 # Agent cache (contents only, keep .gitkeep)
 agents/*/data/cache/*

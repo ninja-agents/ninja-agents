@@ -75,11 +75,17 @@ interface JiraIssueLink {
   type?: { name?: string; inward?: string };
   outwardIssue?: {
     key?: string;
-    fields?: { summary?: string; status?: { statusCategory?: { key?: string } } };
+    fields?: {
+      summary?: string;
+      status?: { statusCategory?: { key?: string } };
+    };
   };
   inwardIssue?: {
     key?: string;
-    fields?: { summary?: string; status?: { statusCategory?: { key?: string } } };
+    fields?: {
+      summary?: string;
+      status?: { statusCategory?: { key?: string } };
+    };
   };
 }
 
@@ -628,8 +634,7 @@ async function main(): Promise<void> {
       if (link.type?.name !== "Cloners") continue;
       const clone = link.inwardIssue ?? link.outwardIssue;
       if (!clone?.key) continue;
-      const statusCategory =
-        clone.fields?.status?.statusCategory?.key ?? "";
+      const statusCategory = clone.fields?.status?.statusCategory?.key ?? "";
       cloneLinks.push({
         parent_key: key,
         clone_key: clone.key,

@@ -1675,14 +1675,7 @@ describe("extractReleaseBranchFromTitle", () => {
 // ---------------------------------------------------------------------------
 
 describe("computeBackportNeeds", () => {
-  const supported = [
-    "4.19.z",
-    "4.20.z",
-    "4.21.z",
-    "4.22.z",
-    "4.23.z",
-    "5.0.z",
-  ];
+  const supported = ["4.19.z", "4.20.z", "4.21.z", "4.22.z", "4.23.z", "5.0.z"];
   const mainTarget = "5.1.0";
   const emptyClones = new Map<string, CloneLink[]>();
 
@@ -1759,12 +1752,7 @@ describe("computeBackportNeeds", () => {
         ],
       ],
     ]);
-    const result = computeBackportNeeds(
-      ticket,
-      clones,
-      supported,
-      mainTarget,
-    );
+    const result = computeBackportNeeds(ticket, clones, supported, mainTarget);
     expect(result).not.toContain("4.22.z");
     expect(result).toContain("4.20.z");
     expect(result).toContain("4.21.z");
@@ -1842,9 +1830,7 @@ describe("computeBackportNeeds", () => {
 
 describe("applyBackportDetection", () => {
   it("populates backport_needed on bug tickets using prefix config", () => {
-    const config = loadConfig(
-      resolve(AGENT_ROOT, "data/team-config.json"),
-    );
+    const config = loadConfig(resolve(AGENT_ROOT, "data/team-config.json"));
     const tickets = [
       makeJira({
         key: "OCPBUGS-100",
@@ -1859,9 +1845,7 @@ describe("applyBackportDetection", () => {
   });
 
   it("uses MTV versions for MTV-prefixed tickets", () => {
-    const config = loadConfig(
-      resolve(AGENT_ROOT, "data/team-config.json"),
-    );
+    const config = loadConfig(resolve(AGENT_ROOT, "data/team-config.json"));
     const tickets = [
       makeJira({
         key: "MTV-3116",
@@ -1880,9 +1864,7 @@ describe("applyBackportDetection", () => {
   });
 
   it("skips tickets whose prefix has no backport config", () => {
-    const config = loadConfig(
-      resolve(AGENT_ROOT, "data/team-config.json"),
-    );
+    const config = loadConfig(resolve(AGENT_ROOT, "data/team-config.json"));
     const tickets = [
       makeJira({
         key: "CNV-12345",
@@ -1922,9 +1904,7 @@ describe("propagateToOrphanPrs", () => {
         ],
       }),
     ];
-    const orphanPrs = [
-      makePR({ title: "OCPBUGS-100: Fix crash" }),
-    ];
+    const orphanPrs = [makePR({ title: "OCPBUGS-100: Fix crash" })];
     const ticketIdRe = /\b(OCPBUGS-\d+)\b/g;
     propagateToOrphanPrs(orphanPrs, tickets, ticketIdRe);
     expect(orphanPrs[0].customer_cases).toHaveLength(1);
@@ -1938,9 +1918,7 @@ describe("propagateToOrphanPrs", () => {
         backport_needed: ["4.22.z", "4.23.z"],
       }),
     ];
-    const orphanPrs = [
-      makePR({ title: "OCPBUGS-100: Fix crash" }),
-    ];
+    const orphanPrs = [makePR({ title: "OCPBUGS-100: Fix crash" })];
     const ticketIdRe = /\b(OCPBUGS-\d+)\b/g;
     propagateToOrphanPrs(orphanPrs, tickets, ticketIdRe);
     expect(orphanPrs[0].backport_needed).toEqual(["4.22.z", "4.23.z"]);

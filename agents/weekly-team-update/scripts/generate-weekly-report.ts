@@ -414,9 +414,7 @@ export function loadJiraTickets(
       role,
       sprint_name: r.sprint_name ?? "",
       resolved_by: r.resolved_by ?? "",
-      affected_versions: (r.affected_versions ?? "")
-        .split("|")
-        .filter(Boolean),
+      affected_versions: (r.affected_versions ?? "").split("|").filter(Boolean),
       fix_versions: (r.fix_versions ?? "").split("|").filter(Boolean),
       nested_prs: [],
       customer_cases: [],
@@ -457,9 +455,7 @@ export function mergeCustomerCases(
   }
 }
 
-export function loadCloneLinks(
-  cacheDir: string,
-): Map<string, CloneLink[]> {
+export function loadCloneLinks(cacheDir: string): Map<string, CloneLink[]> {
   const rows = loadCsvFile(resolve(cacheDir, "clone-links.csv"));
   const map = new Map<string, CloneLink[]>();
   for (const r of rows) {
@@ -1548,8 +1544,7 @@ export function formatHighlightContext(
     const resolvedCustEntries = data.resolvedCustomerTickets.get(pk);
     if (resolvedCustEntries && resolvedCustEntries.length > 0) {
       const parts = resolvedCustEntries.map(
-        (e) =>
-          `[${e.key}](${e.url}) ${e.summary} (${e.customers.join(", ")})`,
+        (e) => `[${e.key}](${e.url}) ${e.summary} (${e.customers.join(", ")})`,
       );
       lines.push(
         `Resolved customer-impacting (${resolvedCustEntries.length}): ${parts.join("; ")}`,
@@ -1562,9 +1557,7 @@ export function formatHighlightContext(
         (e) =>
           `[${e.key}](${e.url}) ${e.summary} (needs: ${e.needed.join(", ")})`,
       );
-      lines.push(
-        `Backport needed (${bpEntries.length}): ${parts.join("; ")}`,
-      );
+      lines.push(`Backport needed (${bpEntries.length}): ${parts.join("; ")}`);
     }
   }
 

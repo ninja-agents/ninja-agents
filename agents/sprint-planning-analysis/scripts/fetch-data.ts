@@ -269,10 +269,7 @@ async function fetchSprintTimeSnapshot(
         if (item.field === "assignee") {
           assigneeId = item.from ?? "";
         }
-        if (
-          item.field === "Story Points" ||
-          item.field === "story_points"
-        ) {
+        if (item.field === "Story Points" || item.field === "story_points") {
           const prev = parseFloat(item.fromString ?? "0");
           storyPoints = isNaN(prev) ? 0 : prev;
         }
@@ -357,8 +354,7 @@ async function fetchVelocityFromSprintReport(
     };
 
     const completed = data.contents?.completedIssues ?? [];
-    const incomplete =
-      data.contents?.issuesNotCompletedInCurrentSprint ?? [];
+    const incomplete = data.contents?.issuesNotCompletedInCurrentSprint ?? [];
     const allIssues = [...completed, ...incomplete];
 
     // Batch-filter out non-deliverable resolutions (Won't Fix, Duplicate, Obsolete, etc.)
@@ -367,11 +363,10 @@ async function fetchVelocityFromSprintReport(
     if (completedKeys.length > 0) {
       const validResolutions = ["Done", "Done-Errata"];
       const resJql = `key in (${completedKeys.join(",")}) AND resolution NOT IN (${validResolutions.map((r) => `"${r}"`).join(",")}) AND status != Verified`;
-      const excludeIssues = await jiraSearchPaginated(
-        config,
-        resJql,
-        ["resolution", "status"],
-      );
+      const excludeIssues = await jiraSearchPaginated(config, resJql, [
+        "resolution",
+        "status",
+      ]);
       for (const issue of excludeIssues) {
         excludeKeys.add(issue.key);
       }
@@ -419,12 +414,8 @@ async function fetchVelocityFromSprintReport(
       }
     >();
 
-    const processIssue = (
-      issue: SprintReportIssue,
-      isDone: boolean,
-    ) => {
-      const sp =
-        issue.currentEstimateStatistic?.statFieldValue?.value ?? 0;
+    const processIssue = (issue: SprintReportIssue, isDone: boolean) => {
+      const sp = issue.currentEstimateStatistic?.statFieldValue?.value ?? 0;
       const assigneeId = issue.assigneeAccountId ?? "";
       const qaContactId = qaContactMap.get(issue.key) ?? "";
 
@@ -482,9 +473,10 @@ async function fetchVelocityFromSprintReport(
       completed_issues: completedCount,
       total_sp: totalSp,
       completed_sp: completedSp,
-      by_engineer: Array.from(engineerMap.entries()).map(
-        ([name, d]) => ({ name, ...d }),
-      ),
+      by_engineer: Array.from(engineerMap.entries()).map(([name, d]) => ({
+        name,
+        ...d,
+      })),
       carryover_keys: [],
       retro_recommendations: [],
     };
@@ -735,10 +727,8 @@ async function fetchVelocityFromJira(
     // Use sprint-time snapshot values when available, current values otherwise
     const assignee = f.assignee as Record<string, unknown> | null;
     const qaContact = f.customfield_10470 as Record<string, unknown> | null;
-    const assigneeId =
-      snapshot?.assigneeId ?? str(assignee?.accountId);
-    const qaContactId =
-      snapshot?.qaContactId ?? str(qaContact?.accountId);
+    const assigneeId = snapshot?.assigneeId ?? str(assignee?.accountId);
+    const qaContactId = snapshot?.qaContactId ?? str(qaContact?.accountId);
 
     // Credit assignee
     const assigneeEng = config.engineers.find(

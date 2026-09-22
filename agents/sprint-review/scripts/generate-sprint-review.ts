@@ -1537,7 +1537,10 @@ function main() {
 
   const configPath =
     args.config ??
-    resolve(__dirname, "../../sprint-planning-analysis/data/sprint-config.json");
+    resolve(
+      __dirname,
+      "../../sprint-planning-analysis/data/sprint-config.json",
+    );
   const cachePath = args["cache-dir"] ?? resolve(__dirname, "../data/cache");
   const config = loadConfig(configPath);
   const accountIdToName = buildAccountIdToName(config);

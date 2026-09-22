@@ -1409,8 +1409,8 @@ export function formatReport(
       if (h.kind !== "already_done" || !h.assignee) continue;
       const sp = deadSpByEngineer.get(h.assignee) ?? 0;
       const itemSp =
-        report.capacity.dead_items.find((d) => d.key === h.key)
-          ?.story_points ?? 0;
+        report.capacity.dead_items.find((d) => d.key === h.key)?.story_points ??
+        0;
       deadSpByEngineer.set(h.assignee, sp + itemSp);
     }
 
@@ -1612,8 +1612,7 @@ function main() {
   }
 
   const configPath =
-    args.config ??
-    resolve(__dirname, "../data/sprint-config.json");
+    args.config ?? resolve(__dirname, "../data/sprint-config.json");
   const targetCsv =
     args["target-csv"] ?? resolve(__dirname, "../data/cache/sprint-issues.csv");
   const velocityFile =

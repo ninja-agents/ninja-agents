@@ -1,6 +1,11 @@
 #!/usr/bin/env tsx
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import {
+  formatHierarchyContext,
+  type HierarchyNode,
+  type HierarchyWork,
+} from "./jira-hierarchy.js";
 
 const GREEN = "\x1b[92m";
 const YELLOW = "\x1b[93m";
@@ -1562,9 +1567,9 @@ export function formatHighlightContext(
   }
 
   lines.push("");
-  lines.push("--- VME Executive Summary Context ---");
+  lines.push("--- Highlights Context ---");
   lines.push(
-    "Write 2-4 bullets (150-200 words max) for ## VME Executive Summary.",
+    "Write 2-4 bullets (150-200 words max) for ## Summary > ### Highlights.",
   );
   lines.push(
     "Only completed milestones. Peer-VP test: would a peer VP mention this?",
@@ -1718,6 +1723,18 @@ export function main(argv: string[] = process.argv): void {
   const customerCases = loadCustomerCases(cacheDir);
   mergeCustomerCases(jiraTickets, customerCases);
   const cloneLinks = loadCloneLinks(cacheDir);
+  const hierarchyPath = resolve(cacheDir, "jira-hierarchy.csv");
+  const hierarchyNodes = new Map<string, HierarchyNode>();
+  if (existsSync(hierarchyPath)) {
+    for (const row of loadCsvFile(hierarchyPath)) {
+      hierarchyNodes.set(row.key, {
+        key: row.key,
+        summary: row.summary,
+        issue_type: row.issue_type,
+        parent_key: row.parent_key,
+      });
+    }
+  }
   const allPrs = [...githubPrs, ...gitlabMrs];
 
   console.log(`  GitHub PRs: ${githubPrs.length} rows`);
@@ -1822,16 +1839,54 @@ export function main(argv: string[] = process.argv): void {
 
   // Compute highlight data (printed to stdout for agent consumption)
   const highlightData = computeHighlightData(sections);
+  const hierarchyWork: HierarchyWork[] = [];
+  for (const [product, engineers] of sections) {
+    for (const block of engineers.values()) {
+      for (const [tickets, completed] of [
+        [block.completed_tickets, true],
+        [block.in_progress_tickets, false],
+      ] as const) {
+        for (const ticket of tickets) {
+          hierarchyWork.push({
+            product,
+            key: ticket.key,
+            summary: ticket.summary,
+            kind: ticket.issuetype,
+            completed,
+          });
+        }
+      }
+      for (const [prs, completed] of [
+        [block.completed_prs, true],
+        [block.in_progress_prs, false],
+      ] as const) {
+        for (const pr of prs) {
+          const key = extractTicketIds(pr.title, ticketIdRe).find((id) =>
+            hierarchyNodes.has(id),
+          );
+          if (key)
+            hierarchyWork.push({
+              product,
+              key,
+              summary: pr.title,
+              kind: "PR",
+              completed,
+            });
+        }
+      }
+    }
+  }
 
   const reportLines: string[] = [
     `# ${config.report_title}`,
     fmtReportDate(reportDate),
     "",
-    "## VME Executive Summary",
-    "<!-- VME_EXEC_SUMMARY_PLACEHOLDER -->",
-    "- (executive summary pending)",
-    "",
     "## Summary",
+    "",
+    "### Highlights",
+    "<!-- HIGHLIGHTS_PLACEHOLDER -->",
+    "- (highlights pending)",
+    "",
     "<!-- SUMMARY_PLACEHOLDER -->",
     "- (summary pending)",
   ];
@@ -1874,6 +1929,14 @@ export function main(argv: string[] = process.argv): void {
   console.log(`  Total in-progress items: ${totalIp}`);
   console.log(`  Date range: ${wsStr} to ${rdStr}`);
   console.log(`\n${formatHighlightContext(highlightData, sections)}`);
+  console.log(
+    `\n${formatHierarchyContext(
+      hierarchyWork,
+      hierarchyNodes,
+      config.jira.base_url,
+      config.products.map((product) => product.key),
+    )}`,
+  );
 
   if (warnings.length > 0) {
     process.stderr.write(

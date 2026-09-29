@@ -6,6 +6,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
+import { parseHierarchyIssue, type HierarchyNode } from "./jira-hierarchy.js";
 
 const SCRIPT_DIR = import.meta.dirname;
 const DATA_DIR = resolve(SCRIPT_DIR, "..", "data");
@@ -36,6 +37,7 @@ interface TeamConfig {
   gitlab?: {
     api_url?: string;
   };
+  products: Array<{ jira_prefixes: string[] }>;
   engineers: Engineer[];
 }
 
@@ -473,7 +475,17 @@ async function main(): Promise<void> {
 
   console.log("\n=== Fetching Jira Tickets ===");
   const jiraTickets = new Map<string, JiraTicket>();
+  const hierarchyNodes = new Map<string, HierarchyNode>();
   let activeSprintName = "";
+
+  function rememberHierarchy(issue: unknown): void {
+    const parsed = parseHierarchyIssue(issue);
+    if (!parsed) return;
+    hierarchyNodes.set(parsed.node.key, parsed.node);
+    if (parsed.parent && !hierarchyNodes.has(parsed.parent.key)) {
+      hierarchyNodes.set(parsed.parent.key, parsed.parent);
+    }
+  }
 
   const projectsClause = jiraConfig.projects.map((p) => `"${p}"`).join(", ");
   const jiraFields = [
@@ -492,6 +504,7 @@ async function main(): Promise<void> {
     "issuelinks",
     "versions",
     "fixVersions",
+    "parent",
   ];
 
   for (const eng of engineers) {
@@ -507,6 +520,7 @@ async function main(): Promise<void> {
 
     for (const issue of issues) {
       if (jiraTickets.has(issue.key)) continue;
+      rememberHierarchy(issue);
       const ticket = parseJiraIssue(issue);
       if (
         ticket.sprint_name &&
@@ -532,6 +546,7 @@ async function main(): Promise<void> {
     let added = 0;
     for (const issue of sprintIssues) {
       if (jiraTickets.has(issue.key)) continue;
+      rememberHierarchy(issue);
       jiraTickets.set(issue.key, parseJiraIssue(issue, activeSprintName));
       added++;
     }
@@ -759,6 +774,64 @@ async function main(): Promise<void> {
   writeFileSync(
     resolve(CACHE_DIR, "gitlab-mrs.csv"),
     gitlabCsvLines.join("\n") + "\n",
+  );
+
+  const prefixes = config.products.flatMap((product) => product.jira_prefixes);
+  const ticketRef = new RegExp(
+    "\\b(?:" + prefixes.join("|") + ")-\\d+\\b",
+    "g",
+  );
+  const pending = new Set<string>();
+  for (const pr of githubPrs) {
+    for (const key of pr.title.match(ticketRef) ?? []) pending.add(key);
+  }
+  for (const mr of gitlabMrs) {
+    for (const key of mr.title.match(ticketRef) ?? []) pending.add(key);
+  }
+  for (const node of hierarchyNodes.values()) {
+    if (node.parent_key) pending.add(node.parent_key);
+  }
+  const fetched = new Set(jiraTickets.keys());
+  let hierarchyFailures = 0;
+  while (pending.size > 0) {
+    const key = pending.values().next().value;
+    if (!key) break;
+    pending.delete(key);
+    if (fetched.has(key)) continue;
+    fetched.add(key);
+    const issue = await jiraGetIssue(key, "", [
+      "summary",
+      "issuetype",
+      "parent",
+    ]);
+    const parsed = parseHierarchyIssue(issue);
+    if (!parsed) {
+      hierarchyFailures++;
+      continue;
+    }
+    hierarchyNodes.set(parsed.node.key, parsed.node);
+    if (parsed.parent) {
+      if (!hierarchyNodes.has(parsed.parent.key))
+        hierarchyNodes.set(parsed.parent.key, parsed.parent);
+      pending.add(parsed.parent.key);
+    }
+  }
+  const hierarchyCsv = ["key,summary,issue_type,parent_key"];
+  for (const node of [...hierarchyNodes.values()].sort((a, b) =>
+    a.key.localeCompare(b.key),
+  )) {
+    hierarchyCsv.push(
+      [node.key, node.summary, node.issue_type, node.parent_key]
+        .map(csvEscape)
+        .join(","),
+    );
+  }
+  writeFileSync(
+    resolve(CACHE_DIR, "jira-hierarchy.csv"),
+    hierarchyCsv.join("\n") + "\n",
+  );
+  console.log(
+    `  Jira hierarchy: ${hierarchyNodes.size} nodes (${hierarchyFailures} lookup warnings)`,
   );
 
   writeFileSync(

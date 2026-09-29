@@ -67,17 +67,17 @@ Handle exit codes:
 - **Exit 2**: Data quality problem. Display the error. Ask user to retry data collection or proceed.
 - **Exit 3**: Warnings present. Report was generated. Note the warnings and proceed.
 
-## Step 3: Write VME Executive Summary and Summary
+## Step 3: Write Highlights and Summary
 
 The script outputs placeholders for two LLM-written sections. Fill both using the structured context printed to stdout.
 
 1. Read the report at `agents/weekly-team-update/data/output/weekly-update-{today}.md`
 2. Study the **Completed This Week** and **In Progress** sections
-3. Use the **VME Executive Summary Context** and **Highlight Context** blocks printed by the script
-4. Write the VME Executive Summary (see format below), then write the per-product Summary
+3. Use the **Highlights Context**, **Highlight Context**, and **Jira Hierarchy Context** blocks printed by the script
+4. Write Highlights first, then a per-product Summary that does not repeat those outcomes
 5. Replace both placeholder markers
 
-### VME Executive Summary Format
+### Highlights Format
 
 Write 2-4 bullets, 150-200 words max. This is an executive briefing, not a technical changelog.
 
@@ -121,15 +121,11 @@ Write 2-4 bullets, 150-200 words max. This is an executive briefing, not a techn
 - **Security posture hardened across 4.20-5.1:** Resolved 10 CVEs including baseline-browser-mapping DoS and fast-uri SSRF vulnerabilities ([OCPBUGS-122214](https://redhat.atlassian.net/browse/OCPBUGS-122214))
 ```
 
-Replace `<!-- VME_EXEC_SUMMARY_PLACEHOLDER -->` and the pending line with your bullets.
+Replace `<!-- HIGHLIGHTS_PLACEHOLDER -->` and the pending line with your bullets under `## Summary` > `### Highlights`.
 
 ### Summary Format
 
-Write the per-product Summary as before. Replace `<!-- SUMMARY_PLACEHOLDER -->` and the pending line.
-
-### Summary Format
-
-Write one `### ProductName` sub-heading per configured product, always — every product gets a bullet list regardless of volume. Use one bullet per logical item (a shipped feature, a bug fix, a CVE remediation, an in-progress item, a customer-impacting callout).
+Replace `<!-- SUMMARY_PLACEHOLDER -->` and the pending line. Write one `### ProductName` sub-heading per configured product. Use compact bullets that group related work under linked Features and Epics.
 
 **Rules:**
 
@@ -137,45 +133,29 @@ Write one `### ProductName` sub-heading per configured product, always — every
 - Active voice, past tense for completed work ("Shipped", "Fixed", "Delivered")
 - Present tense for in-progress items — prefix with "In progress:" ("In progress: storage access mode selection is in review")
 - Quantify when possible ("8 bug fixes", "two features")
-- Do NOT include markdown links or Jira ticket IDs — the detailed sections have those. **Exception:** resolved customer-impacting bugs must include the Jira key as a markdown link (see below)
+- Work bottom-up from relevant completed and in-progress Stories, Tasks, Bugs, or PRs. Trace their Jira parents using the Jira Hierarchy Context. Present `Feature: Epic` with descriptive links to both when both exist, then link the relevant work beneath. If only an Epic exists, use it as the group heading. If no parent exists, summarize the product activity in concise prose.
+- Link only parent nodes and weekly work that appears in the context. A parent link supplies context; it does not mean the parent itself was completed this week.
+- Do not repeat outcomes, Jira keys, or CVEs already covered by Highlights. Omit that work from the product summary, including resolved customer bugs when Highlights already names them.
+- Keep routine work compact. Do not expand all tickets into a second copy of the detailed sections.
 - Every claim must trace to an item in the report — never invent work
 - Group related items into a single bullet when natural (e.g. multiple CVEs in one bullet, multiple related bug fixes in one bullet)
-- **CVE IDs must always be included** when mentioning CVE remediations — extract them from the "Notable" lines in the Highlight Context (e.g. "Remediated CVE-2026-13676 and CVE-2026-13149 on the 5.0 branch")
-- **Customer-impacting bugs must be called out** with the customer names. For **in-progress** bugs: "Customer-impacting: a React error affecting Acme Corp and Globex Inc". For **resolved** bugs, include the Jira key as a markdown link using data from the "Resolved customer-impacting" lines in the Highlight Context: "Resolved [OCPBUGS-12345](https://issues.redhat.com/browse/OCPBUGS-12345) — a React rendering error affecting LEE KUM KEE and IBM"
+- **CVE IDs must always be included** when mentioning CVE remediations — extract them from the "Notable" lines in the Highlight Context, unless already covered in Highlights.
+- **Customer-impacting bugs must be called out** with customer names unless Highlights already covers them.
 - **Backport needs must be mentioned** when the Highlight Context contains "Backport needed" lines. Include the Jira key, a brief description, and the list of versions needing backport: "Backport needed: [OCPBUGS-105358](https://issues.redhat.com/browse/OCPBUGS-105358) — NAD form config fix needs backport to 4.20.z, 4.21.z, 4.22.z, 4.23.z, 5.0.z"
 
-**Good example:**
+**Hierarchy example:**
 
 ```
 ### MTV (Migration Toolkit for Virtualization)
-- Shipped storage access mode selection, LUKS secret specification, migration alerts integration, and ASAP cutover option
-- Added clustered Hyper-V and CSV support with a backport to 2.12
-- Migrated to React 18 and React Router 7
-- In progress: six patches covering bug fixes and UI improvements are in review
-
-### MTA (Migration Toolkit for Applications)
-- Fixed branding regressions including logo alignment and title overflow
-- Shipped hub-side login page and favicon support
-- In progress: modal and DualListSelector PF5 migration, Dockerfile improvements, and lint cleanup
-
-### CNV (Container-Native Virtualization)
-- Completed quarterly connection sessions and course work
-- In progress: hot-cluster CI infrastructure setup for networking and nmstate console plugins
-- In progress: VM network details with clickable NAD/UDN/CUDN links
-
-### Networking Console Plugins
-- Remediated CVE-2026-13676 (fast-uri security bypass) and CVE-2026-13149 (brace-expansion DoS) on the 5.0 branch with backports across four release streams
-- Completed 5.0 ART image update
-- Resolved [OCPBUGS-85606](https://issues.redhat.com/browse/OCPBUGS-85606) — a React rendering error affecting LEE KUM KEE, TOKAI CORP., HITACHI, and IBM
-- In progress: VM tab for NAD/UDN/CUDN detail pages
-- Customer-impacting: a network config policy tab error affecting IBM
+- [MTV-6426: Exclude disks](https://redhat.atlassian.net/browse/MTV-6426) > [MTV-6760: Plan UI](https://redhat.atlassian.net/browse/MTV-6760): [MTV-6763](https://redhat.atlassian.net/browse/MTV-6763) is adding per-VM disk exclusion controls.
 ```
 
 ### Self-check before proceeding:
 
 - Every configured product has a `### ProductName` sub-heading with a bullet list
 - All sentences use active voice
-- No markdown links or ticket IDs in the summary (except resolved customer bugs)
+- Relevant Epic and Feature groups have links to their parents and weekly work
+- No outcome, Jira key, or CVE from Highlights is repeated in a product summary
 - Every fact matches an item in the report
 - Placeholder marker is removed from the file
 
@@ -194,6 +174,6 @@ Read and display `agents/weekly-team-update/data/output/weekly-update-{today}.md
 
 ## Rules
 
-1. Never write report sections yourself EXCEPT the VME Executive Summary and Summary — the TypeScript script generates all other sections.
+1. Never write report sections yourself EXCEPT Highlights and the product Summary — the TypeScript script generates all other sections.
 2. If the fetch script fails (exit 1), display the error and STOP. Do not proceed with empty data.
 3. Every claim must trace to an item in the generated report — never invent work.

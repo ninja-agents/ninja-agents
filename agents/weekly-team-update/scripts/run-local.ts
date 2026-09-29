@@ -15,7 +15,7 @@ const OUTPUT_PATH = resolve(
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "http://localhost:1234/v1";
 const LLM_MODEL = process.env.LLM_MODEL ?? "qwen2.5-coder-7b-instruct";
 
-const EXEC_SUMMARY_SYSTEM_PROMPT = `You are a senior engineering leader writing an executive summary for a weekly status report.
+const HIGHLIGHTS_SYSTEM_PROMPT = `You are a senior engineering leader writing Highlights for a weekly status report.
 Write 2-4 bullets (150-200 words max) covering only the most impactful completed milestones.
 
 Rules:
@@ -31,16 +31,15 @@ Rules:
 Output ONLY the 2-4 bullets, nothing else.`;
 
 const SUMMARY_SYSTEM_PROMPT = `You are a technical writer for a software engineering team's weekly status report.
-Write one "### ProductName" sub-heading per product with one rich paragraph each covering:
-- What shipped this week (outcomes, not ticket IDs) — active voice, past tense
-- What's actively in progress — present tense
-- CVEs fixed, blockers, or notable items
-- Customer-impacting bugs — name affected customers
+Write one "### ProductName" sub-heading per product with compact bullets covering relevant work.
+Use the Jira Hierarchy Context to group work bottom-up under linked Features and Epics. Show Feature > Epic > relevant Story or work links when available. If no Feature exists, start at the Epic. If no parent exists, summarize the product work in prose.
+Cover completed and in-progress work, customer-impacting bugs, backport needs, and CVEs when relevant.
 
 Rules:
 - Every product gets a paragraph, even if quiet
-- No markdown links or Jira ticket IDs in the summary
-- Quantify when possible ("8 bug fixes", "two features")
+- Use descriptive inline Jira links for hierarchy nodes and relevant work
+- Do not repeat any outcome, Jira key, or CVE already covered in Highlights; omit that work from the product summary
+- Group routine items concisely rather than listing each one
 - Every claim must trace to an item in the provided data — never invent work
 - Customer-impacting bugs must name the customers
 
@@ -70,6 +69,7 @@ async function callLlm(
   highlightContext: string,
   reportBody: string,
   systemPrompt: string = SUMMARY_SYSTEM_PROMPT,
+  highlights = "",
 ): Promise<string> {
   const completedMatch = reportBody.match(
     /## Completed This Week[\s\S]*?(?=## In Progress)/,
@@ -78,6 +78,9 @@ async function callLlm(
 
   const userContent = [
     highlightContext,
+    highlights
+      ? "\n--- Already written Highlights (do not repeat) ---\n" + highlights
+      : "",
     "",
     "--- Report Sections (for reference) ---",
     completedMatch?.[0]?.slice(0, 2000) ?? "(no completed section found)",
@@ -97,7 +100,7 @@ async function callLlm(
         { role: "system", content: systemPrompt },
         { role: "user", content: userContent },
       ],
-      max_tokens: 1024,
+      max_tokens: 3072,
       temperature: 0.7,
     }),
     signal: AbortSignal.timeout(600_000),
@@ -122,6 +125,17 @@ async function callLlm(
   return content.replace(/<think>[\s\S]*?<\/think>\s*/g, "").trim();
 }
 
+function repeatedSummaryReferences(
+  highlights: string,
+  summary: string,
+): string[] {
+  const referencePattern = /\b(?:CVE-\d{4}-\d+|[A-Z][A-Z0-9]+-\d+)\b/g;
+  const highlightReferences = new Set(highlights.match(referencePattern) ?? []);
+  return [...new Set(summary.match(referencePattern) ?? [])].filter(
+    (reference) => highlightReferences.has(reference),
+  );
+}
+
 async function main(): Promise<void> {
   // Step 1: Fetch data
   run(
@@ -139,25 +153,52 @@ async function main(): Promise<void> {
   const hcStart = genOutput.indexOf("--- Highlight Context ---");
   const highlightContext = hcStart >= 0 ? genOutput.slice(hcStart) : genOutput;
 
-  // Step 3: Read report and call LLM for VME Executive Summary and Summary
   let report = readFileSync(OUTPUT_PATH, "utf-8");
 
-  if (report.includes("<!-- VME_EXEC_SUMMARY_PLACEHOLDER -->")) {
+  if (report.includes("<!-- HIGHLIGHTS_PLACEHOLDER -->")) {
     const execSummary = await callLlm(
       highlightContext,
       report,
-      EXEC_SUMMARY_SYSTEM_PROMPT,
+      HIGHLIGHTS_SYSTEM_PROMPT,
     );
     report = report.replace(
-      /<!-- VME_EXEC_SUMMARY_PLACEHOLDER -->\n- \(executive summary pending\)/,
+      /<!-- HIGHLIGHTS_PLACEHOLDER -->\n- \(highlights pending\)/,
       execSummary,
     );
     writeFileSync(OUTPUT_PATH, report);
-    console.log("\n=> VME Executive Summary written");
+    console.log("\n=> Highlights written");
   }
 
   if (report.includes("<!-- SUMMARY_PLACEHOLDER -->")) {
-    const summary = await callLlm(highlightContext, report);
+    const highlights =
+      report
+        .match(
+          /### Highlights\n([\s\S]*?)(?=\n### |\n<!-- SUMMARY_PLACEHOLDER -->)/,
+        )?.[1]
+        ?.trim() ?? "";
+    let summary = await callLlm(
+      highlightContext,
+      report,
+      SUMMARY_SYSTEM_PROMPT,
+      highlights,
+    );
+    let repeated = repeatedSummaryReferences(highlights, summary);
+    if (repeated.length > 0) {
+      summary = await callLlm(
+        highlightContext,
+        report,
+        SUMMARY_SYSTEM_PROMPT +
+          "\nRemove every mention of these references already in Highlights: " +
+          repeated.join(", "),
+        highlights,
+      );
+      repeated = repeatedSummaryReferences(highlights, summary);
+    }
+    if (repeated.length > 0) {
+      throw new Error(
+        "Summary repeats Highlights references: " + repeated.join(", "),
+      );
+    }
     report = report.replace(
       /<!-- SUMMARY_PLACEHOLDER -->\n- \(summary pending\)/,
       summary,

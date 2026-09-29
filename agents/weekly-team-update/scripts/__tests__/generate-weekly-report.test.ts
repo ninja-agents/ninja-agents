@@ -1419,7 +1419,7 @@ describe("formatHighlightContext", () => {
     const output = formatHighlightContext(data, sections);
     expect(output).toContain("--- Highlight Context ---");
     expect(output).not.toContain("### PROJ");
-    expect(output).toContain("--- VME Executive Summary Context ---");
+    expect(output).toContain("--- Highlights Context ---");
   });
 });
 
@@ -1574,11 +1574,12 @@ describe("end-to-end", () => {
         `# ${config!.report_title}`,
         fmtReportDate(reportDate),
         "",
-        "## VME Executive Summary",
-        "<!-- VME_EXEC_SUMMARY_PLACEHOLDER -->",
-        "- (executive summary pending)",
-        "",
         "## Summary",
+        "",
+        "### Highlights",
+        "<!-- HIGHLIGHTS_PLACEHOLDER -->",
+        "- (highlights pending)",
+        "",
         "<!-- SUMMARY_PLACEHOLDER -->",
         "- (summary pending)",
       ];
@@ -1598,11 +1599,11 @@ describe("end-to-end", () => {
 
       const reportText = reportLines.join("\n") + "\n";
 
-      expect(reportText).toContain("## VME Executive Summary");
+      expect(reportText).toContain("### Highlights");
       expect(reportText).toContain("## Summary");
       expect(reportText).toContain("## Completed This Week");
-      expect(reportText.indexOf("## VME Executive Summary")).toBeLessThan(
-        reportText.indexOf("## Summary\n"),
+      expect(reportText.indexOf("## Summary\n")).toBeLessThan(
+        reportText.indexOf("### Highlights"),
       );
     },
   );

@@ -8,6 +8,9 @@
     "base_url": "https://your-site.atlassian.net/browse",
     "projects": ["Project Alpha", "Project Beta"]
   },
+  "gitlab": {
+    "api_url": "https://gitlab.example.com/api/v4"
+  },
   "backport": {
     "ALPHA": {
       "supported_versions": ["1.0.z", "1.1.z"],

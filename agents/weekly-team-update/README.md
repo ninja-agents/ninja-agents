@@ -38,17 +38,18 @@ npx tsx agents/weekly-team-update/scripts/validate-report-links.ts
    - Jira tickets (assignee + QA contact, updated in last 7 days) for each engineer
    - Jira sprint backlog (all tickets in the active sprint, regardless of update date) to ensure In Progress items are never missed
    - GitLab MRs (merged + open) for each engineer
-3. Merges per-engineer and sprint-based Jira results (dedup by key) and saves as CSV in `data/cache/`
+3. Merges per-engineer and sprint-based Jira results (dedup by key), follows Jira parent links for weekly work and PR references, and saves normalized CSVs in `data/cache/`
 4. Runs `scripts/generate-weekly-report.ts` for deterministic formatting (body sections)
-5. Agent writes Key Highlights — polished theme summaries derived from the completed work data
+5. Agent writes Highlights and product summaries using the generated context; product summaries group relevant work under linked Features and Epics
 6. Validates all links with `scripts/validate-report-links.ts`
 7. Saves report to `data/output/weekly-update-{date}.md`
 
-The agent writes only the Key Highlights section. All other sections are generated deterministically by the TypeScript script.
+The agent writes Highlights and the product Summary. All other sections are generated deterministically by the TypeScript script.
 
 ## Output Format
 
-- **Key Highlights** — agent-written theme summaries (active voice, leadership-friendly)
+- **Summary > Highlights** — agent-written completed business outcomes
+- **Summary > Products** — compact activity grouped under linked Jira Features and Epics, without repeating Highlights
 - **Completed This Week** — by product, then engineer, PRs nested under Jira tickets
 - **In Progress** — same structure
 - **Blockers & Critical Issues** — real external blockers only

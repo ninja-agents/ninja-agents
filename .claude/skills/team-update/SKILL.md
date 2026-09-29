@@ -4,7 +4,7 @@ description: Generate a weekly team status report for leadership (7-day window)
 user-invocable: true
 ---
 
-Generate a concise weekly team report for leadership by querying the last 7 days of activity across all engineers via live MCP queries.
+Generate a concise weekly team report for leadership by collecting the last 7 days of activity across all engineers through the repository scripts.
 
 ## Usage
 
@@ -18,22 +18,19 @@ No arguments needed - automatically queries all data sources and generates the r
 
 Launches the `weekly-team-update` agent which:
 
-1. **Fetches last 7 days of activity** via parallel MCP queries:
-   - Batch 1: GitHub PRs (merged + open) + Jira tickets (per-engineer assignee queries, 7-day window) for all engineers (parallel calls)
-   - Batch 1.5: Jira sprint backlog (all active sprint tickets regardless of update date) to capture In Progress items not touched this week
-   - Batch 2: GitLab MRs (merged + open) for all engineers (parallel calls)
-2. **Saves data to CSV** in `agents/weekly-team-update/data/cache/` (github-prs.csv, gitlab-mrs.csv, jira-tickets.csv)
+1. **Fetches activity** from GitHub, GitLab, and Jira, including the active Jira sprint backlog and parent hierarchy for weekly work.
+2. **Saves data to CSV** in `agents/weekly-team-update/data/cache/` (including `jira-hierarchy.csv`).
 3. **Runs `agents/weekly-team-update/scripts/generate-weekly-report.ts`** which deterministically:
    - Filters by date window and resolution
    - Nests PRs under their parent Jira tickets
    - Organizes by product and engineer
-   - Generates formatted markdown (with a placeholder for highlights)
-4. **Writes Summary** — the agent reads the completed work and writes one rich paragraph per product, always including every product
+   - Generates formatted markdown with placeholders for Highlights and product summaries
+4. **Writes Summary** — the agent writes 2–4 completed business Highlights, then compact product bullets with linked Feature and Epic groups for relevant work. Product bullets omit outcomes already in Highlights.
 5. **Validates all links** via `agents/weekly-team-update/scripts/validate-report-links.ts`
 6. **Saves to file**: `agents/weekly-team-update/data/output/weekly-update-{YYYY-MM-DD}.md`
 7. **Displays** the report
 
-**Time:** ~30-40 seconds
+**Time:** Varies with Jira parent lookups.
 
 ## Expected Output
 
@@ -41,8 +38,8 @@ A weekly report with:
 
 ### Summary
 
-- One rich paragraph per product, always — every configured product is included
-- Active voice, leadership-friendly prose covering what shipped, what's in progress, and notable items
+- Highlights plus one subsection per configured product
+- Linked Feature and Epic groups for interesting weekly work, with no repeated Highlights
 
 ### Completed This Week
 

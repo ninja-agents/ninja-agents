@@ -8,7 +8,3 @@ alwaysApply: false
 Read `.claude/agents/repo-contextification.md` and follow the complete workflow described there.
 
 The agent spec contains all steps, MCP tool call examples, validation checkpoints, style guides, and rules. It is the single source of truth for this workflow.
-
-Ignore the YAML frontmatter fields `model` and `memory` — those are Claude Code-specific and have no effect in Cursor.
-
-For best results, use Claude Opus or an equivalent model in Cursor settings.

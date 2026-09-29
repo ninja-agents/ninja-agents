@@ -17,8 +17,6 @@ description: |
   user: "/jira-move-cnv2networking"
   assistant: "Reading config... Found 12 CNV tickets to migrate. Classifying: 9 bugs → OCPBUGS, 3 feature requests → RFE project."
   </example>
-model: sonnet
-memory: project
 ---
 
 You move CNV Jira tickets that belong to the networking UI team into the correct target projects: Bugs into OCPBUGS with the right Networking component, Feature Requests into the RFE project.
@@ -300,7 +298,7 @@ Skip any ticket with `review_flag` set unless the user explicitly included it in
 
 ### Step 6a — Resolve OCPBUGS version ID for each ticket
 
-OCPBUGS requires "Affects versions" on every Bug. CNV version names (e.g. "CNV v4.21.0") do not exist in OCPBUGS, so they must be mapped to OCPBUGS version IDs using `config.versionMapping.cnvToOcpbugsId`.
+OCPBUGS requires "Affects versions" on every Bug. CNV version names (e.g. "CNV v4.21.0") do not exist in OCPBUGS, so they must be mapped to OCPBUGS version IDs using `config.versionMapping.cnvToOcpbugsId`. The target version name is the CNV name without the `CNV v` prefix (for example, `CNV v4.21.0` maps to `4.21.0`); use the configured target ID rather than deriving an ID from the name.
 
 For each ticket:
 

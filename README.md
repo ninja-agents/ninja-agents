@@ -2,7 +2,7 @@
 
 ![Ninja Agents logo](logo.png)
 
-A shared playground for AI agents that help engineering teams ship status reports, run sprint retrospectives, and audit repository documentation. Each agent is a self-contained directory under `agents/` with its own scripts, config, and data. Agents run inside [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Cursor](https://cursor.com) via MCP servers that connect to GitHub, GitLab, and Jira.
+A shared playground for AI agents that help engineering teams ship status reports, run sprint retrospectives, and audit repository documentation. Each agent is a self-contained directory under `agents/` with its own scripts, config, and data. Agents run inside [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Cursor](https://cursor.com), or [Codex](https://learn.chatgpt.com/docs/codex/cli) via MCP servers that connect to GitHub, GitLab, and Jira.
 
 > **Note:** These agents are opinionated — they encode our team's specific workflows, naming conventions, and tooling choices. They work well for us but may need adaptation for your team.
 
@@ -26,6 +26,10 @@ claude                # Claude Code
 
 # Or open the project in Cursor
 # then ask: @weekly-team-update or "generate a weekly team report"
+
+# Or launch Codex with a model of your choice
+codex -m gpt-6-luna
+# then select $team-update with the $ skill picker
 ```
 
 See [docs/mcp-setup.md](docs/mcp-setup.md) for the full token setup guide and troubleshooting.
@@ -50,6 +54,8 @@ See [docs/mcp-setup.md](docs/mcp-setup.md) for the full token setup guide and tr
 
 Each agent has its own README with setup and usage instructions.
 
+Codex skills use the same names as the Claude commands in the table. Select a skill with `$` or `/skills`; for example, choose `$team-update` for the weekly report. Where a detailed workflow exists in `.claude/agents/`, the Codex skill links to it so both clients follow the same steps.
+
 ## Prerequisites
 
 You need an AI-powered IDE plus MCP servers for the agents you want to use:
@@ -68,6 +74,7 @@ See [docs/mcp-setup.md](docs/mcp-setup.md) for the full step-by-step guide. The 
 export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
 export GITLAB_PAT=glpat-xxxxxxxxxxxxxxxxxxxx
 claude   # Claude Code — or open the project in Cursor
+# For Codex: codex -m gpt-6-luna
 ```
 
 ## Contributing a New Agent
@@ -83,11 +90,12 @@ agents/your-agent/
 
 To add a new agent:
 
-1. Run `/create-agent` in Claude Code, or copy `agents/_template/` manually
+1. Run `/create-agent` in Claude Code, `$create-agent` in Codex, or copy `agents/_template/` manually
 2. Add your scripts, config, and a README
-3. Wire it into both IDEs:
+3. Wire it into all three clients:
    - Create `.claude/agents/your-agent.md` (agent spec — shared source of truth)
    - Create `.claude/skills/your-skill/SKILL.md` (Claude Code skill shortcut)
+   - Create `.agents/skills/your-skill/SKILL.md` with a reference link to the agent spec (Codex skill)
    - Create `.cursor/rules/your-agent.mdc` (Cursor rule — points to the agent spec)
 4. Update the agent table in this README and in `AGENTS.md`
 
@@ -101,6 +109,8 @@ ninja-agents/
 ├── CLAUDE.md                          # Claude Code project context
 ├── README.md                          # This file
 ├── .mcp.json                          # MCP server definitions (Claude Code)
+├── .codex/config.toml                 # MCP server definitions (Codex)
+├── .agents/skills/                   # Codex skills linked to the agent specs
 ├── .claude/
 │   ├── agents/                        # Agent specs (shared source of truth)
 │   ├── skills/                        # Skill shortcuts (Claude Code)

@@ -11,8 +11,6 @@ assistant: launches the slack-channels-analyzer agent
 user: '/slack-channels-analyzer'
 assistant: launches the slack-channels-analyzer agent
 </example>"
-model: sonnet
-memory: project
 ---
 
 You are a Console Networking & NMState UI analyst. You identify topics relevant to the OpenShift web console networking and NMState plugins by scanning Slack channels and filtering for UI relevance using LLM reasoning.

@@ -15,8 +15,6 @@ description: |
   user: "Team update for leadership"
   assistant: "Let me launch the weekly-team-update agent to generate the weekly report."
   </example>
-model: sonnet
-memory: project
 ---
 
 You are a report coordinator for the weekly team report. Your job is to:

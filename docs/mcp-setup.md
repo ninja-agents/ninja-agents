@@ -1,10 +1,10 @@
 # MCP Server Setup
 
-This guide walks you through configuring the MCP servers that agents in this repo depend on. The server definitions are committed to the repo; you only need to supply your personal tokens as environment variables when launching your IDE.
+This guide walks you through configuring the MCP servers that agents in this repo depend on. The server definitions are committed to the repo; you only need to supply your personal tokens as environment variables when launching your client.
 
 ## Prerequisites
 
-- An AI-powered IDE: [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Cursor](https://cursor.com)
+- An AI-powered client: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Cursor](https://cursor.com), or [Codex](https://learn.chatgpt.com/docs/codex/cli)
 - [Node.js](https://nodejs.org/) 18+ (for the GitLab stdio server)
 
 ## Quick Start
@@ -12,10 +12,11 @@ This guide walks you through configuring the MCP servers that agents in this rep
 ```bash
 export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
 export GITLAB_PAT=glpat-xxxxxxxxxxxxxxxxxxxx
-export JIRA_API_TOKEN=ATATT3x...   # only needed for jira-qe-story (issue creation)
+export JIRA_API_TOKEN=ATATT3x...   # needed for workflows that write Jira issues
 
 claude          # Claude Code
 # or open the project in Cursor
+# or: codex -m gpt-6-luna
 ```
 
 You can add these exports to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.) so they persist across sessions.
@@ -51,9 +52,9 @@ Used by the GitLab MCP server for MR data from `gitlab.cee.redhat.com`.
 
 ### 3. Atlassian (browser OAuth for reads, API token for writes)
 
-The Atlassian Rovo MCP server authenticates via browser OAuth for **read operations**. On first use, your IDE will open a browser window for you to log in to your Atlassian account.
+The Atlassian Rovo MCP server authenticates via browser OAuth for **read operations**. On first use, your client will open a browser window for you to log in to your Atlassian account. In Codex, run `codex mcp login atlassian` if the login prompt does not appear automatically.
 
-For **write operations** (creating issues, adding comments), some projects require direct REST API access via a Jira API token. The `jira-qe-story` agent uses this for issue creation.
+For **write operations** (creating issues, adding comments, setting fields), the agents use direct REST API scripts with a Jira API token. Set this token before running any Jira write workflow.
 
 1. Go to [id.atlassian.com/manage-profile/security/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
 2. Create a new API token
@@ -84,6 +85,10 @@ You should see three servers listed: **github**, **gitlab**, and **atlassian**.
 
 Open the MCP settings (Cursor Settings > MCP) and verify the three servers show a green status indicator.
 
+**Codex:**
+
+From the repository root, run `codex mcp list`, or use `/mcp` in an interactive Codex session. The project must be trusted for `.codex/config.toml` to load. You should see **github**, **gitlab**, and **atlassian**. Select a workflow with `$` or `/skills`; the selected Codex model applies to it.
+
 To test each server, ask your IDE to run a simple query:
 
 ```bash
@@ -99,14 +104,15 @@ mcp__atlassian__searchJiraIssuesUsingJql with jql: "assignee = currentUser() ORD
 
 ## How It Works
 
-MCP server definitions live in two files (one per IDE):
+MCP server definitions live in three client-specific files:
 
-| IDE         | Config File        |
-| ----------- | ------------------ |
-| Claude Code | `.mcp.json`        |
-| Cursor      | `.cursor/mcp.json` |
+| IDE         | Config File          |
+| ----------- | -------------------- |
+| Claude Code | `.mcp.json`          |
+| Cursor      | `.cursor/mcp.json`   |
+| Codex       | `.codex/config.toml` |
 
-Both files define the same three servers:
+All three files define the same three servers:
 
 | Server        | Type  | Endpoint                     |
 | ------------- | ----- | ---------------------------- |
@@ -114,13 +120,13 @@ Both files define the same three servers:
 | **gitlab**    | stdio | `npx @zereight/mcp-gitlab`   |
 | **atlassian** | HTTP  | `mcp.atlassian.com/v1/mcp`   |
 
-Token references use `${VAR_NAME}` syntax, which both IDEs resolve from your environment variables.
+Claude Code and Cursor resolve `${VAR_NAME}` token references. Codex reads `GITHUB_PAT` through `bearer_token_env_var` and forwards `GITLAB_PAT` to its GitLab server process. No token values are stored in the repository.
 
 ## Troubleshooting
 
 ### MCP servers not showing up
 
-- Make sure `.mcp.json` (Claude Code) or `.cursor/mcp.json` (Cursor) exists in the project
+- Make sure `.mcp.json` (Claude Code), `.cursor/mcp.json` (Cursor), or `.codex/config.toml` (Codex) exists in the project
 - Restart your IDE after cloning or pulling
 
 ### Server shows but tools fail with auth errors

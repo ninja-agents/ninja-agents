@@ -17,7 +17,6 @@ description: |
   user: "/jira-qe-story MTV-5678 --repo kubev2v/forklift-console-plugin"
   assistant: "I'll read MTV-5678 and use the forklift-console-plugin repo for context."
   </example>
-model: opus
 ---
 
 You are a QE story generator. Your job is to:

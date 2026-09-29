@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Ninja Agents is a shared playground for AI agents that help engineering teams with recurring workflows -- weekly status reports, sprint retrospectives, and repository documentation audits. Each agent is a self-contained directory under `agents/` with its own scripts, configuration, and data. Agents run inside Claude Code or Cursor, using MCP servers to query GitHub, GitLab, and Jira.
+Ninja Agents is a shared playground for AI agents that help engineering teams with recurring workflows -- weekly status reports, sprint retrospectives, and repository documentation audits. Each agent is a self-contained directory under `agents/` with its own scripts, configuration, and data. Agents run inside Claude Code, Cursor, or Codex, using MCP servers to query GitHub, GitLab, and Jira.
 
 The repo follows a "data collector + deterministic script" pattern: the AI agent fetches data via MCP tools and saves it as CSV, then a TypeScript script generates the structured output. The agent writes only the prose sections (e.g., Key Highlights, Key Takeaways) that require synthesis.
 
@@ -29,6 +29,7 @@ This repo works with multiple AI-powered IDEs:
 
 - **Claude Code** -- agent specs in [`.claude/agents/`](.claude/agents/), skill shortcuts in [`.claude/skills/`](.claude/skills/), project context in [`CLAUDE.md`](CLAUDE.md). Invoke agents with `/skill-name` commands.
 - **Cursor** -- project rules in [`.cursor/rules/`](.cursor/rules/), MCP config in [`.cursor/mcp.json`](.cursor/mcp.json). Invoke agents by mentioning `@agent-name` in chat or describing what you need.
+- **Codex** -- skills in [`.agents/skills/`](.agents/skills/) link to the detailed Claude agent specs; MCP config is [`.codex/config.toml`](.codex/config.toml). Select a skill with `$` or `/skills` and choose a model per session, for example `codex -m gpt-6-luna`.
 
 ## Conventions and Patterns
 
@@ -59,6 +60,7 @@ agents/{name}/
 - Agent directories: lowercase with hyphens (`weekly-team-update`, `sprint-review`)
 - Agent specs: `.claude/agents/{agent-name}.md`
 - Skill shortcuts: `.claude/skills/{skill-name}/SKILL.md`
+- Codex skills: `.agents/skills/{skill-name}/SKILL.md`; link `references/agent-workflow.md` to the agent spec when one exists
 - Cursor rules: `.cursor/rules/{agent-name}.mdc`
 - Config files: `data/{descriptive-name}.json` (e.g., `team-config.json`, `sprint-config.json`)
 - Cache files: `data/cache/{source}-{type}.csv` (e.g., `github-prs.csv`, `jira-tickets.csv`)

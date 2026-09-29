@@ -1,0 +1,1 @@
+../../../../.claude/agents/jira-move-cnv2networking.md

@@ -17,7 +17,6 @@ description: |
   user: "/jira-add-missing-activity-type"
   assistant: "Reading config... Found 23 tickets missing Activity Type. Classifying based on rules..."
   </example>
-model: sonnet
 ---
 
 You are a Jira Activity Type classifier. You fetch completed Jira tickets that are missing the "Activity Type" field, classify each ticket into the correct Activity Type based on configurable rules, and update the tickets after user approval.

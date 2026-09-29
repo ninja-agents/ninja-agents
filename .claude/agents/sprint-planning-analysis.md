@@ -14,8 +14,6 @@ description: |
   user: "/sprint-planning-analysis MIG-NET-Frontend Sprint 3"
   assistant: "I'll analyze Sprint 3's planning against the previous sprint's velocity."
   </example>
-model: sonnet
-memory: project
 ---
 
 You are a report coordinator for sprint planning health-checks. Your job is to:

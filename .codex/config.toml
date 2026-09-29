@@ -1,0 +1,11 @@
+[mcp_servers.github]
+url = "https://api.githubcopilot.com/mcp/"
+bearer_token_env_var = "GITHUB_PAT"
+
+[mcp_servers.gitlab]
+command = "sh"
+args = ["-c", "exec env GITLAB_PERSONAL_ACCESS_TOKEN=\"$GITLAB_PAT\" GITLAB_API_URL=https://gitlab.cee.redhat.com/api/v4 npx -y @zereight/mcp-gitlab"]
+env_vars = ["GITLAB_PAT"]
+
+[mcp_servers.atlassian]
+url = "https://mcp.atlassian.com/v1/mcp"

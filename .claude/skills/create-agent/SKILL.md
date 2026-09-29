@@ -56,20 +56,7 @@ Ask:
 - **Does this agent need a config file?** If yes, what does it configure? (e.g., team members, project list, thresholds, API endpoints). Default: yes for data-fetching agents, no for simple tools.
 - **Does the agent write any prose output itself** (vs. delegating all formatting to scripts)? If yes, what kind? (e.g., summary bullets, analysis paragraphs, recommendations). A style guide will be generated for any agent-written prose.
 
-### 1.4 Model & Memory
-
-Ask:
-
-- **Which model?** Options:
-  - `opus` — complex reasoning, multi-step workflows, large context (recommended for data-heavy agents)
-  - `sonnet` — balanced speed and capability (recommended for most agents)
-  - `haiku` — fast and cheap (recommended for simple lookups, exploration, read-only tasks)
-- **Memory mode?** Options:
-  - `project` — learns across sessions, shared with team via git (recommended for team agents)
-  - `user` — personal learning across all projects
-  - None — no persistent memory (recommended for stateless/deterministic agents)
-
-### 1.5 Skill & Validation
+### 1.4 Skill & Validation
 
 Ask:
 
@@ -137,8 +124,6 @@ Generate the agent spec with this structure:
 ---
 name: { name }
 description: "{description with trigger phrases and examples}"
-model: { model }
-memory: { memory or omit if none }
 ---
 
 {Role statement — one sentence defining what the agent does and doesn't do.}
@@ -709,10 +694,6 @@ alwaysApply: false
 Read `.claude/agents/{name}.md` and follow the complete workflow described there.
 
 The agent spec contains all steps, MCP tool call examples, CSV schemas, validation checkpoints, style guides, and rules. It is the single source of truth for this workflow.
-
-Ignore the YAML frontmatter fields `model` and `memory` — those are Claude Code-specific and have no effect in Cursor.
-
-For best results, use Claude Opus or an equivalent model in Cursor settings.
 ```
 
 **If TypeScript**, also add a reference to `tsconfig.json` in the repo root:
@@ -723,35 +704,7 @@ For best results, use Claude Opus or an equivalent model in Cursor settings.
 
 Append to the `"references"` array in the root `tsconfig.json`.
 
-## Phase 3: Save Memory
-
-Save a **project** memory so future conversations know this agent exists. Write to the memory system at `/home/rlavi/.claude/projects/-home-rlavi-Projects-ninja-agents/memory/`:
-
-1. Create `agent_{name}.md` with frontmatter:
-
-   ```markdown
-   ---
-   name: agent-{name}
-   description: "{name}" agent was scaffolded — {one-line purpose}
-   type: project
-   ---
-
-   Agent "{name}" was created on {today's date}.
-
-   **What it does:** {one-sentence description from Phase 1}
-   **Skill:** `/{skill-name}`
-   **Model:** {model}
-   **Scripts:** {language or "none"}
-   **MCP servers:** {list or "none"}
-   **Config:** `agents/{name}/data/config.json` or "none"
-   ```
-
-2. Add a pointer line to `MEMORY.md`:
-   ```
-   - [Agent: {name}](agent_{name}.md) — {name} agent scaffolded, invoked via /{skill-name}
-   ```
-
-## Phase 4: Install & Verify
+## Phase 3: Install & Verify
 
 If TypeScript or Python scripts were generated, install dependencies:
 
@@ -784,7 +737,7 @@ npm run format      # Prettier — auto-format all new files
 
 If ESLint reports errors, fix them (common issues: add type assertions to `JSON.parse` calls, use `String(e)` in catch blocks instead of interpolating `unknown` directly).
 
-## Phase 5: Review & Next Steps
+## Phase 4: Review & Next Steps
 
 After generating all files, display:
 

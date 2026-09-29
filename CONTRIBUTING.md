@@ -16,12 +16,13 @@ Or run the scaffolding skill in Claude Code:
 /create-agent your-agent-name
 ```
 
-Both approaches produce the standard layout described in [agents/\_template/README.md](agents/_template/README.md). After creating the agent directory, wire it into both IDEs:
+Both approaches produce the standard layout described in [agents/\_template/README.md](agents/_template/README.md). After creating the agent directory, wire it into all three clients:
 
 1. Agent spec at `.claude/agents/your-agent.md` (shared source of truth)
 2. Skill shortcut at `.claude/skills/your-skill/SKILL.md` (Claude Code)
-3. Cursor rule at `.cursor/rules/your-agent.mdc` (Cursor — points to the agent spec)
-4. Rows added to the agent tables in `README.md`, `AGENTS.md`, and `CLAUDE.md`
+3. Codex skill at `.agents/skills/your-skill/SKILL.md` with a relative `references/agent-workflow.md` symlink to the agent spec
+4. Cursor rule at `.cursor/rules/your-agent.mdc` (Cursor — points to the agent spec)
+5. Rows added to the agent tables in `README.md`, `AGENTS.md`, and `CLAUDE.md`
 
 ## Coding Standards
 

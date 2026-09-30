@@ -1,0 +1,8 @@
+---
+description: "Publish only the approved Summary of a weekly team report through the configured fork and open a PR. Use when the user asks to publish or submit an approved team update."
+alwaysApply: false
+---
+
+# Publish Weekly Team Summary
+
+Read `.claude/skills/team-update-publish/SKILL.md` and follow the complete workflow. This is a separate step after the user reviews the weekly report.

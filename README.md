@@ -32,6 +32,8 @@ codex -m gpt-6-luna
 # then select $team-update with the $ skill picker
 ```
 
+After reviewing the weekly report, use `/team-update-publish` in Claude Code, `$team-update-publish` in Codex, or ask Cursor to publish the approved summary. The skill previews the single-file change before asking permission to push it to the configured fork and open a PR.
+
 See [docs/mcp-setup.md](docs/mcp-setup.md) for the full token setup guide and troubleshooting.
 
 ## Available Agents

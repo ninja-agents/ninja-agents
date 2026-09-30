@@ -17,6 +17,10 @@ Generates a leadership-ready weekly status report by querying GitHub, GitLab, an
 /team-update
 ```
 
+After reviewing the generated report, run `/team-update-publish` to preview its Summary and, after explicit approval, push it to the configured fork and open a PR containing only that section in the configured GitHub repository.
+
+In Codex, select `$team-update-publish`. In Cursor, ask to publish the approved weekly team summary.
+
 ### Cursor
 
 In Cursor chat, mention `@weekly-team-update` or ask for a "weekly team report" — the rule activates automatically and walks through the full workflow.
@@ -68,6 +72,7 @@ cp data/team-config.example.json data/team-config.json
 Edit `data/team-config.json` to customize:
 
 - **Team name** and report title
+- **Publishing destination and fork** in `publishing.github_repository` and `publishing.github_fork` (`OWNER/REPO`); the real values stay in the gitignored `team-config.json`
 - **Jira** cloud ID, filter ID, and base URL
 - **Products** with Jira prefixes and tracked repos
 - **Engineers** with GitHub/GitLab usernames and Jira account IDs (product is inferred from work item data)

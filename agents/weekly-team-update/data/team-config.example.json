@@ -2,6 +2,10 @@
   "_comment": "Copy this file to team-config.json and fill in your team's real data.",
   "team_name": "My Team",
   "report_title": "My Team - Weekly Report",
+  "publishing": {
+    "github_repository": "OWNER/REPO",
+    "github_fork": "YOUR_USERNAME/REPO"
+  },
   "jira": {
     "cloud_id": "your-site.atlassian.net",
     "team_filter_id": "12345",

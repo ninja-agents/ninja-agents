@@ -61,7 +61,7 @@ npm run context:test        # run only repo-contextification tests
 
 Test files live alongside the source (e.g., `scripts/lib.test.ts`). When adding new scripts, add corresponding test files following the same naming convention.
 
-The NMState CVE workflow uses isolated evidence fixtures: `npm run nmstate-cve-verification:test`. For live validation, prepare/log in to an approved cluster yourself, provide a Jira issue, and follow the [agent README](agents/nmstate-cve-verification/README.md). Do not make live cluster or Jira writes part of the test suite; a source-dependency verdict is not a runtime vulnerability scan.
+The NMState CVE workflow uses isolated evidence fixtures: `npm run nmstate-cve-verification:test`. Live build/catalog/repository assessments require no cluster by default; provide a current Jira issue and explicit selection inputs, following the [agent README](agents/nmstate-cve-verification/README.md). The build runner reuses only an existing user-owned authfile and never logs in or creates credentials. Only explicitly requested deployed-source checks require you to prepare/log in to an approved cluster yourself. Do not make live cluster or Jira writes part of the test suite; separately scoped image-labelled and repository source-dependency verdicts are not runtime vulnerability scans.
 
 ## Pull Request Process
 

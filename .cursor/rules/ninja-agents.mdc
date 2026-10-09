@@ -23,6 +23,7 @@ AI agents for engineering teams. Self-contained under `agents/`, specs in `.clau
 | `@jira-bugs-missing-qe` | Find resolved bugs missing QA Contact, identify and set verifier |
 | `@jira-move-cnv2networking` | Move CNV networking tickets to OCPBUGS or the RFE project |
 | `@jira-fix-version` | Set fixVersions on resolved tickets by tracing merged PR branches |
+| `@nmstate-cve-verification` | Verify NMState CVEs from release-associated artifacts without a cluster by default; deployed checks opt-in |
 
 ## Key Rules
 

@@ -42,14 +42,24 @@
     "jira-fix-version:resolve-issues": "tsx agents/jira-fix-version/scripts/resolve-github-issues.ts",
     "jira-fix-version:generate": "tsx agents/jira-fix-version/scripts/generate-preview.ts",
     "jira-fix-version:test": "vitest run --dir agents/jira-fix-version",
+    "nmstate-cve-verification:verify": "tsx agents/nmstate-cve-verification/scripts/collect.ts",
+    "nmstate-cve-verification:validate": "tsx agents/nmstate-cve-verification/scripts/validate-output.ts",
+    "nmstate-cve-verification:test": "vitest run --dir agents/nmstate-cve-verification",
+    "nmstate-cve-verification:read-jira": "tsx agents/nmstate-cve-verification/scripts/read-jira.ts",
+    "nmstate-cve-verification:catalog": "tsx agents/nmstate-cve-verification/scripts/run-catalog.ts",
+    "nmstate-cve-verification:compare-runs": "tsx agents/nmstate-cve-verification/scripts/compare-runs.ts",
     "vertex-billing": "tsx agents/vertex-billing/scripts/vertex-billing.ts"
   },
   "dependencies": {
-    "@slack/web-api": "^7.17.0"
+    "@slack/web-api": "^7.17.0",
+    "semver": "^7.8.5",
+    "tar": "^7.5.22",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.0.0",
+    "@types/semver": "^7.8.0",
     "eslint": "^10.3.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.8.3",

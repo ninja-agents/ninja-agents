@@ -23,6 +23,10 @@ agents/*/data/cache/*
 agents/*/data/output/*.md
 agents/*/data/output/*.json
 
+# Private CVE evidence runs (manifests, lockfiles and checksums included)
+agents/nmstate-cve-verification/data/output/*
+!agents/nmstate-cve-verification/data/output/.gitkeep
+
 # Research logs (contain PII: real names, account IDs, internal ticket data)
 agents/*/research.md
 
@@ -33,3 +37,5 @@ node_modules/
 .DS_Store
 .pi/skills
 .codex/config.toml
+.omp/plans/NMSTATE_CATALOG_ITERATIONS_PLAN.md
+.omp/plans/NMSTATE_CATALOG_MANUAL_PLAN.md

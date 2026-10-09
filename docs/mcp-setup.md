@@ -69,6 +69,12 @@ For **write operations** (creating issues, adding comments, setting fields), the
    }
    ```
 
+### NMState CVE verification access
+
+The [NMState CVE verification agent](../agents/nmstate-cve-verification/README.md) needs Jira **read** access; no Jira write token. Default artifact_source needs release/platform/selection intent and approved publisher/registry/source/advisory access, **not a cluster or kubeconfig**. Only explicit deployed_source requires prepared NMState workloads, approved cluster binding and user-run `oc login`.
+
+Install `oc` for registry/payload metadata reads, `skopeo`, Node.js 22+ and root dependencies (`npm install`). Registry auth uses a supplied file/`REGISTRY_AUTH_FILE`, or secure temporary Podman login with configured `RH_USERNAME`/`RH_TOKEN`; token on stdin, no credential output and cleanup on success/failure. Red Hat credentials do not grant CI-registry access. All `skopeo` reads receive `--authfile`; registry-only `oc adm release info`/`oc image info` receive `--registry-config`, never cluster `oc get`. See the [authentication modes](../agents/nmstate-cve-verification/README.md#prepare-registry-authentication). Missing publisher product mapping/access is INCONCLUSIVE, not permission for a cluster or origin-tag fallback. Credentials/authfile paths stay out of reports; no cluster login/pull-secret extraction/TLS bypass or Jira writes. GitLab is not required.
+
 ## Verification
 
 After exporting your tokens, launch your IDE and verify the MCP servers are connected.

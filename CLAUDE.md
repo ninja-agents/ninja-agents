@@ -29,6 +29,10 @@ npm run format:check  # Prettier dry-run
 npm test              # all agent tests
 ```
 
+## CVE Verification
+
+`/nmstate-cve-verification <jira-key-or-url>` follows the [NMState CVE verification workflow](.claude/agents/nmstate-cve-verification.md): release-associated artifact/source verification without a cluster by default, explicit deployed_source for installed-image checks. Also available as `$nmstate-cve-verification` in Codex and `@nmstate-cve-verification` in Cursor. Publisher product mapping/platform/source evidence is required; no runtime scan or Jira closure claim.
+
 ## Full Context
 
 See [AGENTS.md](AGENTS.md) for conventions, patterns, MCP tool usage, and review guidelines. See [ARCHITECTURE.md](ARCHITECTURE.md) for system design and data flow. See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow.

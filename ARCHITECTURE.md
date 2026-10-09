@@ -107,6 +107,12 @@ The AI agent reads the generated report and writes the prose sections that requi
 
 A validation script then checks the final output for broken links, missing sections, or data quality issues.
 
+### Read-only artifact verification
+
+`nmstate-cve-verification` retains collector/deterministic-output separation using typed JSON for release/product/platform/source/advisory identity. The AI derives targets from Jira; default artifact_source selects approved publisher records without cluster APIs, verifies immutable product/platform/release association, then evaluates all matching npm copies at the exact recorded source commit. Explicit deployed_source adds real context/release/workload/node observations and stability checks. Reports preserve selected discovery and unassociated candidate findings without turning them into release verdicts.
+
+Cluster/Jira/source operations are read-only; cluster setup/login and Jira closure remain user-owned. Registry authentication may use a provided authfile or `RH_USERNAME`/`RH_TOKEN`; Podman receives the token on stdin, and agent-owned temporary authentication is removed on success/failure. A source-dependency pass is explicitly not a runtime scan, final-bundle assertion or cryptographic provenance attestation. See the [agent's scope and evidence contract](agents/nmstate-cve-verification/README.md).
+
 ## Dependencies
 
 ### Root Level
@@ -126,7 +132,7 @@ All dependencies are managed in the root `package.json`. In addition to the lint
 | `vitest`      | Unit testing                              |
 | `@types/node` | Node.js type definitions                  |
 
-No runtime dependencies exist -- agents use only Node.js built-in modules (`fs`, `path`). The `tsx` package provides the TypeScript execution environment.
+Runtime dependencies are managed at the root alongside tooling: `@slack/web-api` supports Slack collection and `semver` provides npm version/range semantics for CVE verification. Other scripts use Node.js built-in modules where sufficient. The `tsx` package provides the TypeScript execution environment.
 
 ### MCP Servers
 

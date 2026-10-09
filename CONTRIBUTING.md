@@ -61,6 +61,8 @@ npm run context:test        # run only repo-contextification tests
 
 Test files live alongside the source (e.g., `scripts/lib.test.ts`). When adding new scripts, add corresponding test files following the same naming convention.
 
+The NMState CVE workflow uses isolated evidence fixtures: `npm run nmstate-cve-verification:test`. For live validation, prepare/log in to an approved cluster yourself, provide a Jira issue, and follow the [agent README](agents/nmstate-cve-verification/README.md). Do not make live cluster or Jira writes part of the test suite; a source-dependency verdict is not a runtime vulnerability scan.
+
 ## Pull Request Process
 
 1. Create a branch from `main` with a descriptive name (e.g., `add-deploy-agent` or `fix-gitlab-scope`)

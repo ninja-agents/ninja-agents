@@ -37,5 +37,4 @@ node_modules/
 .DS_Store
 .pi/skills
 .codex/config.toml
-.omp/plans/NMSTATE_CATALOG_ITERATIONS_PLAN.md
-.omp/plans/NMSTATE_CATALOG_MANUAL_PLAN.md
+.omp/plans/*

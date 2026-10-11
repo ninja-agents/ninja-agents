@@ -48,6 +48,7 @@
     "nmstate-cve-verification:read-jira": "tsx agents/nmstate-cve-verification/scripts/read-jira.ts",
     "nmstate-cve-verification:catalog": "tsx agents/nmstate-cve-verification/scripts/run-catalog.ts",
     "nmstate-cve-verification:build": "tsx agents/nmstate-cve-verification/scripts/run-build.ts",
+    "nmstate-cve-verification:art": "tsx agents/nmstate-cve-verification/scripts/run-art.ts",
     "nmstate-cve-verification:repository": "tsx agents/nmstate-cve-verification/scripts/verify-repository.ts",
     "nmstate-cve-verification:validate-repository": "tsx agents/nmstate-cve-verification/scripts/validate-repository-output.ts",
     "nmstate-cve-verification:compare-runs": "tsx agents/nmstate-cve-verification/scripts/compare-runs.ts",

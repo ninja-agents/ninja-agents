@@ -6,6 +6,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
+import { normalizeSprintMemberships } from "./sprint-membership.js";
 
 const SCRIPT_DIR = import.meta.dirname;
 const AGENT_DIR = resolve(SCRIPT_DIR, "..");
@@ -766,15 +767,15 @@ async function fetchVelocityFromJira(
 
 // --- CSV writing ---
 
-function writeSprintIssuesCsv(
+export function buildSprintIssuesCsv(
   issues: JiraSearchResult["issues"],
   sprintName: string,
   sprintStart: string,
   sprintEnd: string,
   config: SprintConfig,
-): void {
+): string {
   const header =
-    "key,summary,status,resolution,resolutiondate,issuetype,priority,assignee_id,assignee_name,story_points,created,updated,sprint_name,sprint_start,sprint_end,labels,qa_contact_id,qa_contact_name";
+    "key,summary,status,resolution,resolutiondate,issuetype,priority,assignee_id,assignee_name,story_points,created,updated,sprint_name,sprint_start,sprint_end,labels,qa_contact_id,qa_contact_name,sprint_history";
 
   const rows = (issues ?? []).map((issue) => {
     const f = issue.fields ?? {};
@@ -784,6 +785,7 @@ function writeSprintIssuesCsv(
       ? (f.labels as string[]).join(";")
       : "";
     const sp = f[config.jira.story_point_field];
+    const memberships = normalizeSprintMemberships(f[config.jira.sprint_field]);
 
     return [
       issue.key,
@@ -804,13 +806,11 @@ function writeSprintIssuesCsv(
       labels,
       str(qaContact.accountId),
       csvEscape(str(qaContact.displayName)),
+      memberships === null ? "" : csvEscape(JSON.stringify(memberships)),
     ].join(",");
   });
 
-  writeFileSync(
-    resolve(CACHE_DIR, "sprint-issues.csv"),
-    [header, ...rows].join("\n") + "\n",
-  );
+  return [header, ...rows].join("\n") + "\n";
 }
 
 // --- Main ---
@@ -981,12 +981,15 @@ async function main(): Promise<void> {
 
   // Step 6: Save CSV
   console.log("\n=== Step 6: Save Outputs ===");
-  writeSprintIssuesCsv(
-    issues,
-    targetSprintName,
-    targetSprintStart,
-    targetSprintEnd,
-    config,
+  writeFileSync(
+    resolve(CACHE_DIR, "sprint-issues.csv"),
+    buildSprintIssuesCsv(
+      issues,
+      targetSprintName,
+      targetSprintStart,
+      targetSprintEnd,
+      config,
+    ),
   );
   console.log(`  sprint-issues.csv: ${issues.length} rows`);
   console.log(`  velocity-summary.json: ${velocitySummary.sprint_name}`);

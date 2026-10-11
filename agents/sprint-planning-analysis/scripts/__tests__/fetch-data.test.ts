@@ -1,4 +1,9 @@
 import { describe, it, expect } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { buildSprintIssuesCsv } from "../fetch-data.js";
+import { loadSprintIssues } from "../generate-sprint-planning-analysis.js";
 
 // Re-implement helpers locally since they aren't exported
 
@@ -530,131 +535,148 @@ describe("computeVelocityFromJira", () => {
 
 // --- CSV output format ---
 
-describe("CSV output format", () => {
-  function writeSprintIssuesCsv(
-    issues: Array<{ key: string; fields?: Record<string, unknown> }>,
-    sprintName: string,
-    sprintStart: string,
-    sprintEnd: string,
-    config: SprintConfig,
-  ): string {
-    const header =
-      "key,summary,status,resolution,resolutiondate,issuetype,priority,assignee_id,assignee_name,story_points,created,updated,sprint_name,sprint_start,sprint_end,labels,qa_contact_id,qa_contact_name";
-
-    const rows = issues.map((issue) => {
-      const f = issue.fields ?? {};
-      const assignee = (f.assignee ?? {}) as Record<string, unknown>;
-      const qaContact = (f.customfield_10470 ?? {}) as Record<string, unknown>;
-      const labels = Array.isArray(f.labels)
-        ? (f.labels as string[]).join(";")
-        : "";
-      const sp = f[config.jira.story_point_field];
-
-      return [
-        issue.key,
-        csvEscape(str(f.summary)),
-        str((f.status as Record<string, unknown> | null)?.name),
-        str((f.resolution as Record<string, unknown> | null)?.name),
-        str(f.resolutiondate),
-        str((f.issuetype as Record<string, unknown> | null)?.name),
-        str((f.priority as Record<string, unknown> | null)?.name),
-        str(assignee.accountId),
-        csvEscape(str(assignee.displayName)),
-        sp != null ? str(sp) : "",
-        str(f.created),
-        str(f.updated),
-        sprintName,
-        sprintStart,
-        sprintEnd,
-        labels,
-        str(qaContact.accountId),
-        csvEscape(str(qaContact.displayName)),
-      ].join(",");
-    });
-
-    return [header, ...rows].join("\n") + "\n";
+describe("CSV consumer roundtrip", () => {
+  function loadCsv(csv: string) {
+    const dir = mkdtempSync(join(tmpdir(), "planning-csv-"));
+    try {
+      const file = join(dir, "issues.csv");
+      writeFileSync(file, csv);
+      return loadSprintIssues(file);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 
-  it("produces correct CSV header", () => {
-    const csv = writeSprintIssuesCsv([], "Sprint 4", "", "", testConfig);
-    const header = csv.split("\n")[0];
-    expect(header).toBe(
-      "key,summary,status,resolution,resolutiondate,issuetype,priority,assignee_id,assignee_name,story_points,created,updated,sprint_name,sprint_start,sprint_end,labels,qa_contact_id,qa_contact_name",
-    );
-  });
-
-  it("maps fields correctly for a full issue", () => {
-    const issues = [
+  it("preserves full issue values and configured sprint history", () => {
+    const config = {
+      ...testConfig,
+      jira: { ...testConfig.jira, sprint_field: "customfield_other" },
+    };
+    const fields = {
+      summary: 'Fix "button", correctly',
+      status: { name: "Done" },
+      resolution: { name: "Done" },
+      resolutiondate: "2026-08-15T10:00:00.000+0000",
+      issuetype: { name: "Bug" },
+      priority: { name: "Major" },
+      assignee: { accountId: "abc123", displayName: "Jane, Doe" },
+      customfield_10028: 5,
+      created: "2026-08-01T09:00:00.000+0000",
+      updated: "2026-08-15T10:00:00.000+0000",
+      labels: ["ui", "networking"],
+      customfield_10470: { accountId: "qa456", displayName: 'QA "Person"' },
+      customfield_other: [
+        { id: 4, name: "Sprint 4", state: "future" },
+        { id: 3, name: 'Sprint 3, "closed"', state: "closed" },
+        { id: 4, name: " Sprint 4 ", state: "future" },
+      ],
+      customfield_10020: [{ id: 99, name: "Wrong field" }],
+    };
+    expect(
+      loadCsv(
+        buildSprintIssuesCsv(
+          [{ key: "CNV-100", fields }],
+          "Sprint 4",
+          "2026-08-01",
+          "2026-08-15",
+          config,
+        ),
+      ),
+    ).toEqual([
       {
         key: "CNV-100",
-        fields: {
-          summary: "Fix button",
-          status: { name: "Done" },
-          resolution: { name: "Done" },
-          resolutiondate: "2026-08-15T10:00:00.000+0000",
-          issuetype: { name: "Bug" },
-          priority: { name: "Major" },
-          assignee: { accountId: "abc123", displayName: "Jane Doe" },
-          customfield_10028: 5,
-          created: "2026-08-01T09:00:00.000+0000",
-          updated: "2026-08-15T10:00:00.000+0000",
-          labels: ["ui", "networking"],
-          customfield_10470: {
-            accountId: "qa456",
-            displayName: "QA Person",
-          },
-        },
+        summary: 'Fix "button", correctly',
+        status: "Done",
+        resolution: "Done",
+        resolutiondate: "2026-08-15T10:00:00.000+0000",
+        issuetype: "Bug",
+        priority: "Major",
+        assignee_id: "abc123",
+        assignee_name: "Jane, Doe",
+        story_points: 5,
+        created: "2026-08-01T09:00:00.000+0000",
+        updated: "2026-08-15T10:00:00.000+0000",
+        sprint_name: "Sprint 4",
+        sprint_start: "2026-08-01",
+        sprint_end: "2026-08-15",
+        labels: ["ui", "networking"],
+        qa_contact_id: "qa456",
+        qa_contact_name: 'QA "Person"',
+        sprint_history: [
+          { id: 3, name: 'Sprint 3, "closed"', state: "closed" },
+          { id: 4, name: "Sprint 4", state: "future" },
+        ],
       },
-    ];
-
-    const csv = writeSprintIssuesCsv(
-      issues,
-      "Sprint 4",
-      "2026-08-01",
-      "2026-08-15",
-      testConfig,
-    );
-    const row = csv.split("\n")[1];
-    expect(row).toContain("CNV-100");
-    expect(row).toContain("Fix button");
-    expect(row).toContain("Done");
-    expect(row).toContain("Bug");
-    expect(row).toContain("Major");
-    expect(row).toContain("abc123");
-    expect(row).toContain("Jane Doe");
-    expect(row).toContain(",5,");
-    expect(row).toContain("Sprint 4");
-    expect(row).toContain("ui;networking");
-    expect(row).toContain("qa456");
-    expect(row).toContain("QA Person");
+    ]);
   });
 
-  it("handles null fields gracefully", () => {
-    const issues = [
-      {
-        key: "MTV-200",
-        fields: {
-          summary: "No assignee ticket",
-          status: { name: "New" },
-          resolution: null,
-          resolutiondate: null,
-          issuetype: { name: "Story" },
-          priority: { name: "Minor" },
-          assignee: null,
-          customfield_10028: null,
-          created: "2026-08-10",
-          updated: "2026-08-10",
-          labels: null,
-          customfield_10470: null,
-        },
-      },
-    ];
+  it("keeps missing fields and unknown memberships explicit", () => {
+    const [issue] = loadCsv(
+      buildSprintIssuesCsv(
+        [
+          {
+            key: "MTV-200",
+            fields: {
+              summary: "No assignee ticket",
+              status: { name: "New" },
+              resolution: null,
+              resolutiondate: null,
+              issuetype: { name: "Story" },
+              priority: { name: "Minor" },
+              assignee: null,
+              customfield_10028: null,
+              created: "2026-08-10",
+              updated: "2026-08-10",
+              labels: null,
+              customfield_10470: null,
+            },
+          },
+        ],
+        "Sprint 4",
+        "",
+        "",
+        testConfig,
+      ),
+    );
+    expect(issue).toMatchObject({
+      key: "MTV-200",
+      summary: "No assignee ticket",
+      resolution: "",
+      resolutiondate: "",
+      assignee_id: "",
+      assignee_name: "",
+      story_points: null,
+      labels: [],
+      qa_contact_id: "",
+      qa_contact_name: "",
+      sprint_history: null,
+    });
+  });
 
-    const csv = writeSprintIssuesCsv(issues, "Sprint 4", "", "", testConfig);
-    const row = csv.split("\n")[1];
-    expect(row).toContain("MTV-200");
-    expect(row).toContain("No assignee ticket");
-    expect(row).not.toContain("undefined");
-    expect(row).not.toContain("null");
+  it.each([
+    undefined,
+    [
+      { id: 4, name: "Sprint 4", state: "closed" },
+      { id: 4, name: "Conflict", state: "closed" },
+    ],
+    [{ id: "4", name: "Sprint 4", state: "future" }],
+    [{ id: 4, name: "Sprint 4" }],
+    [{ id: 4, name: "Sprint 4", state: "unknown" }],
+    [
+      { id: 4, name: "Sprint 4", state: "closed" },
+      { id: 4, name: "Sprint 4", state: "future" },
+    ],
+  ])("does not invent history for unusable evidence %j", (history) => {
+    const [issue] = loadCsv(
+      buildSprintIssuesCsv(
+        [{ key: "TEST-1", fields: { customfield_10020: history } }],
+        "Sprint 4",
+        "",
+        "",
+        testConfig,
+      ),
+    );
+    expect(issue.sprint_history).toBeNull();
+    expect(issue.sprint_name).toBe("Sprint 4");
   });
 });

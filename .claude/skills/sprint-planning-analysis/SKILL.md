@@ -34,13 +34,13 @@ Launches the `sprint-planning-analysis` agent which:
 A markdown report saved to `agents/sprint-planning-analysis/data/output/sprint-planning-analysis-{date}.md` with:
 
 - **Key Takeaways** — 3-5 actionable observations with implications
-- **Capacity vs. Velocity** — SP/issue count compared to previous sprint (script-generated)
-- **Load Distribution** — per-engineer workload vs. previous output, with QA Contact counting for QE (script-generated)
+- **Capacity vs. Velocity** — remaining SP/issues against historical velocity, plus already-Done target credit and recommended total (script-generated)
+- **Load Distribution** — completed/remaining load and additive target after PTO, with QA Contact counting for QE (script-generated)
 - **Retro Compliance** — previous retro recommendations checked against the plan (script-generated)
 - **Carryover from Previous Sprint** — items carried over with priority and status (script-generated)
-- **Planning Hygiene** — unassigned, unestimated, already-done, oversized items (script-generated)
+- **Planning Hygiene** — unassigned, unestimated, duplicate, oversized unfinished items (script-generated)
 - **Recommendations** — actionable items for the planning session (script-generated)
-- **Individual DM Recommendations** — copy-paste messages per engineer with SP add/remove amounts (script-generated)
+- **Individual DM Recommendations** — copy-paste messages with planned, completed, remaining and recommended total SP (script-generated)
 
 ## Critical Rules
 

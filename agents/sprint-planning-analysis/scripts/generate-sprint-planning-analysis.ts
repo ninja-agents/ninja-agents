@@ -1,5 +1,9 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
+import {
+  normalizeSprintMemberships,
+  type SprintMembership,
+} from "./sprint-membership.js";
 
 const __dirname = import.meta.dirname;
 
@@ -34,6 +38,7 @@ export interface SprintIssue {
   labels: string[];
   qa_contact_id: string;
   qa_contact_name: string;
+  sprint_history: SprintMembership[] | null;
 }
 
 export interface PTOEntry {
@@ -134,16 +139,19 @@ export interface IndividualVelocityAverage {
 export interface CapacityAnalysis {
   target_sp: number;
   target_issues: number;
+  completed_sp: number;
+  completed_issues: number;
+  recommended_sp: number;
   velocity_sp: number;
   velocity_issues: number;
   effective_sp: number;
   effective_issues: number;
-  dead_items: DeadItem[];
+  duplicate_items: DuplicateItem[];
   delta_pct: number;
   status: "ok" | "warning" | "overcommitted";
 }
 
-export interface DeadItem {
+export interface DuplicateItem {
   key: string;
   summary: string;
   url: string;
@@ -156,6 +164,9 @@ export interface LoadDistributionEntry {
   role: "dev" | "qe";
   target_assigned: number;
   target_sp: number;
+  completed_sp: number;
+  remaining_sp: number;
+  recommended_sp: number;
   prev_completed: number;
   prev_sp_completed: number;
   load_ratio: number | null;
@@ -181,11 +192,19 @@ export interface CarryoverAnalysisItem {
   assignee: string;
 }
 
+export interface MultiSprintReviewItem {
+  key: string;
+  summary: string;
+  url: string;
+  sprints: SprintMembership[];
+  owners: string[];
+}
+
 export interface HygieneFlag {
   key: string;
   summary: string;
   url: string;
-  kind: "unassigned" | "no_sp" | "already_done" | "refinement" | "oversized";
+  kind: "unassigned" | "no_sp" | "duplicate" | "refinement" | "oversized";
   detail: string;
   assignee: string;
 }
@@ -207,6 +226,7 @@ export interface PlanningReport {
   individualVelocity: IndividualVelocityAverage[];
   retro: RetroComplianceItem[];
   carryover: CarryoverAnalysisItem[];
+  multiSprintReview: MultiSprintReviewItem[];
   hygiene: HygieneFlag[];
   recommendations: string[];
   engineerProposals: EngineerProposal[];
@@ -278,10 +298,8 @@ export function buildAccountIdToName(
   return map;
 }
 
-export function isCompleted(issue: SprintIssue, config: SprintConfig): boolean {
-  return (
-    issue.resolution === "Done" || config.statuses.done.includes(issue.status)
-  );
+export function isCompleted(issue: SprintIssue): boolean {
+  return issue.resolution === "Done";
 }
 
 // ---------------------------------------------------------------------------
@@ -298,6 +316,16 @@ export function loadSprintIssues(csvPath: string): SprintIssue[] {
 
   return lines.slice(1).map((line) => {
     const f = parseCsvLine(line);
+    let sprintHistory: SprintMembership[] | null = null;
+    if (f[18]?.trim()) {
+      try {
+        sprintHistory = normalizeSprintMemberships(
+          JSON.parse(f[18]) as unknown,
+        );
+      } catch {
+        // Malformed history is unknown evidence, not a report-wide failure.
+      }
+    }
     return {
       key: f[0] ?? "",
       summary: f[1] ?? "",
@@ -317,6 +345,7 @@ export function loadSprintIssues(csvPath: string): SprintIssue[] {
       labels: (f[15] ?? "").split(";").filter(Boolean),
       qa_contact_id: f[16] ?? "",
       qa_contact_name: f[17] ?? "",
+      sprint_history: sprintHistory,
     };
   });
 }
@@ -390,6 +419,23 @@ function loadConfig(configPath: string): SprintConfig {
 // Engineer load computation (shared logic with sprint-review)
 // ---------------------------------------------------------------------------
 
+function resolveIssueOwners(
+  issue: SprintIssue,
+  accountIdToName: Map<string, string>,
+  displayToName: Map<string, string>,
+  qeNames: Set<string>,
+): string[] {
+  const name =
+    accountIdToName.get(issue.assignee_id) ??
+    displayToName.get(issue.assignee_name.toLowerCase());
+  const owners = name ? [name] : [];
+  const qaName =
+    accountIdToName.get(issue.qa_contact_id) ??
+    displayToName.get(issue.qa_contact_name.toLowerCase());
+  if (qaName && qeNames.has(qaName) && qaName !== name) owners.push(qaName);
+  return owners;
+}
+
 export function computeEngineerLoad(
   issues: SprintIssue[],
   config: SprintConfig,
@@ -414,7 +460,7 @@ export function computeEngineerLoad(
 
   const accumulate = (entry: EngineerCompletion, i: SprintIssue) => {
     entry.assigned++;
-    if (isCompleted(i, config)) {
+    if (isCompleted(i)) {
       entry.completed++;
       entry.sp_completed += i.story_points ?? 0;
     } else {
@@ -424,22 +470,68 @@ export function computeEngineerLoad(
   };
 
   for (const i of issues) {
-    const name =
-      accountIdToName.get(i.assignee_id) ??
-      displayToName.get(i.assignee_name.toLowerCase());
-    const entry = name ? map.get(name) : undefined;
-    if (entry) accumulate(entry, i);
-
-    const qaName =
-      accountIdToName.get(i.qa_contact_id) ??
-      displayToName.get(i.qa_contact_name.toLowerCase());
-    if (qaName && qeNames.has(qaName) && qaName !== name) {
-      const qaEntry = map.get(qaName);
-      if (qaEntry) accumulate(qaEntry, i);
+    if (i.resolution === "Duplicate") continue;
+    for (const owner of resolveIssueOwners(
+      i,
+      accountIdToName,
+      displayToName,
+      qeNames,
+    )) {
+      const entry = map.get(owner);
+      if (entry) accumulate(entry, i);
     }
   }
 
   return [...map.values()].sort((a, b) => b.assigned - a.assigned);
+}
+
+export function computeMultiSprintReview(
+  issues: SprintIssue[],
+  config: SprintConfig,
+  accountIdToName: Map<string, string>,
+  displayToName: Map<string, string>,
+): MultiSprintReviewItem[] {
+  const engineerNames = new Set(config.engineers.map((e) => e.name));
+  const qeNames = new Set(
+    config.engineers.filter((e) => e.role === "qe").map((e) => e.name),
+  );
+  const byKey = new Map<string, MultiSprintReviewItem>();
+  for (const issue of issues) {
+    if (isCompleted(issue) || issue.resolution === "Duplicate") continue;
+    const history = normalizeSprintMemberships(issue.sprint_history);
+    if (
+      history === null ||
+      !history.some((s) => s.name === issue.sprint_name)
+    ) {
+      continue;
+    }
+    const sprints = history.filter(
+      (s) => s.state === "closed" || s.state === "active",
+    );
+    if (sprints.length <= 1) continue;
+    const owners = resolveIssueOwners(
+      issue,
+      accountIdToName,
+      displayToName,
+      qeNames,
+    ).filter((name) => engineerNames.has(name));
+    if (owners.length === 0) continue;
+    const existing = byKey.get(issue.key);
+    if (existing) {
+      for (const owner of owners) {
+        if (!existing.owners.includes(owner)) existing.owners.push(owner);
+      }
+    } else {
+      byKey.set(issue.key, {
+        key: issue.key,
+        summary: issue.summary,
+        url: `${config.jira.base_url}/${issue.key}`,
+        sprints,
+        owners,
+      });
+    }
+  }
+  return [...byKey.values()].sort((a, b) => a.key.localeCompare(b.key));
 }
 
 // ---------------------------------------------------------------------------
@@ -475,30 +567,25 @@ export function computeCapacityVsVelocity(
   const totalSp = round2(issues.reduce((s, i) => s + (i.story_points ?? 0), 0));
   const totalIssues = issues.length;
 
-  const deadItems: DeadItem[] = [];
-  for (const i of issues) {
-    let reason = "";
-    if (isCompleted(i, config)) {
-      reason = `Already ${i.resolution || i.status}`;
-    } else if (i.resolution === "Duplicate") {
-      reason = "Closed as Duplicate";
-    }
-    if (reason) {
-      deadItems.push({
-        key: i.key,
-        summary: i.summary,
-        url: `${config.jira.base_url}/${i.key}`,
-        story_points: i.story_points,
-        reason,
-      });
-    }
-  }
-
-  const deadSp = round2(
-    deadItems.reduce((s, d) => s + (d.story_points ?? 0), 0),
+  const duplicateItems: DuplicateItem[] = issues
+    .filter((i) => i.resolution === "Duplicate")
+    .map((i) => ({
+      key: i.key,
+      summary: i.summary,
+      url: `${config.jira.base_url}/${i.key}`,
+      story_points: i.story_points,
+      reason: "Closed as Duplicate",
+    }));
+  const completed = issues.filter(isCompleted);
+  const completedSp = round2(
+    completed.reduce((s, i) => s + (i.story_points ?? 0), 0),
   );
-  const effectiveSp = round2(totalSp - deadSp);
-  const effectiveIssues = totalIssues - deadItems.length;
+  const duplicateSp = round2(
+    duplicateItems.reduce((s, d) => s + (d.story_points ?? 0), 0),
+  );
+  const effectiveSp = round2(totalSp - completedSp - duplicateSp);
+  const effectiveIssues =
+    totalIssues - completed.length - duplicateItems.length;
 
   const count = previousVelocities.length;
   const baselineSp =
@@ -532,11 +619,14 @@ export function computeCapacityVsVelocity(
   return {
     target_sp: totalSp,
     target_issues: totalIssues,
+    completed_sp: completedSp,
+    completed_issues: completed.length,
+    recommended_sp: round2(baselineSp + completedSp),
     velocity_sp: baselineSp,
     velocity_issues: baselineIssues,
     effective_sp: effectiveSp,
     effective_issues: effectiveIssues,
-    dead_items: deadItems,
+    duplicate_items: duplicateItems,
     delta_pct: deltaPct,
     status,
   };
@@ -606,7 +696,9 @@ export function computeLoadDistribution(
     const rawBaselineSp = avg?.avg_sp_completed ?? prev?.sp_completed ?? 0;
     const baselineCompleted = avg?.avg_items_completed ?? prev?.completed ?? 0;
     const baselineSprints = avg?.sprints_available ?? (prev ? 1 : 0);
-    const totalTargetSp = t.sp_completed + t.sp_remaining;
+    const completedSp = round2(t.sp_completed);
+    const remainingSp = round2(t.sp_remaining);
+    const totalTargetSp = round2(completedSp + remainingSp);
 
     // Calculate capacity adjustment for PTO
     const capacityData = calculateCapacityAdjustment(
@@ -621,7 +713,7 @@ export function computeLoadDistribution(
 
     let loadRatio: number | null = null;
     if (baselineSp > 0) {
-      loadRatio = round2(totalTargetSp / baselineSp);
+      loadRatio = round2(remainingSp / baselineSp);
     }
 
     const hasPrevData = avg ? avg.sprints_available > 0 : prev !== undefined;
@@ -631,7 +723,7 @@ export function computeLoadDistribution(
       risk = "absent";
     } else if (!hasPrevData) {
       risk = "new";
-    } else if (baselineSp === 0 && totalTargetSp > 0) {
+    } else if (baselineSp === 0 && remainingSp > 0) {
       risk = "extreme";
     } else if (loadRatio !== null && loadRatio > 2.5) {
       risk = "extreme";
@@ -646,6 +738,9 @@ export function computeLoadDistribution(
       role: roleMap.get(t.name) ?? "dev",
       target_assigned: t.assigned,
       target_sp: totalTargetSp,
+      completed_sp: completedSp,
+      remaining_sp: remainingSp,
+      recommended_sp: round2(baselineSp + completedSp),
       prev_completed: baselineCompleted,
       prev_sp_completed: rawBaselineSp,
       load_ratio: loadRatio,
@@ -660,20 +755,17 @@ export function computeLoadDistribution(
 export function computeRetroCompliance(
   recommendations: string[],
   issues: SprintIssue[],
-  config: SprintConfig,
 ): RetroComplianceItem[] {
   if (recommendations.length === 0) return [];
 
   const maxSp = Math.max(
-    ...issues
-      .filter((i) => !isCompleted(i, config))
-      .map((i) => i.story_points ?? 0),
+    ...issues.filter((i) => !isCompleted(i)).map((i) => i.story_points ?? 0),
   );
   const oversizedCount = issues.filter(
-    (i) => !isCompleted(i, config) && (i.story_points ?? 0) >= 21,
+    (i) => !isCompleted(i) && (i.story_points ?? 0) >= 21,
   ).length;
   const largeSp8Count = issues.filter(
-    (i) => !isCompleted(i, config) && (i.story_points ?? 0) >= 8,
+    (i) => !isCompleted(i) && (i.story_points ?? 0) >= 8,
   ).length;
 
   return recommendations.map((rec) => {
@@ -721,7 +813,7 @@ export function computeRetroCompliance(
     if (lower.includes("prioritize") && lower.includes("blocker")) {
       const blockerItems = issues.filter(
         (i) =>
-          !isCompleted(i, config) &&
+          !isCompleted(i) &&
           (i.priority === "Blocker" || i.priority === "Critical"),
       );
       if (blockerItems.length === 0) {
@@ -755,7 +847,10 @@ export function computeCarryoverAnalysis(
 ): CarryoverAnalysisItem[] {
   const keySet = new Set(carryoverKeys);
   return issues
-    .filter((i) => keySet.has(i.key))
+    .filter(
+      (i) =>
+        keySet.has(i.key) && !isCompleted(i) && i.resolution !== "Duplicate",
+    )
     .map((i) => ({
       key: i.key,
       summary: i.summary,
@@ -795,8 +890,20 @@ export function computePlanningHygiene(
     "";
 
   for (const i of issues) {
+    if (isCompleted(i)) continue;
     const url = `${config.jira.base_url}/${i.key}`;
     const assignee = resolveName(i);
+    if (i.resolution === "Duplicate") {
+      flags.push({
+        key: i.key,
+        summary: i.summary,
+        url,
+        kind: "duplicate",
+        detail: `Status: ${i.status}, Resolution: ${i.resolution || "none"}`,
+        assignee,
+      });
+      continue;
+    }
 
     if (!i.assignee_id && !i.assignee_name) {
       flags.push({
@@ -809,24 +916,13 @@ export function computePlanningHygiene(
       });
     }
 
-    if (i.story_points === null && !isCompleted(i, config)) {
+    if (i.story_points === null) {
       flags.push({
         key: i.key,
         summary: i.summary,
         url,
         kind: "no_sp",
         detail: `${i.priority} priority, assigned to ${i.assignee_name || "Unassigned"}`,
-        assignee,
-      });
-    }
-
-    if (isCompleted(i, config) || i.resolution === "Duplicate") {
-      flags.push({
-        key: i.key,
-        summary: i.summary,
-        url,
-        kind: "already_done",
-        detail: `Status: ${i.status}, Resolution: ${i.resolution || "none"}`,
         assignee,
       });
     }
@@ -845,11 +941,7 @@ export function computePlanningHygiene(
       });
     }
 
-    if (
-      i.story_points !== null &&
-      i.story_points >= 21 &&
-      !isCompleted(i, config)
-    ) {
+    if (i.story_points !== null && i.story_points >= 21) {
       flags.push({
         key: i.key,
         summary: i.summary,
@@ -867,37 +959,28 @@ export function computePlanningHygiene(
 export function generateRecommendations(report: PlanningReport): string[] {
   const recs: string[] = [];
 
-  if (report.capacity.dead_items.length > 0) {
-    const deadSp = round2(
-      report.capacity.dead_items.reduce((s, d) => s + (d.story_points ?? 0), 0),
+  if (report.capacity.duplicate_items.length > 0) {
+    const duplicateSp = round2(
+      report.capacity.duplicate_items.reduce(
+        (s, d) => s + (d.story_points ?? 0),
+        0,
+      ),
     );
-    const keys = report.capacity.dead_items.map((d) => d.key).join(", ");
+    const keys = report.capacity.duplicate_items.map((d) => d.key).join(", ");
     recs.push(
-      `**Remove dead items** — ${keys} (${deadSp} SP) are already done/duplicate and inflate sprint metrics`,
-    );
-  }
-
-  const extremeLoad = report.load.filter((l) => l.risk === "extreme");
-  for (const eng of extremeLoad) {
-    const baselineLabel =
-      eng.baseline_sprints >= 2
-        ? `${eng.baseline_sprints}-sprint avg`
-        : "completed last sprint";
-    recs.push(
-      `**Rebalance ${eng.name}'s load** — ${eng.target_sp} SP assigned vs. ${eng.prev_sp_completed} SP ${baselineLabel} (${eng.load_ratio !== null ? eng.load_ratio + "x" : "no baseline"})`,
+      `**Remove duplicates** — ${keys} (${spStr(duplicateSp)} SP) are closed as Duplicate and inflate sprint metrics`,
     );
   }
 
-  const heavyLoad = report.load.filter((l) => l.risk === "heavy");
-  if (heavyLoad.length > 0) {
-    const names = heavyLoad.map((l) => l.name).join(", ");
-    const maxBaseline = Math.max(...heavyLoad.map((l) => l.baseline_sprints));
-    const baselineLabel =
-      maxBaseline >= 2
-        ? `${maxBaseline}-sprint avg output`
-        : "previous sprint output";
+  for (const eng of report.load) {
+    if (eng.risk !== "extreme" && eng.risk !== "heavy") continue;
+    const action =
+      eng.risk === "extreme"
+        ? `Rebalance ${eng.name}'s load`
+        : `Review load for ${eng.name}`;
+    const remainingCapacity = round2(eng.recommended_sp - eng.completed_sp);
     recs.push(
-      `**Review load for ${names}** — assigned > 2x their ${baselineLabel}`,
+      `**${action}** — ${spStr(eng.target_sp)} SP planned, ${eng.completed_sp !== 0 ? `including ${spStr(eng.completed_sp)} SP already done and ` : ""}${spStr(eng.remaining_sp)} SP remaining; historical average ${spStr(eng.prev_sp_completed)} SP, ${Math.round(eng.capacity_pct * 100)}% capacity allows ${spStr(remainingCapacity)} SP remaining; recommended total ${eng.baseline_sprints > 0 ? spStr(eng.recommended_sp) + " SP" : "no baseline"}; remaining load ${eng.load_ratio !== null ? eng.load_ratio + "x" : remainingCapacity === 0 && eng.baseline_sprints > 0 ? "unfinished work exceeds zero capacity" : "no baseline"}`,
     );
   }
 
@@ -933,11 +1016,17 @@ export function generateRecommendations(report: PlanningReport): string[] {
   }
 
   if (report.capacity.status === "overcommitted") {
-    const trimSp = Math.round(
-      report.capacity.effective_sp - report.capacity.velocity_sp * 1.1,
+    const trimSp = Math.max(
+      0,
+      Math.round(
+        report.capacity.effective_sp - report.capacity.velocity_sp * 1.1,
+      ),
+    );
+    const stretchTotal = round2(
+      report.capacity.completed_sp + report.capacity.velocity_sp * 1.1,
     );
     recs.push(
-      `**Trim ~${trimSp} SP** to align with proven velocity (~${Math.round(report.capacity.velocity_sp * 1.1)} SP target including 10% stretch)`,
+      `**Trim ~${trimSp} SP of unfinished work** to align with proven velocity (${spStr(stretchTotal)} SP total allowance: ${report.capacity.completed_sp !== 0 ? `${spStr(report.capacity.completed_sp)} already done + ` : ""}${spStr(round2(report.capacity.velocity_sp * 1.1))} remaining including 10% stretch)`,
     );
   }
 
@@ -977,19 +1066,18 @@ export function generateEngineerProposals(
     .map((l) => {
       const actions: string[] = [];
       const avg = avgByName.get(l.name);
-      const avgSp = avg?.avg_sp_completed ?? null;
+      const avgSp =
+        l.baseline_sprints > 0
+          ? (avg?.avg_sp_completed ?? l.prev_sp_completed)
+          : null;
 
-      if (l.risk === "extreme" && avgSp !== null && avgSp > 0) {
-        const trimTo = Math.round(avgSp);
-        const trimBy = Math.round(l.target_sp - avgSp);
+      if ((l.risk === "extreme" || l.risk === "heavy") && avgSp !== null) {
+        const trimBy = Math.max(0, Math.round(l.target_sp - l.recommended_sp));
+        const remainingCapacity = round2(l.recommended_sp - l.completed_sp);
+        const action =
+          l.risk === "extreme" ? "Defer or reassign" : "Consider deferring";
         actions.push(
-          `Defer or reassign ~${trimBy} SP to reach sustainable load (~${trimTo} SP)`,
-        );
-      } else if (l.risk === "heavy" && avgSp !== null && avgSp > 0) {
-        const trimTo = Math.round(avgSp);
-        const trimBy = Math.round(l.target_sp - avgSp);
-        actions.push(
-          `Consider deferring ~${trimBy} SP to align with your avg output (~${trimTo} SP)`,
+          `${action} ~${trimBy} SP of unfinished work to reach ${spStr(l.recommended_sp)} SP total (${spStr(remainingCapacity)} SP remaining capacity${l.completed_sp !== 0 ? ` + ${spStr(l.completed_sp)} SP already done` : ""})`,
         );
       }
 
@@ -1065,6 +1153,7 @@ export function formatReport(
   const lines: string[] = [];
   const ln = (s = "") => lines.push(s);
   const velCount = previousVelocities.length;
+  const loadByName = new Map(report.load.map((l) => [l.name, l]));
 
   ln(`# Sprint Planning Health-Check: ${sprintName}`);
   ln();
@@ -1105,24 +1194,40 @@ export function formatReport(
   ln(`| Metric | Target Sprint | ${velocityColHeader} | Delta |`);
   ln("|--------|--------------|---------------------------|-------|");
   ln(
-    `| Story Points | ${spStr(report.capacity.target_sp)} | ${spStr(report.capacity.velocity_sp)} | ${report.capacity.delta_pct > 0 ? "+" : ""}${report.capacity.delta_pct}% |`,
+    `| Remaining Story Points | ${spStr(report.capacity.effective_sp)} | ${spStr(report.capacity.velocity_sp)} | ${report.capacity.delta_pct > 0 ? "+" : ""}${report.capacity.delta_pct}% |`,
   );
   ln(
-    `| Issues | ${report.capacity.target_issues} | ${report.capacity.velocity_issues} | ${report.capacity.target_issues > report.capacity.velocity_issues ? "+" : ""}${report.capacity.target_issues - report.capacity.velocity_issues} |`,
+    `| Remaining Issues | ${report.capacity.effective_issues} | ${report.capacity.velocity_issues} | ${report.capacity.effective_issues > report.capacity.velocity_issues ? "+" : ""}${report.capacity.effective_issues - report.capacity.velocity_issues} |`,
+  );
+  ln();
+  const duplicateSp = round2(
+    report.capacity.duplicate_items.reduce(
+      (s, d) => s + (d.story_points ?? 0),
+      0,
+    ),
+  );
+  ln(
+    `Raw target: ${spStr(report.capacity.target_sp)} SP / ${report.capacity.target_issues} issues.`,
+  );
+  if (report.capacity.completed_sp !== 0) {
+    ln(
+      `Already done in target sprint: ${spStr(report.capacity.completed_sp)} SP / ${report.capacity.completed_issues} issues. Completed work stays recorded in the target sprint.`,
+    );
+  }
+  ln(
+    `Duplicate exclusions: ${spStr(duplicateSp)} SP / ${report.capacity.duplicate_items.length} issues.`,
+  );
+  ln(
+    report.capacity.velocity_sp > 0
+      ? `Recommended total SP: ${spStr(report.capacity.recommended_sp)} = ${spStr(report.capacity.velocity_sp)} average${report.capacity.completed_sp !== 0 ? ` + ${spStr(report.capacity.completed_sp)} already done` : ""}`
+      : "Recommended total SP: no baseline",
   );
   ln();
 
-  if (report.capacity.dead_items.length > 0) {
-    const deadSp = round2(
-      report.capacity.dead_items.reduce((s, d) => s + (d.story_points ?? 0), 0),
-    );
-    ln(
-      `**Effective load**: ${spStr(report.capacity.effective_sp)} SP / ${report.capacity.effective_issues} issues (after removing ${report.capacity.dead_items.length} already-done/duplicate items totaling ${spStr(deadSp)} SP)`,
-    );
-    ln();
+  if (report.capacity.duplicate_items.length > 0) {
     ln("| Remove | Key | SP | Reason |");
     ln("|--------|-----|-----|--------|");
-    for (const d of report.capacity.dead_items) {
+    for (const d of report.capacity.duplicate_items) {
       ln(
         `| Yes | [${d.key}](${d.url}) | ${spStr(d.story_points)} | ${d.reason} |`,
       );
@@ -1149,21 +1254,12 @@ export function formatReport(
 
   ln("## Load Distribution");
   ln();
-  if (hasPTO) {
-    ln(
-      `| Engineer | Role | Target Items | Target SP | ${baselineLabel} SP | Capacity | Adj. Load Ratio | Risk |`,
-    );
-    ln(
-      "|----------|------|-------------|-----------|---------|----------|-----------------|------|",
-    );
-  } else {
-    ln(
-      `| Engineer | Role | Target Items | Target SP | ${baselineLabel} Completed | ${baselineLabel} SP | Load Ratio | Risk |`,
-    );
-    ln(
-      "|----------|------|-------------|-----------|---------------|---------|-----------|------|",
-    );
-  }
+  ln(
+    `| Engineer | Role | Target Items | Target SP | Already Done SP | Remaining SP | ${baselineLabel} SP | Capacity | Recommended Total SP | Remaining Load Ratio | Risk |`,
+  );
+  ln(
+    "|----------|------|--------------|-----------|-----------------|--------------|-------------|----------|----------------------|----------------------|------|",
+  );
   for (const l of report.load) {
     const ratioStr = l.load_ratio !== null ? `${l.load_ratio}x` : "no baseline";
     const riskStr =
@@ -1178,15 +1274,9 @@ export function formatReport(
               : "New";
     const capacityStr = `${Math.round(l.capacity_pct * 100)}%`;
 
-    if (hasPTO) {
-      ln(
-        `| ${l.name} | ${l.role.toUpperCase()} | ${l.target_assigned} | ${l.target_sp} | ${l.prev_sp_completed} | ${capacityStr} | ${ratioStr} | ${riskStr} |`,
-      );
-    } else {
-      ln(
-        `| ${l.name} | ${l.role.toUpperCase()} | ${l.target_assigned} | ${l.target_sp} | ${l.prev_completed} | ${l.prev_sp_completed} | ${ratioStr} | ${riskStr} |`,
-      );
-    }
+    ln(
+      `| ${l.name} | ${l.role.toUpperCase()} | ${l.target_assigned} | ${spStr(l.target_sp)} | ${spStr(l.completed_sp)} | ${spStr(l.remaining_sp)} | ${spStr(l.prev_sp_completed)} | ${capacityStr} | ${l.baseline_sprints > 0 ? spStr(l.recommended_sp) : "no baseline"} | ${ratioStr} | ${riskStr} |`,
+    );
   }
   ln();
   if (velCount >= 2) {
@@ -1319,8 +1409,7 @@ export function formatReport(
     const counts = {
       unassigned: report.hygiene.filter((h) => h.kind === "unassigned").length,
       no_sp: report.hygiene.filter((h) => h.kind === "no_sp").length,
-      already_done: report.hygiene.filter((h) => h.kind === "already_done")
-        .length,
+      duplicate: report.hygiene.filter((h) => h.kind === "duplicate").length,
       refinement: report.hygiene.filter((h) => h.kind === "refinement").length,
       oversized: report.hygiene.filter((h) => h.kind === "oversized").length,
     };
@@ -1328,8 +1417,7 @@ export function formatReport(
     const parts: string[] = [];
     if (counts.unassigned > 0) parts.push(`${counts.unassigned} unassigned`);
     if (counts.no_sp > 0) parts.push(`${counts.no_sp} unsized`);
-    if (counts.already_done > 0)
-      parts.push(`${counts.already_done} already done`);
+    if (counts.duplicate > 0) parts.push(`${counts.duplicate} duplicates`);
     if (counts.refinement > 0) parts.push(`${counts.refinement} not refined`);
     if (counts.oversized > 0) parts.push(`${counts.oversized} oversized`);
     ln(`${report.hygiene.length} issues flagged: ${parts.join(", ")}`);
@@ -1343,8 +1431,8 @@ export function formatReport(
           ? "Unassigned"
           : h.kind === "no_sp"
             ? "No SP"
-            : h.kind === "already_done"
-              ? "Already done"
+            : h.kind === "duplicate"
+              ? "Duplicate"
               : h.kind === "refinement"
                 ? "Not refined"
                 : "Oversized";
@@ -1370,6 +1458,7 @@ export function formatReport(
     ln("## Per-Engineer Proposals");
     ln();
     for (const p of report.engineerProposals) {
+      const loadEntry = loadByName.get(p.name)!;
       const riskLabel =
         p.risk === "extreme"
           ? "EXTREME"
@@ -1382,11 +1471,12 @@ export function formatReport(
                 : "OK";
       const avgStr =
         p.avg_sp !== null ? `${spStr(p.avg_sp)} SP avg` : "no baseline";
-      const ratioStr = p.load_ratio !== null ? ` | ${p.load_ratio}x` : "";
+      const ratioStr =
+        p.load_ratio !== null ? `${p.load_ratio}x` : "no baseline";
       ln(`### ${p.name} (${p.role.toUpperCase()}) — ${riskLabel}`);
       ln();
       ln(
-        `${p.target_items} items / ${p.target_sp} SP target | ${avgStr}${ratioStr}`,
+        `${p.target_items} items / ${spStr(loadEntry.target_sp)} SP target${loadEntry.completed_sp !== 0 ? ` | ${spStr(loadEntry.completed_sp)} SP already done` : ""} | ${spStr(loadEntry.remaining_sp)} SP remaining | ${avgStr} | recommended total ${loadEntry.baseline_sprints > 0 ? spStr(loadEntry.recommended_sp) + " SP" : "no baseline"} | remaining load ${ratioStr}`,
       );
       ln();
       for (const a of p.actions) {
@@ -1398,20 +1488,16 @@ export function formatReport(
 
   // Individual DM Recommendations
   if (report.engineerProposals.length > 0) {
-    const loadByName = new Map(report.load.map((l) => [l.name, l]));
     const velByName = new Map(
       report.individualVelocity.map((v) => [v.name, v]),
     );
-
-    // Compute per-engineer dead SP so DMs show effective planned SP
-    const deadSpByEngineer = new Map<string, number>();
-    for (const h of report.hygiene) {
-      if (h.kind !== "already_done" || !h.assignee) continue;
-      const sp = deadSpByEngineer.get(h.assignee) ?? 0;
-      const itemSp =
-        report.capacity.dead_items.find((d) => d.key === h.key)?.story_points ??
-        0;
-      deadSpByEngineer.set(h.assignee, sp + itemSp);
+    const reviewByOwner = new Map<string, MultiSprintReviewItem[]>();
+    for (const item of report.multiSprintReview) {
+      for (const owner of item.owners) {
+        const items = reviewByOwner.get(owner);
+        if (items) items.push(item);
+        else reviewByOwner.set(owner, [item]);
+      }
     }
 
     const spBreakdown = (name: string): string => {
@@ -1419,45 +1505,38 @@ export function formatReport(
       if (!vel || vel.per_sprint_sp.length === 0) return "";
       const vals = [...vel.per_sprint_sp]
         .reverse()
-        .map((sp) => (sp !== null ? String(Math.round(sp)) : "-"))
+        .map((sp) => (sp !== null ? spStr(sp) : "-"))
         .join(", ");
       return ` (${vals})`;
     };
 
     ln("## Individual DM Recommendations");
     ln();
-    ln(
-      "Copy-paste messages for each team member with their specific SP adjustment:",
-    );
+    ln("Copy-paste planning messages for each team member:");
     ln();
     for (const p of report.engineerProposals) {
       if (p.avg_sp === null) continue;
-      const avgSp = Math.round(p.avg_sp);
       const loadEntry = loadByName.get(p.name);
-      const hasPto = loadEntry && loadEntry.capacity_pct < 1.0;
-      const adjustedSp = hasPto
-        ? Math.round(p.avg_sp * loadEntry.capacity_pct)
-        : avgSp;
-
-      const deadSp = deadSpByEngineer.get(p.name) ?? 0;
-      const plannedSp = p.target_sp - deadSp;
+      if (!loadEntry || loadEntry.baseline_sprints === 0) continue;
 
       ln("---");
       ln();
       ln(`**${p.name}**`);
       const breakdown = spBreakdown(p.name);
-      if (hasPto && loadEntry.pto_details) {
+      ln(
+        `> From the planning agent, you currently have **${spStr(loadEntry.target_sp)} SP planned**. Your avg. SP is ${spStr(p.avg_sp)}${breakdown}; let's plan accordingly.`,
+      );
+      const reviewItems = reviewByOwner.get(p.name);
+      if (reviewItems && reviewItems.length > 0) {
+        ln(">");
         ln(
-          `> From the planning agent, you currently have **${plannedSp} SP planned**. Your avg. SP is ${avgSp}${breakdown} but with PTO (${loadEntry.pto_details}) your effective capacity is ~${adjustedSp} SP this sprint, let's plan accordingly, thanks!`,
+          `> These unfinished items span more than one started sprint. Should we drop any of them from ${sprintName}? Please indicate which to drop or keep:`,
         );
-      } else if (hasPto) {
-        ln(
-          `> From the planning agent, you currently have **${plannedSp} SP planned**. Your avg. SP is ${avgSp}${breakdown} but with the shorter sprint (${Math.round(loadEntry.capacity_pct * 100)}% capacity) your effective target is ~${adjustedSp} SP, let's plan accordingly, thanks!`,
-        );
-      } else {
-        ln(
-          `> From the planning agent, you currently have **${plannedSp} SP planned**. Your avg. SP is ${avgSp}${breakdown}, let's plan accordingly, thanks!`,
-        );
+        for (const item of reviewItems) {
+          ln(
+            `> - [${item.key}](${item.url}) — ${item.summary} (${item.sprints.length} started sprints: ${item.sprints.map((s) => s.name).join(", ")})`,
+          );
+        }
       }
 
       // Tech lead: append direct reports summary
@@ -1482,7 +1561,7 @@ export function formatReport(
                   : rl.risk;
           const rBreakdown = spBreakdown(reportName);
           ln(
-            `> - ${reportName}: ${rl.target_sp} SP assigned, avg ${rAvgSp} SP${rBreakdown}, ${rCapacity}% capacity → ${rRatio} (${rRisk})`,
+            `> - ${reportName}: ${spStr(rl.target_sp)} SP assigned${rl.completed_sp !== 0 ? `, ${spStr(rl.completed_sp)} SP already done` : ""}, ${spStr(rl.remaining_sp)} SP remaining, avg ${rl.baseline_sprints > 0 ? spStr(rAvgSp) + " SP" : "no baseline"}${rBreakdown}, ${rCapacity}% capacity, recommended total ${rl.baseline_sprints > 0 ? spStr(rl.recommended_sp) + " SP" : "no baseline"} → ${rRatio} remaining load (${rRisk})`,
           );
         }
       }
@@ -1543,17 +1622,18 @@ function printPlanningContext(
     );
   }
   console.log(
-    `  Capacity: ${spStr(capacity.effective_sp)} SP effective vs ${spStr(capacity.velocity_sp)} SP velocity (${capacity.delta_pct > 0 ? "+" : ""}${capacity.delta_pct}%) — ${capacity.status}`,
+    `  Capacity: ${spStr(capacity.target_sp)} SP planned${capacity.completed_sp !== 0 ? `, ${spStr(capacity.completed_sp)} SP already done` : ""}, ${spStr(capacity.effective_sp)} SP remaining vs ${spStr(capacity.velocity_sp)} SP historical average; recommended total ${capacity.velocity_sp > 0 ? spStr(capacity.recommended_sp) + " SP" : "no baseline"} (${capacity.delta_pct > 0 ? "+" : ""}${capacity.delta_pct}%) — ${capacity.status}`,
   );
   console.log(
-    `  Dead items: ${capacity.dead_items.length} (${spStr(round2(capacity.dead_items.reduce((s, d) => s + (d.story_points ?? 0), 0)))} SP)`,
+    `  Duplicates: ${capacity.duplicate_items.length} (${spStr(round2(capacity.duplicate_items.reduce((s, d) => s + (d.story_points ?? 0), 0)))} SP)`,
   );
   console.log(
     `  Load risks: ${extreme.length} extreme, ${heavy.length} heavy, ${absent.length} absent`,
   );
-  if (extreme.length > 0) {
+  const topOverload = extreme[0] ?? heavy[0];
+  if (topOverload) {
     console.log(
-      `  Top overload: ${extreme[0].name} (${extreme[0].target_sp} SP target, ${extreme[0].prev_sp_completed} SP baseline)`,
+      `  Top overload: ${topOverload.name} (${spStr(topOverload.target_sp)} SP planned${topOverload.completed_sp !== 0 ? `, ${spStr(topOverload.completed_sp)} SP already done` : ""}, ${spStr(topOverload.remaining_sp)} SP remaining, ${spStr(topOverload.prev_sp_completed)} SP historical average, ${Math.round(topOverload.capacity_pct * 100)}% capacity; recommended total ${topOverload.baseline_sprints > 0 ? spStr(topOverload.recommended_sp) + " SP" : "no baseline"}; remaining load ${topOverload.load_ratio !== null ? topOverload.load_ratio + "x" : "no baseline"})`,
     );
   }
   console.log(
@@ -1563,7 +1643,7 @@ function printPlanningContext(
     `  Retro compliance: ${notAddressed.length} not addressed, ${retro.filter((r) => r.status === "unknown").length} unknown`,
   );
   console.log(
-    `  Hygiene flags: ${hygiene.length} (${hygiene.filter((h) => h.kind === "unassigned").length} unassigned, ${hygiene.filter((h) => h.kind === "no_sp").length} unsized, ${hygiene.filter((h) => h.kind === "already_done").length} done, ${hygiene.filter((h) => h.kind === "oversized").length} oversized)`,
+    `  Hygiene flags: ${hygiene.length} (${hygiene.filter((h) => h.kind === "unassigned").length} unassigned, ${hygiene.filter((h) => h.kind === "no_sp").length} unsized, ${hygiene.filter((h) => h.kind === "duplicate").length} duplicates, ${hygiene.filter((h) => h.kind === "oversized").length} oversized)`,
   );
   console.log();
 }
@@ -1642,6 +1722,18 @@ function main() {
       `Sprint has only ${issues.length} items (threshold: ${config.thresholds.low_item_warning}). Analysis may not be representative.`,
     );
   }
+  const missingMembershipCount = issues.filter(
+    (issue) =>
+      !isCompleted(issue) &&
+      issue.resolution !== "Duplicate" &&
+      (issue.sprint_history === null ||
+        !issue.sprint_history.some((s) => s.name === issue.sprint_name)),
+  ).length;
+  if (missingMembershipCount > 0) {
+    warnings.push(
+      `Sprint membership history is unavailable for ${missingMembershipCount} unfinished item(s); multi-sprint DM questions may be incomplete. Refresh sprint-issues.csv from Jira.`,
+    );
+  }
 
   const sprintName = issues[0]?.sprint_name ?? "Unknown Sprint";
 
@@ -1690,11 +1782,7 @@ function main() {
     displayToName,
     individualVelocity,
   );
-  const retro = computeRetroCompliance(
-    velocity.retro_recommendations,
-    issues,
-    config,
-  );
+  const retro = computeRetroCompliance(velocity.retro_recommendations, issues);
   const carryover = computeCarryoverAnalysis(
     issues,
     velocity.carryover_keys,
@@ -1715,6 +1803,12 @@ function main() {
     individualVelocity,
     retro,
     carryover,
+    multiSprintReview: computeMultiSprintReview(
+      issues,
+      config,
+      accountIdToName,
+      displayToName,
+    ),
     hygiene,
     recommendations: [],
     engineerProposals: [],

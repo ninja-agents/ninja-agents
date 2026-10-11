@@ -54,6 +54,14 @@ wc -l agents/sprint-planning-analysis/data/cache/sprint-issues.csv && test -f ag
 - CSV must have at least 2 lines (header + 1 data row). If fewer: display "No sprint data in cache." STOP.
 - velocity-summary.json must exist. If VELOCITY_MISSING: display "Velocity data missing." STOP.
 
+The collector preserves full Jira sprint lifecycle evidence as normalized
+`{id, name, state}` objects in the appended `sprint_history` CSV cell, including
+future memberships to prove target membership. Only explicit `closed` or `active`
+states establish started participation; never infer state from dates, names,
+target membership or velocity. Existing 18-column caches and ID/name-only histories
+remain readable, but missing/invalid state or missing target membership produces
+an incomplete-DM-coverage warning; refresh from Jira rather than guess.
+
 ## Step 2: Generate Report
 
 Calculate `today` = current date (YYYY-MM-DD), then:
@@ -91,14 +99,16 @@ The script outputs a placeholder in the Key Takeaways section. Replace it with a
 - Frame positively where warranted ("Load is well-balanced across the team" not "No one is overloaded")
 - Do NOT include markdown links — the detailed sections have those
 - Every claim must trace to data in the analysis sections — never invent findings
+- Use remaining work for load/risk comparisons. Recommended total includes already-Done target work; retain it in the sprint, and remove only duplicates. Individual PTO reduces historical remaining capacity before adding Done credit; team capacity keeps its historical-average policy. Missing history is no baseline, not sustainable capacity.
+- When target completed SP is zero, do not mention already-Done work, zero completed credit, absence of completed work, or a + 0 term in Key Takeaways or narrative summaries. Apply this per engineer in individual summaries; keep nonzero credit visible and numeric tables unchanged.
 
 **Good examples:**
 
 ```
-- Sprint is 30% overcommitted relative to proven velocity (297 SP planned vs. 229 SP delivered last sprint), which risks repeating the 27% SP shortfall from Sprint 1
-- Scott Dickerson's load (100 SP across 10 items) is 12x his Sprint 1 output (8 SP, 1 item), making him the single biggest completion risk — rebalancing could recover 50+ SP of capacity
+- Sprint is 30% overcommitted relative to proven velocity (297 SP remaining vs. 229 SP historical average), which risks repeating the 27% SP shortfall from Sprint 1
+- Scott Dickerson has 100 SP remaining across 10 unfinished items, 12x his Sprint 1 output (8 SP, 1 item), making him the single biggest completion risk — rebalance unfinished work while retaining already-Done credit
 - All 13 carryover items from Sprint 1 are present, including both unresolved Blockers, suggesting root causes from last sprint haven't been addressed
-- 4 items totaling 31 SP are already done or duplicate and should be removed to clean up the sprint backlog
+- 4 duplicate items totaling 31 SP should be removed to clean up the sprint backlog; completed target work stays recorded and adds to the recommended total
 ```
 
 **Bad examples (do NOT write like this):**
@@ -127,4 +137,4 @@ Read and display `agents/sprint-planning-analysis/data/output/sprint-planning-an
 1. Never write report sections yourself EXCEPT Key Takeaways — the TypeScript script generates all other sections.
 2. If the fetch script fails (exit 1), display the error and STOP. Do not proceed with empty data.
 3. Every claim in the Key Takeaways must trace to data in the analysis sections — never invent findings.
-4. The script generates an "Individual DM Recommendations" section automatically — do not modify it.
+4. The script generates an "Individual DM Recommendations" section automatically — do not modify it. Separate item-specific drop/keep questions require full target membership and more than one distinct Jira sprint ID with state `closed` or `active`. Every `future` membership is excluded from qualification, counts and listed names, including an upcoming target. Questions retain the same assignee/QE ownership and request a decision only; never remove issues or deduct SP automatically.

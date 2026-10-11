@@ -43,6 +43,63 @@ npx tsx agents/sprint-planning-analysis/scripts/generate-sprint-planning-analysi
 6. **Write takeaways** — agent writes 3-5 Key Takeaway bullets synthesizing the analysis
 7. **Display** — shows the report to the user
 
+### Completed-work credit
+
+Recommendations retain work already completed in the **target sprint**. Only exact
+`resolution = "Done"` earns credit, regardless of status or completion date;
+completed work stays recorded in that sprint. Duplicate-resolution issues are
+excluded from eligible load and recommended for removal. Historical velocity
+and previous-sprint caches are unchanged.
+
+- **Individual recommended total SP** = historical average × available capacity
+  (PTO or shorter sprint), rounded to two decimals, **plus already-Done target SP**.
+  Credit is added after the capacity adjustment, never reduced for PTO.
+- **Remaining load ratio** = unfinished target SP ÷ adjusted historical capacity.
+  Rebalancing and defer amounts apply only to unfinished work.
+- **Team recommended total SP** = existing team historical average + target Done
+  SP, counting each issue once. Team risk and the 10% stretch compare remaining
+  work to historical velocity; the stretch does not multiply completed credit.
+- Existing ownership applies: assignee plus a distinct configured QE QA contact
+  may each receive individual credit; team totals still count the issue once.
+- Without history, reports show **no baseline**, not a sustainable capacity.
+  Known zero capacity with unfinished work is extreme; completed work alone is not.
+
+Example: 20 SP average + 6 SP already Done recommends **26 total SP**, leaving
+20 SP of capacity for unfinished work. At 50% availability, it recommends
+**16 total SP** (10 remaining capacity + 6 Done), not 13 SP.
+
+### Planning DMs
+
+Each eligible engineer's primary DM contains two sentences: planned SP, historical
+average with a chronological per-sprint breakdown, and “let's plan accordingly”.
+Historical zero values remain `0`; missing sprint entries remain `-`. Engineers
+without a velocity baseline do not receive a primary DM.
+
+Completed credit, PTO/shorter-sprint capacity adjustments, recommendations and
+risks remain in the detailed report sections. Tech-lead direct-report bullets
+retain their detailed credit, remaining work, capacity, recommendations and risk.
+
+Eligible primary DMs get a separate drop/keep question for unfinished,
+non-Duplicate items with full target membership and more than one distinct
+started Jira sprint ID. Only `closed` and `active` memberships count; all `future`
+memberships, including an upcoming target, are excluded independently of the
+velocity lookback. Each linked item lists only its started-sprint count and names.
+Ownership follows the assignee plus a distinct configured QE QA contact; a tech
+lead does not inherit direct-report items. Known zero historical averages remain
+eligible; engineers without a baseline receive neither message.
+
+The collector appends `sprint_history` as CSV-escaped JSON of normalized
+`{id, name, state}` memberships, including future ones, without changing the
+original 18 fields. IDs must be positive safe integers; names are trimmed; state
+must be exactly `closed`, `active` or `future`. Repeated IDs must agree on both name
+and state or the entire history is unknown. Old 18-column caches, ID/name-only
+histories and malformed/absent lifecycle evidence still load, but a coverage
+warning requests a Jira refresh when unfinished items lack usable full
+target-sprint membership. State is never inferred from dates, names, target
+membership, carryover or velocity.
+These questions request an engineer decision only: no issues are removed and no
+SP, capacity, recommendations or primary DM wording change.
+
 ## Configuration
 
 This agent uses the same config as `sprint-review`:

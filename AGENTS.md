@@ -22,7 +22,7 @@ The repo follows a "data collector + deterministic script" pattern: the AI agent
 | [jira-bugs-missing-qe](agents/jira-bugs-missing-qe/)                     | Find resolved bugs missing QA Contact, identify verifiers, and set the field                   | [README](agents/jira-bugs-missing-qe/README.md)           |
 | [jira-move-cnv2networking](agents/jira-move-cnv2networking/)             | Move CNV networking tickets to OCPBUGS (bugs) or the RFE project (feature requests)            | [README](agents/jira-move-cnv2networking/README.md)       |
 | [jira-fix-version](agents/jira-fix-version/)                             | Set fixVersions on resolved tickets by tracing merged PR branches                              | [README](agents/jira-fix-version/README.md)               |
-| [nmstate-cve-verification](agents/nmstate-cve-verification/)             | Verify NMState CVEs from release-associated product/source artifacts; deployed checks optional | [README](agents/nmstate-cve-verification/README.md)       |
+| [nmstate-cve-verification](agents/nmstate-cve-verification/)             | ART-reported public-source assessment; optional pre-GA image metadata/source-label assessment | [README](agents/nmstate-cve-verification/README.md) |
 
 ## IDE Support
 
@@ -56,7 +56,7 @@ agents/{name}/
 4. The AI agent writes prose sections that require synthesis (highlights, takeaways)
 5. A validation script checks the output for correctness (links, format, data quality)
 
-`nmstate-cve-verification` uses typed JSON for release/product/platform/source/advisory evidence. Default artifact_source requires no cluster/kubeconfig/API checks; deployed_source adds actual prepared-cluster observation only by explicit request. Scripts resolve approved publisher mapping, verify exact image/source identity and evaluate npm ranges into private checksummed reports. Product/platform/release association gates precede complete PASS/FAIL; unassociated candidate findings remain separate. Registry login is permitted through provided `RH_USERNAME`/`RH_TOKEN` (stdin token, private temporary auth cleanup) or a supplied authfile. No cluster/Jira/source objects are modified.
+`nmstate-cve-verification` assesses ART-reported public source for a current Jira technical identity and requested numeric OCP minor, using an explicit or previously approved platform. Mapped GA and pre-GA numeric minors are supported without lifecycle admission for source assessment; no cluster or kubeconfig is needed. The optional, explicitly requested image assessment is limited to configured pre-GA ART streams and uses `skopeo` with borrowed Quay Basic authentication to inspect image metadata and source labels, not image layers or runtime dependencies. Prerequisites for source are Jira read access, ART/public source and advisory access, and private storage; image assessment additionally needs `skopeo` and a borrowed Quay Basic-auth file. Stored reports are sealed and independently replay-validated before summary generation. Jira is read-only.
 
 ### Naming Conventions
 

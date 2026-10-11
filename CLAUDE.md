@@ -31,7 +31,7 @@ npm test              # all agent tests
 
 ## CVE Verification
 
-`/nmstate-cve-verification <jira-key-or-url>` follows the [NMState CVE verification workflow](.claude/agents/nmstate-cve-verification.md): release-associated artifact/source verification without a cluster by default, explicit deployed_source for installed-image checks. Also available as `$nmstate-cve-verification` in Codex and `@nmstate-cve-verification` in Cursor. Publisher product mapping/platform/source evidence is required; no runtime scan or Jira closure claim.
+`/nmstate-cve-verification <jira-key-or-url>` follows the [NMState CVE verification workflow](.claude/agents/nmstate-cve-verification.md): ART-reported public-source assessment for current Jira technical identity and a requested numeric OCP minor, with no cluster or kubeconfig requirement. Source assessment supports mapped GA and pre-GA minors without lifecycle admission. Optional image assessment is explicitly requested, limited to configured pre-GA ART streams, and requires `skopeo` plus borrowed Quay Basic authentication; it covers image metadata/source labels, not image layers or runtime dependency contents. Required source access is Jira read, ART/public source/advisory, and private storage. The workflow is Jira read-only.
 
 ## Full Context
 

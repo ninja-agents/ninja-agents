@@ -42,24 +42,16 @@
     "jira-fix-version:resolve-issues": "tsx agents/jira-fix-version/scripts/resolve-github-issues.ts",
     "jira-fix-version:generate": "tsx agents/jira-fix-version/scripts/generate-preview.ts",
     "jira-fix-version:test": "vitest run --dir agents/jira-fix-version",
-    "nmstate-cve-verification:verify": "tsx agents/nmstate-cve-verification/scripts/collect.ts",
     "nmstate-cve-verification:validate": "tsx agents/nmstate-cve-verification/scripts/validate-output.ts",
     "nmstate-cve-verification:test": "vitest run --dir agents/nmstate-cve-verification",
     "nmstate-cve-verification:read-jira": "tsx agents/nmstate-cve-verification/scripts/read-jira.ts",
-    "nmstate-cve-verification:catalog": "tsx agents/nmstate-cve-verification/scripts/run-catalog.ts",
-    "nmstate-cve-verification:build": "tsx agents/nmstate-cve-verification/scripts/run-build.ts",
     "nmstate-cve-verification:art": "tsx agents/nmstate-cve-verification/scripts/run-art.ts",
-    "nmstate-cve-verification:repository": "tsx agents/nmstate-cve-verification/scripts/verify-repository.ts",
-    "nmstate-cve-verification:validate-repository": "tsx agents/nmstate-cve-verification/scripts/validate-repository-output.ts",
-    "nmstate-cve-verification:compare-runs": "tsx agents/nmstate-cve-verification/scripts/compare-runs.ts",
     "nmstate-cve-verification:summary": "tsx agents/nmstate-cve-verification/scripts/generate-team-summary.ts",
     "vertex-billing": "tsx agents/vertex-billing/scripts/vertex-billing.ts"
   },
   "dependencies": {
     "@slack/web-api": "^7.17.0",
-    "semver": "^7.8.5",
-    "tar": "^7.5.22",
-    "yaml": "^2.9.1"
+    "semver": "^7.8.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

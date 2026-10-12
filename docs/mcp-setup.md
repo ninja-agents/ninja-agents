@@ -69,11 +69,11 @@ For **write operations** (creating issues, adding comments, setting fields), the
    }
    ```
 
-### NMState CVE verification access
+### Console plugin CVE verification access
 
-The [NMState CVE verification agent](../agents/nmstate-cve-verification/README.md) requires Jira **read** access, ART/public source and advisory access, and private writable storage for its source assessment. It supports mapped GA and pre-GA numeric OCP minors without lifecycle admission. No cluster, kubeconfig, cluster login, or Jira write token is needed.
+The [console plugin CVE verification agent](../agents/cve-verification-console-plugins/README.md) supports the configured `nmstate-console-plugin` and `networking-console-plugin` profiles. Its source-first assessment requires Jira **read** access, ART/public source and advisory access, and private writable storage. The selected profile is validated against refreshed Jira technical identity for the requested numeric OCP minor, with an explicit or previously approved platform. Without an explicit selection, exactly one profile must match current Jira for that minor; ambiguous matches require a choice and no match blocks assessment. Source assessment supports mapped GA and pre-GA numeric OCP minors without lifecycle admission. No cluster, kubeconfig, cluster login, or Jira write token is needed.
 
-Install Node.js 22+ and root dependencies (`npm install`). For source assessment, no registry or image tooling/credentials are required. An explicitly requested ART image assessment is limited to configured pre-GA streams and additionally requires `skopeo` and a borrowed Quay Basic-auth file; the agent uses that file for immutable image metadata inspection and does not modify or delete it. Image metadata/source-label assessment is not image-layer or runtime dependency verification. The supported commands are `:art`, `:read-jira`, `:validate`, `:summary`, and `:test`. GitLab is not required for this workflow.
+Install Node.js 22+ and root dependencies (`npm install`). For source assessment, no registry or image tooling/credentials are required. A separately requested ART image assessment is limited to the selected profile's configured pre-GA streams and additionally requires `skopeo` and a borrowed Quay Basic-auth file; the agent uses that file for immutable image metadata inspection and does not modify or delete it. Image metadata/source-label assessment is not image-layer or runtime dependency verification; neither source nor image assessment establishes shipped-release remediation. The supported npm commands are `cve-verification-console-plugins:{art,read-jira,validate,summary,test}`. GitLab is not required for this workflow.
 
 ## Verification
 

@@ -26,6 +26,8 @@ agents/*/data/output/*.json
 # Private CVE evidence runs (manifests, lockfiles and checksums included)
 agents/nmstate-cve-verification/data/output/*
 !agents/nmstate-cve-verification/data/output/.gitkeep
+agents/cve-verification-console-plugins/data/output/*
+!agents/cve-verification-console-plugins/data/output/.gitkeep
 
 # Research logs (contain PII: real names, account IDs, internal ticket data)
 agents/*/research.md

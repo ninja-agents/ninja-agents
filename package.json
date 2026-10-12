@@ -42,11 +42,11 @@
     "jira-fix-version:resolve-issues": "tsx agents/jira-fix-version/scripts/resolve-github-issues.ts",
     "jira-fix-version:generate": "tsx agents/jira-fix-version/scripts/generate-preview.ts",
     "jira-fix-version:test": "vitest run --dir agents/jira-fix-version",
-    "nmstate-cve-verification:validate": "tsx agents/nmstate-cve-verification/scripts/validate-output.ts",
-    "nmstate-cve-verification:test": "vitest run --dir agents/nmstate-cve-verification",
-    "nmstate-cve-verification:read-jira": "tsx agents/nmstate-cve-verification/scripts/read-jira.ts",
-    "nmstate-cve-verification:art": "tsx agents/nmstate-cve-verification/scripts/run-art.ts",
-    "nmstate-cve-verification:summary": "tsx agents/nmstate-cve-verification/scripts/generate-team-summary.ts",
+    "cve-verification-console-plugins:validate": "tsx agents/cve-verification-console-plugins/scripts/validate-output.ts",
+    "cve-verification-console-plugins:test": "vitest run --dir agents/cve-verification-console-plugins",
+    "cve-verification-console-plugins:read-jira": "tsx agents/cve-verification-console-plugins/scripts/read-jira.ts",
+    "cve-verification-console-plugins:art": "tsx agents/cve-verification-console-plugins/scripts/run-art.ts",
+    "cve-verification-console-plugins:summary": "tsx agents/cve-verification-console-plugins/scripts/generate-team-summary.ts",
     "vertex-billing": "tsx agents/vertex-billing/scripts/vertex-billing.ts"
   },
   "dependencies": {

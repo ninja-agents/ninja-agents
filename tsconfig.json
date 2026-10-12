@@ -16,6 +16,6 @@
     { "path": "agents/jira-bugs-missing-qe" },
     { "path": "agents/jira-move-cnv2networking" },
     { "path": "agents/jira-fix-version" },
-    { "path": "agents/nmstate-cve-verification" }
+    { "path": "agents/cve-verification-console-plugins" }
   ]
 }

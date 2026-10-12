@@ -9,21 +9,21 @@ AI agents for engineering teams. Self-contained under `agents/`, specs in `.clau
 
 ## Workflows
 
-| Workflow | Description |
-| -------- | ----------- |
-| `@weekly-team-update` | Weekly team report for leadership |
-| `@sprint-review` | Sprint retrospective analysis |
-| `@sprint-planning-analysis` | Sprint planning health-check |
-| `@repo-contextification` | Audit repo docs and AI-readiness |
-| `@jira-qe-story` | Generate QE story from dev Jira story |
-| `@jira-sprint-tickets-updater` | Transition sprint tickets based on linked PR status |
-| `@slack-channels-analyzer` | Analyze Slack channels for UI-related topics and trends |
-| `@jira-add-missing-activity-type` | Add missing Activity Type to completed Jira tickets |
-| `@jira-story-points` | Estimate story points using historical team data |
-| `@jira-bugs-missing-qe` | Find resolved bugs missing QA Contact, identify and set verifier |
-| `@jira-move-cnv2networking` | Move CNV networking tickets to OCPBUGS or the RFE project |
-| `@jira-fix-version` | Set fixVersions on resolved tickets by tracing merged PR branches |
-| `@nmstate-cve-verification` | Verify NMState CVEs from release-associated artifacts without a cluster by default; deployed checks opt-in |
+| Workflow                            | Description                                                                                                                                                                |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@weekly-team-update`               | Weekly team report for leadership                                                                                                                                          |
+| `@sprint-review`                    | Sprint retrospective analysis                                                                                                                                              |
+| `@sprint-planning-analysis`         | Sprint planning health-check                                                                                                                                               |
+| `@repo-contextification`            | Audit repo docs and AI-readiness                                                                                                                                           |
+| `@jira-qe-story`                    | Generate QE story from dev Jira story                                                                                                                                      |
+| `@jira-sprint-tickets-updater`      | Transition sprint tickets based on linked PR status                                                                                                                        |
+| `@slack-channels-analyzer`          | Analyze Slack channels for UI-related topics and trends                                                                                                                    |
+| `@jira-add-missing-activity-type`   | Add missing Activity Type to completed Jira tickets                                                                                                                        |
+| `@jira-story-points`                | Estimate story points using historical team data                                                                                                                           |
+| `@jira-bugs-missing-qe`             | Find resolved bugs missing QA Contact, identify and set verifier                                                                                                           |
+| `@jira-move-cnv2networking`         | Move CNV networking tickets to OCPBUGS or the RFE project                                                                                                                  |
+| `@jira-fix-version`                 | Set fixVersions on resolved tickets by tracing merged PR branches                                                                                                          |
+| `@cve-verification-console-plugins` | Assess NMState/networking console plugin CVEs from ART public source first; separately requested image metadata/source-label assessment for configured pre-GA streams only |
 
 ## Key Rules
 

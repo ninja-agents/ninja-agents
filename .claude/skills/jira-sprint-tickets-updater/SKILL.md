@@ -34,4 +34,4 @@ A preview table of proposed transitions (ticket key, current status, target stat
 - **Never modifies tickets without user confirmation** — preview is always shown first
 - Only transitions status — never creates, deletes, or modifies other ticket fields
 - Transition rules are defined in `agents/jira-sprint-tickets-updater/data/config.json`
-- Requires both Atlassian and GitHub MCP servers to be configured
+- Requires GitHub MCP, Node.js 22+, installed root dependencies, and environment-only `JIRA_EMAIL` / `JIRA_API_TOKEN` for the standalone Jira REST reads and approved transitions. Follow the canonical workflow's preview gate before passing `--approved`; Jira/GitLab MCP servers are not configured.

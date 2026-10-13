@@ -7,6 +7,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "jira:rest": "tsx scripts/jira-rest.ts",
+    "gitlab:read": "tsx scripts/gitlab-read.ts",
     "weekly:generate": "tsx agents/weekly-team-update/scripts/generate-weekly-report.ts",
     "weekly:validate": "tsx agents/weekly-team-update/scripts/validate-report-links.ts",
     "weekly:test": "vitest run --dir agents/weekly-team-update",

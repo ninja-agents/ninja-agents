@@ -26,10 +26,10 @@ Ask:
 
 Ask:
 
-- **Which MCP servers does it need?** Options:
-  - GitHub MCP — PR/commit data from github.com
-  - GitLab MCP — MR/commit data from gitlab.cee.redhat.com
-  - Atlassian Rovo MCP — Jira ticket data from redhat.atlassian.net
+- **Which data sources does it need?** Options:
+  - GitHub MCP — PR/commit data; GitHub is the sole project MCP server
+  - Jira direct REST API — root `scripts/jira-rest.ts` commands or an existing workflow's direct collector
+  - GitLab direct REST API — bounded optional QE repository context via `scripts/gitlab-read.ts qe-context`; other MR/commit reporting follows the existing direct collector pattern
   - None / other (describe)
 - **What scripting language for supporting scripts?** Options:
   - TypeScript (recommended) — generates `package.json`, `tsconfig.json`, and starter script
@@ -37,13 +37,14 @@ Ask:
   - Shell — generates starter `.sh` script
   - None — prompt-only agent, no supporting scripts
 
-**Conditional questions** (only ask when MCP servers are selected):
+**Conditional questions** (only ask when data sources are selected):
 
 - **What data fields does the agent need from each source?** Suggest common defaults per platform. The user can accept defaults or customize:
   - GitHub: `number, title, repo, state, created_at, merged_at, html_url`
   - GitLab: `iid, title, project_path, state, created_at, merged_at, web_url`
   - Jira: `key, summary, status, resolution, issuetype, priority, assignee`
 - **Could any data source return 100+ results per query?** Options: Yes / No / Unsure. Default: No for most agents, Yes if Jira is selected and the description mentions "all tickets" or "all issues".
+- **Is each source required or optional?** Required-source failures STOP before processing/output or approval. GitLab `qe-context` is optional enrichment only; it cannot supply general MR reporting.
 
 **Conditional question** (only when 2+ data sources selected):
 
@@ -154,7 +155,7 @@ Then generate the workflow steps:
 
 {Read config from `agents/{name}/data/config.json` (if applicable).
 Calculate parameters (dates, filters, etc.).
-Validate prerequisites (required files exist, MCP servers respond).}
+Validate prerequisites (required files exist, Node.js 22+ and installed repository-root dependencies are available, selected GitHub MCP tools respond, and required API credential variables are present without printing values).}
 ```
 
 **If a skill argument was defined**, add conditional handling at the start of Step 1:
@@ -163,9 +164,9 @@ Validate prerequisites (required files exist, MCP servers respond).}
 If `${argument-name}` was provided, use it. Otherwise {default behavior or ask user}.
 ```
 
-### Data Fetching Steps — MCP Tool Call Templates
+### Data Fetching Steps — MCP and Direct API Templates
 
-Generate the data-fetching step(s) using the batch structure and MCP tool call templates below.
+Generate the data-fetching step(s) using the batch structure and source-specific templates below. Keep `.claude/agents/{name}.md` canonical; do not create another workflow spec or replace an existing direct collector with a second collection path.
 
 **If no data dependencies exist** (or single data source), generate one batch:
 
@@ -197,7 +198,7 @@ Launch ALL of these in a single parallel tool call:
 {...tool calls for dependent sources...}
 ```
 
-**Include these platform-specific MCP tool call blocks** based on selected servers:
+**Include these platform-specific blocks** based on selected sources:
 
 For **GitHub MCP**:
 
@@ -210,63 +211,86 @@ query: "author:{username} is:merged merged:{seven_days_ago}..{today}"
 \```
 ````
 
-For **GitLab MCP**:
+For **GitLab direct REST — optional QE context only**:
 
 ````markdown
-**GitLab {MRs/commits/etc.}** — one query per {entity}:
+**Optional GitLab QE repository context** — use the selected `projects[]` repository or approved CLI override, never a fallback host/repository:
 
+\```bash
+node --import tsx scripts/gitlab-read.ts qe-context \
+ --project '{selected_owner/repo}' --issue-key '{issue_key}' \
+ --api-url '{gitlab.api_url}'
 \```
-mcp**gitlab**list_merge_requests:
-author_username: {username}
-scope: "all" # REQUIRED — without this, results may be empty
-state: "merged"
-updated_after: {seven_days_ago} # ISO-8601: YYYY-MM-DDT00:00:00Z
-per_page: 100
-\```
+
+If `gitlab.api_url` is empty/absent, omit `--api-url` and use `GITLAB_API_URL` from the environment. The base must be HTTPS ending in `/api/v4`, with no userinfo, query, or fragment. `GITLAB_PAT` is optional; public reads may be unauthenticated.
+
+- **Exit 0**: one JSON value `{context:{readme,merge_requests,tree},warnings:[]}`. README is decoded UTF-8; `merge_requests` contains only the first ten issue-key-related MRs (`scope=all`, `per_page=10`), not arbitrary MR/commit reporting. The recursive tree is completely paginated internally.
+- **Exit 3**: `{context:null,warnings:[safe_code]}` for absent base/access or any optional-source failure. Log the warning and proceed without GitLab enrichment; do not claim partial or absent context was collected.
+- **Exit 1**: argument syntax error. STOP and correct the invocation rather than treating a broken command as successful enrichment.
 ````
 
-For **Jira/Atlassian MCP**:
+For **other GitLab REST purposes**, reuse the direct collector design in `agents/weekly-team-update/scripts/fetch-data.ts`: configuration/env API base, optional `GITLAB_PAT` in `PRIVATE-TOKEN`, and `scope=all` for every MR query. Implement the required reads, field mapping, pagination, and required-vs-optional failure handling in the new agent's own collector before invoking it. Do not import between agents, add an unsupported root CLI action, or use `qe-context` as a general reporting substitute. Leave already-direct weekly and sprint collectors in place.
+
+For **Jira direct REST**:
 
 ````markdown
-**Jira tickets** — one query per {entity}:
+**Jira tickets** — run from the repository root with resolved values as safely shell-quoted arguments:
 
+\```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' search \
+ --jql '{JQL query based on agent purpose}' \
+ --fields 'summary,status,assignee,resolution,resolutiondate,issuetype,priority,updated,created'
 \```
-mcp**atlassian**searchJiraIssuesUsingJql:
-cloudId: "{jira.cloud_id}"
-jql: '{JQL query based on agent purpose}'
-maxResults: 100
-fields: ["summary", "status", "assignee", "resolution", "resolutiondate", "issuetype", "priority", "updated", "created"]
-responseContentFormat: "markdown"
-\```
+
+`npm run jira:rest -- --site '{jira.cloud_id}' search ...` is the equivalent invocation. `--site` is the existing config's DNS hostname, not a URL or `cloud_uuid` (Slack uses `jira_filing.cloud_id`). Both reads and approved root CLI writes require `JIRA_EMAIL` and `JIRA_API_TOKEN` in the environment. Never place credentials in argv, caches, tracked config, or output.
+
+Search emits `{issues:[...]}` after internal pagination. Map native `issue.key` and `issue.fields` into the workflow's defined cache schema. `fields.description` and comment bodies are normalized strings, preserving paragraph boundaries, mentions, and link URLs; other fields remain native JSON. No results is `{issues:[]}` with exit 0, not a transport failure.
+
+Only select supported reads needed by the workflow:
+
+| Action after `--site HOST` | Arguments                                                                | JSON output                                                                                                     |
+| -------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `search`                   | `--jql STRING --fields COMMA_LIST`                                       | `{issues:[...]}`; use optional `--limit POSITIVE_INT` only for explicitly bounded 1/3-result lookups            |
+| `issue`                    | `--key KEY_OR_NUMERIC_ID --fields COMMA_LIST [--comments] [--changelog]` | Native issue; flags fetch complete comments in `fields.comment.comments` and histories in `changelog.histories` |
+| `remote-links`             | `--key KEY_OR_NUMERIC_ID`                                                | Native array; referenced URL is `object.url`                                                                    |
+| `transitions`              | `--key KEY_OR_NUMERIC_ID`                                                | `{transitions:[...]}`                                                                                           |
+| `issue-link-types`         | No additional arguments                                                  | Native `issueLinkTypes` response                                                                                |
+| `user-search`              | `--query STRING`                                                         | Complete user array; use `accountId`, not visibility of email                                                   |
+
+Each read emits exactly one complete JSON value on stdout. Exit 1 means a required read failed; report only safe diagnostics and STOP before classification, output, or approval. Never process partial results or ask the model to page API results.
 ````
 
-Adapt the tool names, parameters, and query patterns to the agent's actual purpose. These are starting templates — the exact query strings depend on what the agent fetches.
+Adapt supported commands, fields, and query patterns to the agent's actual purpose. Do not invent endpoints, flags, or generic write actions.
+
+### Approval-Gated Jira Writes
+
+For workflows that already authorize external mutations, retain their preview/selection/per-item user-approval gates. Do not add write scope just because a root action exists. Keep existing per-agent REST apply/QE writers and their private `jira.user_email` plus `JIRA_API_TOKEN` behavior; the root CLI is not a replacement for them.
+
+The root CLI permits only these single-mutation actions, each with `--site HOST` and `--approved`. That flag is a mechanical transport guard, never a substitute for explicit user approval:
+
+| Action             | Required arguments                       | Allowed payload                                                                                                                                                                                                                |
+| ------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `set-fix-versions` | `--key KEY --versions-json JSON_ARRAY`   | Nonempty exact `{id:string}` or `{name:string}` entries; names only for configured TODO IDs; all approved versions in one PUT                                                                                                  |
+| `set-components`   | `--key KEY --components-json JSON_ARRAY` | Nonempty exact `{name:string}` entries                                                                                                                                                                                         |
+| `transition`       | `--key KEY --transition-id ID`           | Chosen ID after the workflow's configured-ID/destination-name checks                                                                                                                                                           |
+| `create-issue`     | `--body-file FILE`                       | Exactly `{fields:{project:{key},issuetype:{name},summary,description,components,labels}}`; description is ADF `{version:1,type:"doc",content:[...]}`, components are `[{name}]`, labels are `string[]`; preserve approved text |
+| `link-issues`      | `--body-file FILE`                       | Exactly `{type:{name:"Relates"},inwardIssue:{key},outwardIssue:{key}}`                                                                                                                                                         |
+
+Request-body files must be owned single-link regular `0600` files, created exclusively without following symlinks in fresh owned `0700` scratch storage, never tracked configs/caches. For approved Slack filing, preserve every template line/URL as one ADF paragraph per line. Successful mutation returns native JSON or `{}` for 204 and exit 0; failure exits 1. Preserve per-item failure summaries and continuation rules; never fabricate rollback or successful writes. No arbitrary endpoint/method/body tunnel is supported.
 
 ### Pagination Subsection
 
-**If the user indicated 100+ results are possible**, add a pagination subsection within the data-fetching step:
+Generate a short source-specific contract, not manual API page loops:
 
-````markdown
-### Pagination
-
-If any query returns exactly 100 results, paginate using `nextPageToken`:
-
-\```
-mcp**atlassian**searchJiraIssuesUsingJql:
-cloudId: "{jira.cloud_id}"
-jql: '{same JQL}'
-maxResults: 100
-nextPageToken: "{token from previous response}"
-\```
-
-Repeat until fewer than 100 results are returned. Combine all pages before proceeding.
-````
-
-**If pagination is not needed**, add a comment: `<!-- Pagination: Not needed — each query returns <100 results. If data volume grows, see sprint-review.md Step 2 for the pagination pattern. -->`
+- Jira root commands own search, comment, changelog, and user pagination. Invoke once and consume the completed output; omit `--limit` for full collection.
+- Optional GitLab `qe-context` owns recursive-tree pagination; its ten-MR lookup is intentionally bounded.
+- Other direct collectors implement their own pagination and return complete data before processing. Describe the collector's actual completeness guarantees, not an unimplemented loop in the spec.
+- Retain the supported GitHub tool's paging contract where needed; do not copy Jira page-token templates into MCP calls.
+- State expected data volume and any deliberate bounds so maintainers can distinguish full collection from lookups.
 
 ### Validation Checkpoint
 
-Generate data-source-specific checks based on selected MCP servers:
+Generate data-source-specific checks based on selected sources:
 
 ```markdown
 ### Validation Checkpoint
@@ -277,17 +301,18 @@ After data collection, verify:
 Include the relevant checks from this list:
 
 - **GitHub**: `- Count total PRs returned. If < 5: display warning, ask user whether to retry or proceed.`
-- **GitLab**: `- Verify GitLab queries returned results (not empty — missing \`scope: "all"\` can cause this).`
-- **Jira**: `- Check all Jira queries succeeded (no errors). If ALL queries returned 0 tickets combined: display warning, STOP and ask user.`
-- **General**: `- If any MCP call returned an error: display the error, STOP, ask user how to proceed.`
+- **GitLab QE context**: `- Exit 3 with context:null is an accepted optional-source warning; proceed without enrichment. Exit 1 is an invocation error and STOPs.`
+- **Other GitLab collectors**: `- Check the collector's exit status and complete output; required failures STOP, explicitly optional failures are reported without fabricated data. An empty successful result is not proof of missing scope=all.`
+- **Jira**: `- Check every required REST command succeeded. On exit 1 STOP before classification/output/approval. If ALL successful queries returned 0 tickets combined, keep the workflow's no-tickets STOP message.`
+- **General**: `- If a required MCP call or direct collector fails, display safe diagnostics and STOP before dependent work. Never print token values or raw credential-bearing responses.`
 
 ```markdown
 If validation fails, display what's missing and STOP.
 ```
 
-### Save to CSV Step (if MCP data sources + scripts)
+### Save to CSV Step (if Data Sources + Scripts)
 
-**If the agent uses MCP data sources and has TypeScript/Python scripts**, generate a "Save to CSV" step between data fetching and processing. Use the data fields from Phase 1.2:
+**If the agent uses data sources and has TypeScript/Python scripts**, generate a "Save to CSV" step between data fetching and processing. Use the data fields from Phase 1.2 and the command's actual JSON output:
 
 ```markdown
 ## Step N: Save to CSV
@@ -440,8 +465,11 @@ Generate the agent README:
 
 ## Prerequisites
 
-{List MCP servers, tokens, or tools needed.
-Include: "Tokens must be set as environment variables before launching Claude Code."}
+{List only selected prerequisites: GitHub is the sole project MCP server.
+Require Node.js 22+ and installed repository-root dependencies for TypeScript/root CLI commands.
+Jira root reads AND writes require JIRA_EMAIL/JIRA_API_TOKEN from the environment and the selected config's jira.cloud_id DNS hostname; existing REST writers may additionally require private jira.user_email.
+GitLab REST uses configured gitlab.api_url or GITLAB_API_URL, with optional GITLAB_PAT; qe-context is optional enrichment, not arbitrary MR reporting.
+Include: "Credentials must be available as environment variables before launching the client; never print their values or commit them."}
 
 ## Usage
 
@@ -693,16 +721,10 @@ alwaysApply: false
 
 Read `.claude/agents/{name}.md` and follow the complete workflow described there.
 
-The agent spec contains all steps, MCP tool call examples, CSV schemas, validation checkpoints, style guides, and rules. It is the single source of truth for this workflow.
+The agent spec contains all steps, GitHub MCP/direct API command examples, CSV schemas, validation checkpoints, style guides, and rules. It is the single source of truth for this workflow.
 ```
 
-**If TypeScript**, also add a reference to `tsconfig.json` in the repo root:
-
-```json
-{ "path": "agents/{name}" }
-```
-
-Append to the `"references"` array in the root `tsconfig.json`.
+**If TypeScript**, keep scripts under `agents/{name}/scripts/`. The root `tsconfig.json` already includes `agents/*/scripts/**/*.ts`; no root project reference is needed. Keep agent-specific compiler options in its own `tsconfig.json`, extending the root configuration.
 
 ## Phase 3: Install & Verify
 
@@ -746,7 +768,7 @@ After generating all files, display:
 3. Next steps checklist:
    - [ ] Flesh out the starter script in `agents/{name}/scripts/`
    - [ ] Flesh out the config file in `agents/{name}/data/config.json` (if applicable)
-   - [ ] Add MCP tool permissions to `.claude/settings.json` if needed
+   - [ ] Add only needed GitHub MCP permissions to `.claude/settings.json`; do not restore removed Jira/GitLab servers or grant blanket command/write permissions
    - [ ] Write tests (run with `npm run {name}:test` from the repo root)
    - [ ] Test the agent by running `/{skill-name}` (Claude Code) or `@{name}` (Cursor)
    - [ ] Commit the new agent
@@ -764,8 +786,8 @@ Quality rules for generated files. The Phase 2 templates above show _what_ to ge
 - Include "You do NOT {anti-pattern}" if there's a common mistake to prevent
 - Batch independent tool calls: "Launch ALL of these in a single parallel tool call:"
 - Handle errors explicitly: "If X fails: display the error, STOP, ask user how to proceed"
-- Specify exact MCP tool names and parameters — show field names and example values
-- Note required fields that are easy to miss (e.g., GitLab `scope: "all"`)
+- Specify exact supported GitHub MCP tool names or direct API commands/flags — show field names and safely quoted values, never credentials
+- Note required fields that are easy to miss (e.g., GitLab MR query `scope=all`)
 - For data schemas, specify exact headers and field definitions
 - Delegate structured output formatting to scripts — the agent gathers data and calls scripts
 - Be prescriptive, not narrative ("Do X", not "You should consider doing X")
@@ -798,7 +820,7 @@ Quality rules for generated files. The Phase 2 templates above show _what_ to ge
 The repo uses ESLint (flat config) + Prettier at the root. All generated TypeScript must pass `npm run lint` and `npm run format` from the repo root.
 
 - `@types/node` is already in the root devDependencies — no per-agent install needed
-- Add a `{ "path": "agents/{name}" }` entry to the root `tsconfig.json` references
+- Keep scripts under `agents/{name}/scripts/` for automatic root compiler inclusion; do not add build references
 - Always add type assertions to `JSON.parse` calls: `JSON.parse(...) as MyType`
 - Use `import.meta.dirname` instead of the `dirname(fileURLToPath(import.meta.url))` pattern (Node 22+)
 - Use `String(e)` when interpolating caught errors in template literals (ESLint `restrict-template-expressions`)
@@ -820,9 +842,10 @@ The repo uses ESLint (flat config) + Prettier at the root. All generated TypeScr
 
 ### Pagination
 
-- If any query could return 100+ results, document pagination with `nextPageToken` (see `sprint-review.md` Step 2)
-- State the expected data volume per query so future maintainers know when pagination becomes relevant
-- Always combine all pages before proceeding to the next step
+- Jira root CLI and bounded optional GitLab `qe-context` own pagination internally; generated specs invoke once, with no manual page-token loops
+- For other direct collectors, implement and document the actual complete-collection contract before referencing the collector; never invent root actions
+- State expected volume and deliberate bounds; root Jira `--limit` is for bounded lookups, not report truncation
+- Consume complete successful output before proceeding; required-source failure STOPs, optional QE GitLab exit 3 proceeds with a warning and null context
 
 ### Batch Parallelism
 

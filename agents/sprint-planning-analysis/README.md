@@ -4,8 +4,11 @@ Analyzes a future or upcoming Jira sprint by comparing the plan against proven v
 
 ## Prerequisites
 
-- [Atlassian Rovo MCP](https://www.npmjs.com/package/@anthropic-ai/mcp-atlassian) configured with access to your Jira instance
-- Shared sprint config at `agents/sprint-review/data/sprint-config.json` (see `sprint-config.example.json` in the sprint-review agent)
+- **Node.js 22+ and installed root dependencies** — run commands from the repository root.
+- **Jira REST credentials** — `JIRA_EMAIL` and `JIRA_API_TOKEN` in the environment for reads.
+- **Shared private sprint config** — `agents/sprint-review/data/sprint-config.json` (see the sprint-review example).
+
+The existing collector reads Jira directly; no Jira MCP server is required. Set credentials before launching your IDE, never in command arguments or report/cache files. See the [setup guide](../../docs/mcp-setup.md).
 
 ## Usage
 
@@ -25,6 +28,8 @@ Mention `@sprint-planning-analysis` in chat, or describe what you need:
 ### Manual
 
 ```bash
+node --import tsx agents/sprint-planning-analysis/scripts/fetch-data.ts
+# Or select a sprint: node --import tsx agents/sprint-planning-analysis/scripts/fetch-data.ts --sprint "Your Team Sprint 3"
 npx tsx agents/sprint-planning-analysis/scripts/generate-sprint-planning-analysis.ts \
   --date 2026-05-18 \
   --target-csv agents/sprint-planning-analysis/data/cache/sprint-issues.csv \
@@ -35,13 +40,15 @@ npx tsx agents/sprint-planning-analysis/scripts/generate-sprint-planning-analysi
 
 ## How It Works
 
-1. **Read config** — loads shared `sprint-config.json` and determines the target sprint (from argument or auto-discovery via Jira)
-2. **Find velocity baseline (N-1)** — checks velocity history cache, then sprint review report, CSV cache, or queries Jira as fallback; writes `velocity-summary.json` and upserts into `velocity-history.json`
-3. **Find velocity baselines (N-2, N-3)** — checks velocity history cache first; fetches from Jira only if not cached; upserts into `velocity-history.json`
-4. **Fetch target sprint** — queries Jira for all issues in the target sprint and saves to CSV
+1. **Read config** — `scripts/fetch-data.ts` loads shared `sprint-config.json` and determines the target sprint through the Jira REST API (from argument or auto-discovery)
+2. **Find velocity baseline (N-1)** — the collector checks velocity history cache, then sprint review report, CSV cache, or Jira REST as fallback; writes `velocity-summary.json` and upserts into `velocity-history.json`
+3. **Find velocity baselines (N-2, N-3)** — checks velocity history cache first; fetches directly from Jira only if not cached; upserts into `velocity-history.json`
+4. **Fetch target sprint** — fetches fresh target-sprint issues directly from Jira each run and saves to this agent's CSV cache
 5. **Generate report** — TypeScript script computes capacity vs. velocity, load distribution, individual velocity averages (3-sprint), retro compliance, carryover analysis, planning hygiene, and recommendations
 6. **Write takeaways** — agent writes 3-5 Key Takeaway bullets synthesizing the analysis
 7. **Display** — shows the report to the user
+
+If the collector exits 1, display its diagnostic and STOP before analysis; do not proceed with empty data or introduce a second root-CLI collection path.
 
 ### Completed-work credit
 
@@ -121,6 +128,7 @@ See the sprint-review agent's `sprint-config.example.json` for the schema. Key f
 agents/sprint-planning-analysis/
 ├── README.md
 ├── scripts/
+│   ├── fetch-data.ts                              # Direct Jira REST collector
 │   ├── generate-sprint-planning-analysis.ts       # analysis engine
 │   └── generate-sprint-planning-analysis.test.ts  # unit tests
 └── data/

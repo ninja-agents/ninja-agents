@@ -2,23 +2,25 @@
 
 ![Ninja Agents logo](logo.png)
 
-A shared playground for AI agents that help engineering teams ship status reports, run sprint retrospectives, and audit repository documentation. Each agent is a self-contained directory under `agents/` with its own scripts, config, and data. Agents run inside [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Cursor](https://cursor.com), or [Codex](https://learn.chatgpt.com/docs/codex/cli) via MCP servers that connect to GitHub, GitLab, and Jira.
+A shared playground for AI agents that help engineering teams ship status reports, run sprint retrospectives, and audit repository documentation. Each agent is a self-contained directory under `agents/` with its own scripts, config, and data. Agents run inside [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Cursor](https://cursor.com), or [Codex](https://learn.chatgpt.com/docs/codex/cli), using GitHub MCP and direct APIs for Jira and GitLab.
 
 > **Note:** These agents are opinionated — they encode our team's specific workflows, naming conventions, and tooling choices. They work well for us but may need adaptation for your team.
 
 ## Overview
 
-The repo follows a "data collector + deterministic script" pattern: the AI agent fetches data from external services (GitHub, GitLab, Jira) via MCP tool calls and saves it as CSV, then a TypeScript script generates the structured output. The agent writes only the prose sections (e.g., Key Highlights, Key Takeaways) that require synthesis. Each agent is self-contained — no cross-agent imports, shared team config accessed via config path — and all dependencies are managed in the root `package.json`. TypeScript files execute directly via `tsx` with no build step.
+The repo follows a "data collector + deterministic script" pattern. Existing weekly, sprint, story-point, and CVE collectors read APIs directly. Other workflows invoke standalone root API commands and adapt their JSON output to existing CSV/JSON caches; GitHub MCP remains available for workflow reads. Deterministic TypeScript scripts process those caches, while the agent writes prose requiring synthesis. Each agent is self-contained — no cross-agent imports, shared team config accessed via config path — and root commands are invoked, not imported by agents. Dependencies live in the root `package.json`; TypeScript executes through `tsx` without a build step.
 
 ## Quick Start
 
 ```bash
 git clone <repo-url> && cd ninja-agents
-npm install           # all dependencies (linting, TypeScript, testing)
+npm install           # root dependencies; requires Node.js 22+
 
-# Set tokens as env vars (add to ~/.bashrc or ~/.zshrc to persist)
-export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
-export GITLAB_PAT=glpat-xxxxxxxxxxxxxxxxxxxx
+# Supply credentials through your environment or local secret manager
+export GITHUB_PAT='<your GitHub token>'
+export JIRA_EMAIL='<your Jira account email>'
+export JIRA_API_TOKEN='<your Jira API token>'
+# GitLab credentials/base are workflow-specific; see the setup guide
 
 # Launch your IDE and invoke an agent
 claude                # Claude Code
@@ -63,24 +65,35 @@ For CVE checks, invoke `/cve-verification-console-plugins <jira-key-or-url>` (Cl
 
 ## Prerequisites
 
-You need an AI-powered IDE plus MCP servers for the agents you want to use:
+You need an AI-powered client, Node.js 22+, and installed root dependencies. All four project MCP manifests define GitHub only:
 
-| Data Source | MCP Server                                                                      | CLI Alternative |
-| ----------- | ------------------------------------------------------------------------------- | --------------- |
-| **Jira**    | [Atlassian Rovo MCP](https://www.npmjs.com/package/@anthropic-ai/mcp-atlassian) | N/A             |
-| **GitHub**  | [GitHub MCP](https://github.com/github/github-mcp-server)                       | `gh` CLI        |
-| **GitLab**  | [@zereight/mcp-gitlab](https://www.npmjs.com/package/@zereight/mcp-gitlab)      | `glab` CLI      |
+| Data Source | Access                                                                                   | Credentials                                                              |
+| ----------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| **GitHub**  | [GitHub MCP](https://github.com/github/github-mcp-server) and existing direct collectors | `GITHUB_PAT`                                                             |
+| **Jira**    | Direct REST collectors or `scripts/jira-rest.ts`                                         | `JIRA_EMAIL` and `JIRA_API_TOKEN` for reads and writes                   |
+| **GitLab**  | Existing direct collectors; optional QE `scripts/gitlab-read.ts`                         | QE base from `gitlab.api_url` or `GITLAB_API_URL`; optional `GITLAB_PAT` |
 
 ### Token Setup
 
 See [docs/mcp-setup.md](docs/mcp-setup.md) for the full step-by-step guide. The short version:
 
 ```bash
-export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
-export GITLAB_PAT=glpat-xxxxxxxxxxxxxxxxxxxx
+export GITHUB_PAT='<your GitHub token>'
+export JIRA_EMAIL='<your Jira account email>'
+export JIRA_API_TOKEN='<your Jira API token>'
 claude   # Claude Code — or open the project in Cursor
 # For Codex: codex -m gpt-6-luna
 ```
+
+Existing per-agent Jira apply/QE writers additionally read private `jira.user_email` configuration with the token. Preserve that setting. Root Jira commands use the environment email and the site's DNS hostname from `jira.cloud_id` (Slack: `jira_filing.cloud_id`), not a URL or UUID. Optional QE GitLab bases must use HTTPS and end in `/api/v4`; exit 3 means enrichment is unavailable and QE proceeds with a warning.
+
+```bash
+node --import tsx scripts/jira-rest.ts --site your-site.atlassian.net user-search --query 'Your Name'
+npm run jira:rest -- --site your-site.atlassian.net search --jql 'assignee = currentUser()' --fields summary,status
+npm run gitlab:read -- qe-context --project OWNER/REPO --issue-key PROJECT-123
+```
+
+Jira account lookup returns `accountId`; visible email is not required. Pagination is internal to the commands. Required Jira failures stop collection; all writes retain workflow approval gates, and root write commands also require `--approved`.
 
 ## Contributing a New Agent
 

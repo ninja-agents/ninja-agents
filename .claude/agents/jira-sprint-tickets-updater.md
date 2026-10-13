@@ -39,7 +39,7 @@ Prefix every status line with `[N/7]` where N is the current step number. Displa
 
 Read `agents/jira-sprint-tickets-updater/data/config.json` to get:
 
-- `jira.cloud_id` — always `"redhat.atlassian.net"`
+- `jira.cloud_id` — the configured Jira DNS hostname (passed to `--site`, never `cloud_uuid`)
 - `jira.board_id` — board ID for sprint lookup
 - `sprint.name_pattern` — prefix to identify the target sprint (e.g., `"MIG-NET-Frontend Sprint"`)
 - `github_link_fields[]` — where to look for GitHub URLs (`"remote_links"`, `"description"`)
@@ -53,20 +53,22 @@ The config has **two workflow types**:
 - **standard** (CNV, MTV, OCPNETUI, MTA Story/Task/Epic): In Progress → Dev Complete when all links resolved
 - **bugzilla** (OCPBUGS, MTA Bug): ASSIGNED → POST (active link), POST → MODIFIED (all resolved)
 
+Run the root Jira CLI with installed dependencies from the repository root. Jira authentication comes only from environment variables `JIRA_EMAIL` and `JIRA_API_TOKEN`; never put credentials in commands, configs or output. Read commands emit native JSON on stdout only on exit 0. Any required Jira or GitHub collection failure STOPs before cache/report generation or approval; display only safe diagnostics and never consume partial results. Preserve the model-as-collector boundary and the existing CSV adaptation below; do not add a second collector. Safely quote all substituted shell arguments.
+
 ### Find the Active Sprint
 
 Query ONE issue to discover the current sprint name for this board:
 
-```
-mcp__atlassian__searchJiraIssuesUsingJql:
-  cloudId: "redhat.atlassian.net"
-  jql: 'sprint in openSprints() AND assignee = "{first_engineer_account_id}" ORDER BY updated DESC'
-  maxResults: 1
-  fields: ["summary", "customfield_10020"]
-  responseContentFormat: "markdown"
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' search \
+  --jql 'sprint in openSprints() AND assignee = "{first_engineer_account_id}" ORDER BY updated DESC' \
+  --fields 'summary,customfield_10020' \
+  --limit 1
 ```
 
 Use the first engineer's `jira_account_id` from the `engineers` array in config.
+
+The successful result is `{ "issues": [...] }`. On exit 1, display the safe CLI diagnostic and STOP: a failed read must not be treated as a no-match or cause fallback to another engineer. `--limit 1` is only for this bounded discovery query.
 
 From the response, extract `fields.customfield_10020` — it is an array of sprint objects. Find the one where:
 
@@ -96,28 +98,13 @@ Fetch all tickets in the target sprint.
 
 **Jira tickets** — single query for all sprint tickets:
 
-```
-mcp__atlassian__searchJiraIssuesUsingJql:
-  cloudId: "redhat.atlassian.net"
-  jql: 'sprint = {sprint_id} AND project in ({project_keys}) ORDER BY key ASC'
-  maxResults: 100
-  fields: ["summary", "status", "assignee", "resolution", "issuetype", "priority", "updated", "created", "description", "customfield_10020", "customfield_10028"]
-  responseContentFormat: "markdown"
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' search \
+  --jql 'sprint = {sprint_id} AND project in ({project_keys}) ORDER BY key ASC' \
+  --fields 'summary,status,assignee,resolution,issuetype,priority,updated,created,description,customfield_10020,customfield_10028'
 ```
 
-### Pagination
-
-If the query returns exactly 100 results, paginate using `nextPageToken`:
-
-```
-mcp__atlassian__searchJiraIssuesUsingJql:
-  cloudId: "redhat.atlassian.net"
-  jql: 'sprint = {sprint_id} AND project in ({project_keys}) ORDER BY key ASC'
-  maxResults: 100
-  nextPageToken: "{token from previous response}"
-```
-
-Repeat until fewer than 100 results are returned. Combine all pages before proceeding.
+Use the discovered sprint ID and the configured project keys without changing this JQL or its fields. Successful stdout is `{ "issues": [...] }`. Pagination is entirely internal to the CLI, including short pages with continuation tokens. Do not add `--limit` or issue separate page requests; consume the complete list before proceeding.
 
 Display: `[2/7] Fetched {count} tickets from {sprint_name}.`
 
@@ -125,8 +112,8 @@ Display: `[2/7] Fetched {count} tickets from {sprint_name}.`
 
 After data collection, verify:
 
-- Check the Jira query succeeded (no errors). If the query returned 0 tickets: display warning, STOP and ask user.
-- If any MCP call returned an error: display the error, STOP, ask user how to proceed.
+- Check the Jira query exited 0. If it returned 0 tickets: display warning, STOP and ask user.
+- If any required collection command exits 1 or a GitHub read errors: display only the safe diagnostic, STOP before classification, reports or approval. Do not substitute empty data or continue with partial results.
 
 If validation fails, display what's missing and STOP.
 
@@ -142,17 +129,18 @@ Display: `[3/7] {actionable_count} of {total_count} tickets in actionable status
 
 ### Batch 1: Fetch GitHub Links from Jira
 
-For each **actionable** ticket, fetch its remote links to find GitHub URLs. Launch ALL of these in a single parallel tool call — one call per ticket:
+For each **actionable** ticket, fetch its remote links to find GitHub URLs. Reads may run in parallel, with one command per ticket:
 
-```
-mcp__atlassian__getJiraIssueRemoteIssueLinks:
-  cloudId: "redhat.atlassian.net"
-  issueIdOrKey: "{ticket_key}"
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' remote-links \
+  --key '{ticket_key}'
 ```
 
-Also check the ticket description for GitHub URLs. Note: descriptions may be in ADF (Atlassian Document Format) JSON — search the raw string for URL patterns regardless of format. Ignore remote links that don't match the GitHub PR/issue patterns (e.g., CVE links, security advisories).
+Each successful stdout value is the native remote-link array; use each link's `object.url`. Also search `fields.description`, normalized by the search CLI to a string preserving ADF link targets. Do not search or stringify raw ADF objects. Respect the configured `github_link_fields[]` sources. Ignore links that don't match the GitHub PR/issue patterns (e.g., CVE links, security advisories). Any failed remote-link read STOPs; it is not an empty link list.
 
 **After Batch 1 returns, STOP and validate:**
+
+- Require all remote-link commands to exit 0 before processing any result; on failure display the safe diagnostic and STOP before Batch 2 or cache/report generation.
 
 - Parse all responses for GitHub URLs matching:
   - PRs: `https://github.com/{owner}/{repo}/pull/{number}`
@@ -281,40 +269,38 @@ Wait for the user's response:
 
 ## Step 6: Apply Transitions
 
-For each approved transition, fetch available transitions and apply:
+Process approved tickets sequentially (not in parallel). For each ticket, first fetch the available transitions:
 
-First, for each ticket, get its available transitions:
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' transitions \
+  --key '{ticket_key}'
+```
 
-```
-mcp__atlassian__getTransitionsForJiraIssue:
-  cloudId: "redhat.atlassian.net"
-  issueIdOrKey: "{ticket_key}"
-```
+Exit 0 returns native `{ "transitions": [...] }`. A failed required transitions read STOPs further processing; record the safe diagnostic and any earlier successes for the summary. Do not treat a failed read as an unavailable transition or attempt a mutation with an unverified ID.
 
 Find the transition that matches the target status using this lookup order:
 
-1. **By ID**: Find the transition where `transition.id` matches the rule's `transition_id`. Verify its `transition.to.name` matches the rule's `to` status name.
-2. **Fallback by name**: If no ID match, find the transition where `transition.to.name` matches the rule's `to` status name (case-sensitive). Use that transition's `id`.
+1. **By ID and destination**: Find the transition where `transition.id` matches the rule's configured `transition_id` and `transition.to.name` exactly matches the rule's `to` status name (case-sensitive). Never apply an ID whose destination does not match.
+2. **Fallback by name**: If no transition satisfies both checks above (including an ID with a different destination), find the transition where `transition.to.name` matches the rule's `to` status name (case-sensitive). Use that transition's returned `id`.
 3. **Not found**: If neither matches, skip this ticket and log: `[6/7] Warning: No transition to "{to_status}" available for {key}. Skipping.`
 
 Then apply the transition:
 
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' transition \
+  --key '{ticket_key}' \
+  --transition-id '{chosen_transition_id}' \
+  --approved
 ```
-mcp__atlassian__transitionJiraIssue:
-  cloudId: "redhat.atlassian.net"
-  issueIdOrKey: "{ticket_key}"
-  transition:
-    id: "{transition_id}"
-```
 
-Process tickets sequentially (not in parallel) to avoid rate limits and to allow clear progress reporting.
+Use only the ID selected from the successful transitions response. `--approved` is a mechanical CLI guard, not a replacement for Step 5's user approval; invoke only for the approved selection. Each invocation performs one POST with `{ "transition": { "id": "{chosen_transition_id}" } }`. Exit 0 (native JSON or `{}` for HTTP 204) means success; exit 1 means failure. Keep each ticket's read/selection/mutation sequence sequential before moving to the next ticket.
 
-Display progress for each ticket: `[6/7] Transitioning {key}: {from_status} → {to_status}... done.`
+Only on exit 0, display progress for that ticket: `[6/7] Transitioning {key}: {from_status} → {to_status}... done.`
 
-If a transition fails:
+If a transition mutation exits 1:
 
-- Log the error with the ticket key
-- Continue with remaining tickets (do not STOP)
+- Log only the safe CLI stderr diagnostic with the ticket key; never inspect raw response bodies or claim success
+- Continue with remaining approved tickets (do not STOP for a mutation failure)
 - Include failed tickets in the summary
 
 ## Step 7: Write Summary
@@ -360,7 +346,7 @@ Write a brief summary of what was updated. Display directly to the user.
 2. **NEVER create or delete tickets.** This agent only transitions existing ticket status.
 3. **NEVER transition OCPBUGS or MTA Bugs past MODIFIED.** Per OCPBUGS docs, ON_QA/Verified/Closed are handled by QA and automated release tools.
 4. Never hardcode sprint names, project keys, or transition IDs — read from `agents/jira-sprint-tickets-updater/data/config.json`.
-5. Jira `cloudId` is always `"redhat.atlassian.net"`.
+5. Jira `--site` always comes from `config.json` → `jira.cloud_id` (DNS hostname, never `cloud_uuid`).
 6. Custom field IDs: sprint = `customfield_10020`, story points = `customfield_10028`.
 7. GitHub links include both PRs (`/pull/`) and issues (`/issues/`). A **resolved** link is a merged PR or a closed issue. An **active** link is an open PR or open issue.
 8. If a transition is not available for a ticket (e.g., wrong workflow state), skip it and log a warning — do not STOP.

@@ -4,16 +4,13 @@ Generate a QE (Quality Engineering) story from a dev Jira story with acceptance 
 
 ## Prerequisites
 
-- **Atlassian Rovo MCP** — for reading dev stories from Jira
-- **JIRA_API_TOKEN** — for creating QE stories via the Jira REST API (the Rovo MCP does not support issue creation for all projects). Get one from [Atlassian API tokens](https://id.atlassian.com/manage-profile/security/api-tokens).
-- **GitHub MCP** (optional) — for reading repo context from github.com
-- **GitLab MCP** (optional) — for reading repo context from your GitLab instance
+- **Node.js 22+ and installed root dependencies** — run commands from the repository root.
+- **Jira REST credentials** — `JIRA_EMAIL` and `JIRA_API_TOKEN` in the environment for root CLI reads.
+- **Existing QE writer** — uses `JIRA_API_TOKEN` with `jira.user_email` from private `data/qe-config.json` for approved creation/update, linking, and comments.
+- **GitHub MCP** (optional) — the sole project MCP server, for GitHub repository context and PR diffs.
+- **GitLab REST context** (optional) — select the repository from `--repo` or `projects[]`; use `gitlab.api_url` from private config or `GITLAB_API_URL`, an HTTPS API base ending in `/api/v4`. Set `GITLAB_PAT` in the environment if access requires it; public unauthenticated reads are allowed.
 
-Tokens must be set as environment variables before launching Claude Code:
-
-```bash
-export JIRA_API_TOKEN=ATATT3x...
-```
+Set credentials before launching your IDE; never pass secrets in command arguments or store tokens in config/cache/output. No Jira or GitLab MCP server is required. See the [setup guide](../../docs/mcp-setup.md).
 
 ## Usage
 
@@ -40,25 +37,31 @@ npm run jira-qe-story:preview
 ## How It Works
 
 1. Reads config from `data/qe-config.json` and parses CLI arguments
-2. Fetches the dev story from Jira (summary, description, priority, labels, etc.)
-3. Optionally fetches repo context (README, related PRs/MRs) for richer acceptance criteria
+2. Reads the dev story through `node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' issue --key '{issue_key}' --fields summary,description,status,issuetype,priority,assignee,labels,components,customfield_10020,customfield_10028,customfield_10470`; saves the native `{key,fields}` as `data/cache/dev-story.json`, with description text/URLs normalized
+3. Reads Jira `remote-links` for PR references, then optionally collects GitHub context/diffs, local repository evidence, or GitLab README/MRs/full tree via `node --import tsx scripts/gitlab-read.ts qe-context --project '{selected_project_id}' --issue-key '{issue_key}' [--api-url '{gitlab.api_url}']`; keeps `repo-context.md` and `pr-diff.md` as separate evidence summaries
 4. Generates QE story content: description, acceptance criteria, test scenarios
 5. Runs the preview formatter script to validate and display the draft
 6. Waits for explicit user approval (approve / edit / abort)
-7. Creates the QE story in Jira and links it to the dev story via a Clones link
+7. Uses the existing `create-jira-issue.ts` REST writer and `qe-story-draft.json` to create/update the approved QE story, retain its Cloners link behavior, and post automation suggestions
 8. Displays the created issue key with a clickable Jira link
+
+`--site` comes from the configured DNS hostname `jira.cloud_id`, never a URL or cloud UUID; quote resolved arguments safely. `npm run jira:rest -- ...` and `npm run gitlab:read -- ...` are alternative root CLI entrypoints. The commands paginate internally; do not add a second collector or manual page loops. Any required Jira read failure exits 1 and STOPs before content generation or approval.
+
+GitLab enrichment is optional: exit 0 returns `{context:{readme,merge_requests,tree},warnings:[]}`; exit 3 returns `{context:null,warnings:[safeCode]}`. Display and record that warning, then proceed without GitLab enrichment, never with fabricated or partial context. Omit `--api-url` to use `GITLAB_API_URL`; do not switch hosts/repositories on failure. GitHub/local enrichment failures also remain best-effort. The draft preview and explicit approve/edit/abort gate remain mandatory before the existing writer runs.
 
 ## Configuration
 
 Copy `data/qe-config.example.json` to `data/qe-config.json` and fill in your team's values:
 
 - `jira.user_email` — your Jira email (used with `JIRA_API_TOKEN` for REST API auth)
+- `jira.cloud_id` — DNS hostname used for root CLI reads with environment-only `JIRA_EMAIL` / `JIRA_API_TOKEN`
+- `gitlab.api_url` — optional HTTPS `/api/v4` base; falls back to `GITLAB_API_URL` when empty or absent
 - `defaults.target_project_key` — Jira project for the QE story (e.g., "PROJ")
 - `defaults.labels` — default labels applied to QE stories
 - `qe_engineers` — array of `{ name, jira_account_id }` for resolving `--assignee` by name
 - `projects` — array mapping Jira prefixes to repos for auto-resolution
 
-All config values can be overridden via CLI arguments (`--project`, `--assignee`, `--repo`). The `--assignee` flag accepts a name (e.g., `--assignee Alice`) which is matched against the `qe_engineers` list.
+`--project`, `--assignee`, and `--repo` override the corresponding selections. The `--assignee` flag accepts a name (e.g., `--assignee Alice`) matched against `qe_engineers`; credentials are never CLI overrides.
 
 ## File Layout
 

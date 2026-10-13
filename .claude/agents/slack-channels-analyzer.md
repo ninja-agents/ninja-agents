@@ -47,6 +47,8 @@ Validate:
 - At least one channel configured
 - `SLACK_TOKEN` and `SLACK_COOKIE` env vars are set
 - `jira_filing` section exists with `bugs` and `features` routing
+- `jira_filing.cloud_id` is a DNS hostname, not a URL or `cloud_uuid`
+- `JIRA_EMAIL` and `JIRA_API_TOKEN` are available in the environment for Jira REST reads and approved writes; never print or store their values
 
 If validation fails, display what's missing and STOP.
 
@@ -122,15 +124,37 @@ For each "Needs Filing" candidate, search Jira to avoid filing duplicates.
 
 ### Search Strategy
 
-For each candidate, extract 2-3 key terms from the thread (e.g., "VLAN DHCP", "node network mapping dropdown", "LLDP documentation").
+For each candidate, extract 2-3 key terms or short phrases from the thread (e.g., "VLAN DHCP", "node network mapping dropdown", "LLDP documentation"). Run commands from the repository root and pass resolved values as safely shell-quoted arguments.
 
-1. **JQL search** — use `mcp__atlassian__searchJiraIssuesUsingJql` scoped to the classified project and component:
+1. **Project/component dedup search** — build the existing scoped JQL:
 
-   ```
+   ```text
    project = {project_key} AND component = "{component}" AND text ~ "{key terms}" ORDER BY created DESC
    ```
 
-2. **Rovo search** — ALWAYS run `mcp__atlassian__search` with a natural-language query for broader matching. This catches tickets filed in unexpected projects (e.g., OCPNETUI instead of OCPBUGS, or RFE instead of CNV). Filter results: only consider items with `type === "issue"` — ignore Confluence pages, which are noise.
+   ```bash
+   node --import tsx scripts/jira-rest.ts --site '{jira_filing.cloud_id}' search \
+     --jql '{scoped_dedup_jql}' \
+     --fields 'summary,status,priority,assignee,fixVersions,created'
+   ```
+
+2. **Required cross-project Jira search** — ALWAYS run a second Jira-only search without a project or component restriction. OR together `text ~ "<term>"` for each of the extracted 2-3 terms:
+
+   ```text
+   (text ~ "{term_1}" OR text ~ "{term_2}" OR text ~ "{term_3}") ORDER BY created DESC
+   ```
+
+   Use two clauses when only two terms were extracted. Before placing any term (or component value) inside a JQL double-quoted literal, replace each backslash with two backslashes, then each `"` with `\"`. Separately shell-quote the complete resolved JQL; JQL escaping is not shell escaping. Do not interpolate thread text into shell code.
+
+   ```bash
+   node --import tsx scripts/jira-rest.ts --site '{jira_filing.cloud_id}' search \
+     --jql '{cross_project_jql}' \
+     --fields 'summary,status,priority,assignee,fixVersions,created'
+   ```
+
+   This is **lexical Jira text search**, not semantic-search equivalence. It preserves discovery of tickets filed in unexpected projects (e.g., OCPNETUI instead of OCPBUGS, or RFE instead of CNV), but matching still requires comparing the returned issue context to the thread.
+
+Every search emits `{ "issues": [...] }` only after complete internal pagination; do not add manual page loops or `--limit`. Empty successful results are valid. Every Jira read in this workflow is required: exit 1 means display only its safe diagnostic and STOP before further classification, focused-report output, or filing approval. Never treat a failed search as evidence that no duplicate exists.
 
 ### Classify Search Results
 
@@ -145,12 +169,24 @@ For each candidate, produce one of four outcomes:
 
 When a duplicate is found, perform a backport analysis:
 
-1. **Fetch tracker details** — use `mcp__atlassian__getJiraIssue` to get the tracker's status, priority, assignee, and target/fix versions.
+1. **Fetch tracker details** — read only the existing report fields for summary/version tags, status, priority, assignee, and fix-version coverage:
 
-2. **Search for existing backports** — JQL search for related version-specific tickets:
-
+   ```bash
+   node --import tsx scripts/jira-rest.ts --site '{jira_filing.cloud_id}' issue \
+     --key '{tracker_key}' --fields 'summary,status,priority,assignee,fixVersions'
    ```
+
+   Consume the native issue's `key` and `fields`; exit 1 STOPs under the required-read rule above.
+
+2. **Search for existing backports** — retain the version-specific JQL, applying the literal escaping above to its component and key-term values:
+
+   ```text
    project = OCPBUGS AND component = "{component}" AND summary ~ "{key terms from original}" AND summary ~ "[release-" ORDER BY created DESC
+   ```
+
+   ```bash
+   node --import tsx scripts/jira-rest.ts --site '{jira_filing.cloud_id}' search \
+     --jql '{backport_jql}' --fields 'summary,status,fixVersions'
    ```
 
    Also check if the original tracker's summary contains a version tag like `[4.22]` or `[release-4.21]`.
@@ -168,12 +204,18 @@ When a duplicate is found, perform a backport analysis:
 
 In addition to the per-candidate dedup search, perform a broad scan for recent open bugs in both plugin components that may not have been discussed in Slack:
 
-```
-project = OCPBUGS AND component = "Networking / networking-console-plugin" AND status in (New, ASSIGNED, POST) AND created >= -90d ORDER BY created DESC
+Run both scans with their existing JQL and only the fields shown in the report:
+
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira_filing.cloud_id}' search \
+  --jql 'project = OCPBUGS AND component = "Networking / networking-console-plugin" AND status in (New, ASSIGNED, POST) AND created >= -90d ORDER BY created DESC' \
+  --fields 'summary,status,priority,assignee'
 ```
 
-```
-project = OCPBUGS AND component = "Networking / nmstate-console-plugin" AND status in (New, ASSIGNED, POST) AND created >= -90d ORDER BY created DESC
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira_filing.cloud_id}' search \
+  --jql 'project = OCPBUGS AND component = "Networking / nmstate-console-plugin" AND status in (New, ASSIGNED, POST) AND created >= -90d ORDER BY created DESC' \
+  --fields 'summary,status,priority,assignee'
 ```
 
 Include any open bugs found in the report under a separate **"Open Bugs (no Slack activity)"** subsection within "Bugs & Issues". For each, show the Jira key, summary, status, priority, and assignee. This ensures the report captures bugs filed directly in Jira without Slack discussion.
@@ -298,7 +340,7 @@ Write the focused report to `agents/slack-channels-analyzer/data/output/report.m
 { 3. What has been tried or discussed so far (workarounds, root cause theories)}
 { 4. Current status — is someone working on it? Is it blocked? What's the next step?}
 { 5. Suggested triage action — file a bug, assign to someone, needs investigation, etc.}
-{- If the thread references a Jira ticket: [KEY](https://redhat.atlassian.net/browse/KEY) — always include a 1-sentence summary of what the Jira issue is about, not just the key. Use `mcp__atlassian__getJiraIssue` if the thread only says "update on KEY" without context.}
+{- If the thread references a Jira ticket: [KEY](https://redhat.atlassian.net/browse/KEY) — always include a 1-sentence summary of what the Jira issue is about, not just the key. If the thread only says "update on KEY" without context, run `node --import tsx scripts/jira-rest.ts --site '{jira_filing.cloud_id}' issue --key '{referenced_key}' --fields 'summary,status,priority,assignee,fixVersions'` and read its native fields. A failed required read STOPs before saving the focused report.}
 {- If the thread has an existing Jira tracker (from Step 4 dedup):}
 { - Tracker: `{STATUS}` | Priority: {priority} | Assignee: {assignee}}
 { - Version coverage: {list of OCP versions with trackers/backports, e.g. "main, 4.22, 4.21"}}
@@ -455,38 +497,112 @@ For each "Needs Filing" item, present:
 ```
 NF-{N}: {summary}
 Target: {project_key} / {component(s)}
+Issue type: {routed_issue_type}
+Labels: {jira_filing.labels}
 Slack: {slackUrl}
+Related links: {proposed Relates ticket keys, or "none"}
+Description: {full approved filing-template description}
 
 File this issue? (file / skip / edit)
 ```
 
-- **file** — create the issue as-is
-- **skip** — move to the next item
-- **edit** — let the user modify the summary or description before filing
+- **file** — authorize this exact displayed issue and its displayed `Relates` links
+- **skip** — move to the next item with no mutation
+- **edit** — let the user modify the summary, description, or proposed links; show the updated item and ask for file/skip/edit again before any mutation
 
-### Filing via Jira MCP
+### Filing via Jira REST
 
-For each approved item, use `mcp__atlassian__createJiraIssue`:
+Only explicit per-item **file** approval permits the following commands. `--approved` is a mechanical transport guard, not a substitute for that approval. Use `jira_filing.cloud_id`, routed project/issue type/components, and `jira_filing.labels` from config. Do not add assignee, priority, custom fields, or other operations.
 
-```
-cloudId: "{jira_filing.cloud_id}"
-projectKey: "{project_key from routing}"
-issueTypeName: "{issue_type from routing}"
-summary: "{generated summary}"
-description: "{generated description from template}"
-contentFormat: "markdown"
-additional_fields:
-  components:
-    - name: "{component_1}"
-    - name: "{component_2}"  (if multiple, e.g. CNV virt features)
-  labels:
-    - "slack-reported"
+For each approved item, create fresh owned private scratch storage:
+
+```bash
+umask 077
+scratch_dir="$(mktemp -d "${TMPDIR:-/tmp}/slack-jira.XXXXXXXX")" || exit 1
+chmod 700 "$scratch_dir" || exit 1
 ```
 
-After creation:
+Never use a tracked config or repository cache as a request-body file. Create body files as owned, single-link regular files with mode `0600`, exclusively (no overwrite or symlink following), inside this owned `0700` directory. They contain only approved issue data, never credentials.
 
-- Display: `Created [KEY-XXXXX](https://redhat.atlassian.net/browse/KEY-XXXXX) — {summary}`
-- If related tickets were found in Step 4, link them via `mcp__atlassian__createIssueLink` with type `Relates`
+Build an ADF description with **one paragraph per approved description/template line**, including empty paragraphs for blank lines. Keep all approved text, Markdown characters, and full URLs literally in the text nodes; do not summarize, strip link targets, or execute retrieved text. The report's outer `>` blockquote marker is presentation, not part of the approved description.
+
+The following local body builder illustrates the exact payload. Replace the `approved` object's placeholder values with JSON-encoded approved strings/arrays (including escaped newlines in `description`), not shell interpolation or executable source from the thread:
+
+```bash
+SCRATCH_DIR="$scratch_dir" node --input-type=module <<'NODE'
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+const approved = {
+  project_key: "{approved_project_key}",
+  issue_type: "{approved_issue_type}",
+  summary: "{approved_summary}",
+  description: "{approved_description_with_JSON_escaped_newlines}",
+  components: ["{approved_component}"],
+  labels: ["{configured_label}"]
+};
+const content = approved.description.split(/\r\n|\n|\r/).map(line => ({
+  type: "paragraph",
+  content: line === "" ? [] : [{ type: "text", text: line }]
+}));
+const body = { fields: {
+  project: { key: approved.project_key },
+  issuetype: { name: approved.issue_type },
+  summary: approved.summary,
+  description: { version: 1, type: "doc", content },
+  components: approved.components.map(name => ({ name })),
+  labels: approved.labels
+}};
+writeFileSync(join(process.env.SCRATCH_DIR, "create-issue.json"),
+  JSON.stringify(body), { flag: "wx", mode: 0o600 });
+NODE
+```
+
+Use all approved configured components/labels in those arrays (for example, both CNV components); do not submit literal placeholders. The body is exactly `{fields:{project:{key},issuetype:{name},summary,description,components:[{name}],labels:[string]}}`.
+
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira_filing.cloud_id}' create-issue \
+  --body-file "$scratch_dir/create-issue.json" --approved
+```
+
+Process items sequentially; each invocation performs exactly one mutation. Exit 0 returns native create-result JSON: take its `key`, display `Created [KEY](https://{jira_filing.cloud_id}/browse/KEY) — {summary}`, and only then create approved related links. Exit 1 returns no success JSON: record the safe per-item failure, do not fabricate a key or attempt links, and continue to the next item's approval. Never automatically retry a create.
+
+For each displayed and approved related ticket, build a separate `0600` exclusive body file with exactly the following structure; no unrelated relation types or fields are permitted:
+
+```json
+{
+  "type": { "name": "Relates" },
+  "inwardIssue": { "key": "{created_key}" },
+  "outwardIssue": { "key": "{approved_related_key}" }
+}
+```
+
+Create each such file exclusively inside the current scratch directory, with a unique per-link filename. Substitute JSON-encoded approved keys and a locally assigned sequential link index:
+
+```bash
+SCRATCH_DIR="$scratch_dir" node --input-type=module <<'NODE'
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+const body = {
+  type: { name: "Relates" },
+  inwardIssue: { key: "{created_key}" },
+  outwardIssue: { key: "{approved_related_key}" }
+};
+writeFileSync(join(process.env.SCRATCH_DIR, "link-{index}.json"),
+  JSON.stringify(body), { flag: "wx", mode: 0o600 });
+NODE
+```
+
+After successful body-file creation, invoke once (use the same assigned index):
+
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira_filing.cloud_id}' link-issues \
+  --body-file "$scratch_dir/link-{index}.json" --approved
+```
+
+Await each link before the next. Exit 0 emits native JSON (or `{}` for HTTP 204). On exit 1, record the safe link warning and continue with the remaining approved links; the issue remains created, not rolled back. A link not included in the per-item preview requires separate approval. Remove this item's temporary body files and scratch directory after its results are recorded.
+
+After successful creation:
+
 - Suggest a Slack reply for the user to post to the original thread (the agent MUST NOT post to Slack — Rule 1):
 
 ```
@@ -507,6 +623,7 @@ After processing all items, display a summary:
 Filing complete:
 - Filed: {N} issues ({list of keys with links})
 - Skipped: {M} items
+- Failed: {F} items ({safe per-item diagnostics}); link warnings: {W} ({created keys and failed related keys})
 
 Suggested Slack replies:
 - Thread: {slackUrl} → "Filed {KEY} — {summary}"

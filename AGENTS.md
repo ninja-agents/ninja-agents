@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-Ninja Agents is a shared playground for AI agents that help engineering teams with recurring workflows -- weekly status reports, sprint retrospectives, and repository documentation audits. Each agent is a self-contained directory under `agents/` with its own scripts, configuration, and data. Agents run inside Claude Code, Cursor, or Codex, using MCP servers to query GitHub, GitLab, and Jira.
+Ninja Agents is a shared playground for AI agents that help engineering teams with recurring workflows -- weekly status reports, sprint retrospectives, and repository documentation audits. Each agent is a self-contained directory under `agents/` with its own scripts, configuration, and data. Agents run inside Claude Code, Cursor, or Codex, using GitHub as the sole project MCP server and direct APIs for Jira and GitLab.
 
-The repo follows a "data collector + deterministic script" pattern: the AI agent fetches data via MCP tools and saves it as CSV, then a TypeScript script generates the structured output. The agent writes only the prose sections (e.g., Key Highlights, Key Takeaways) that require synthesis.
+The repo follows a "data collector + deterministic script" pattern: existing agent-owned collectors read APIs directly; other workflows invoke standalone root API commands and adapt their JSON results to existing CSV/JSON caches. GitHub MCP remains available for workflow reads. TypeScript scripts generate structured output, and the agent writes prose requiring synthesis.
 
 ## Available Agents
 
@@ -51,7 +51,7 @@ agents/{name}/
 ### Data Flow Pattern
 
 1. Agent spec (`.claude/agents/{name}.md`) defines the step-by-step workflow
-2. The AI agent fetches data from MCP servers (GitHub, GitLab, Jira) and writes CSV files to `data/cache/`
+2. Existing agent-owned direct collectors, GitHub MCP reads, or standalone root `jira-rest`/optional QE `gitlab-read` commands collect data; the model adapts command output to the workflow's existing CSV/JSON cache schema in `data/cache/`. Root tools paginate internally and are invoked, never imported between agents.
 3. A TypeScript script reads the CSV cache and generates the structured report in `data/output/`
 4. The AI agent writes prose sections that require synthesis (highlights, takeaways)
 5. A validation script checks the output for correctness (links, format, data quality)

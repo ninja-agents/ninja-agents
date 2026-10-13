@@ -46,6 +46,7 @@ Prefix every status line with `[N/8]` where N is the current step number. Keep u
 Read `agents/jira-qe-story/data/qe-config.json` to get:
 
 - `jira.cloud_id` and `jira.base_url`
+- `gitlab.api_url` (optional) — HTTPS API base ending in `/api/v4`; if empty or absent, use `GITLAB_API_URL` from the environment
 - `defaults.target_project_key`, `defaults.issue_type`
 - `defaults.labels`, `defaults.components`, `defaults.priority`
 - `qe_engineers[]` — array of `{ name, jira_account_id }` for resolving `--assignee` by name
@@ -68,6 +69,8 @@ Any non-flag argument that is not a Jira key (does not match `[A-Z]+-\d+`) is tr
 
 Resolve final values: CLI args override config, config provides defaults.
 
+Run commands below from the repository root, substituting resolved values as safely shell-quoted arguments. Jira reads use `jira.cloud_id` as a DNS hostname, never `cloud_uuid` or a URL, and require `JIRA_EMAIL` and `JIRA_API_TOKEN` in the environment. Never put credentials in command arguments, cache files, or tracked config. Existing Step 7 writes continue using the private config's `jira.user_email` and `JIRA_API_TOKEN`.
+
 Clear old cache:
 
 ```bash
@@ -76,19 +79,17 @@ rm -f agents/jira-qe-story/data/cache/dev-story.json agents/jira-qe-story/data/c
 
 ## Step 2: Fetch Dev Story
 
-Fetch the source dev story from Jira:
+Read the source dev story with the standalone REST command:
 
-```
-mcp__atlassian__getJiraIssue:
-  cloudId: "redhat.atlassian.net"
-  issueIdOrKey: "{issue_key}"
-  fields: ["summary", "description", "status", "issuetype", "priority", "assignee",
-           "labels", "components", "customfield_10020", "customfield_10028",
-           "customfield_10470"]
-  responseContentFormat: "markdown"
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' issue \
+  --key '{issue_key}' \
+  --fields 'summary,description,status,issuetype,priority,assignee,labels,components,customfield_10020,customfield_10028,customfield_10470'
 ```
 
-Save the issue node (the object containing `key` and `fields`) to `agents/jira-qe-story/data/cache/dev-story.json`. Extract it from the API response wrapper — the file must have the shape `{ "key": "...", "fields": { ... } }` so the preview script can parse it.
+Exit 0 emits one native issue JSON object. The command normalizes `fields.description` to a string while preserving text and hyperlink target URLs. Save only `{ "key": issue.key, "fields": issue.fields }` from that successful object to `agents/jira-qe-story/data/cache/dev-story.json`; there is no MCP wrapper to unwrap. Keep this cache shape unchanged so the preview script can parse it.
+
+If the command exits 1, show only its safe diagnostic and STOP before generating content or seeking approval. Do not consume partial output or treat a failed read as an empty issue.
 
 Display the dev story to the user for confirmation:
 
@@ -103,15 +104,14 @@ Display the dev story to the user for confirmation:
 
 ### Fetch Dev PR from Web Links
 
-After fetching the issue, also fetch its remote links to find the dev PR:
+After fetching the issue, also read its remote links to find the dev PR:
 
-```
-mcp__atlassian__getJiraIssueRemoteIssueLinks:
-  cloudId: "redhat.atlassian.net"
-  issueIdOrKey: "{issue_key}"
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' remote-links \
+  --key '{issue_key}'
 ```
 
-Parse the response for GitHub PR URLs matching the pattern `https://github.com/{owner}/{repo}/pull/{number}`. Extract `owner`, `repo`, and `pullNumber` from each match.
+Exit 0 emits the native remote-link array. Inspect each entry's `object.url` for GitHub PR URLs matching `https://github.com/{owner}/{repo}/pull/{number}`. Extract `owner`, `repo`, and `pullNumber` from each match. Also retain GitHub PR URLs found in the normalized dev-story description. Exit 1 is a required-read failure: show the safe diagnostic and STOP; it is not the same as successfully returning no links.
 
 Display found PRs:
 
@@ -119,9 +119,9 @@ Display found PRs:
 [2/8] Dev PR found: {owner}/{repo}#{number} — {title}
 ```
 
-If **no GitHub PR found** in remote links, ask the user:
+If **no GitHub PR found** in either the remote links or normalized description, ask the user:
 
-> No dev PR found in Jira web links. Provide the PR URL (e.g., `https://github.com/org/repo/pull/123`) or press Enter to skip.
+> No dev PR found in Jira web links or the description. Provide the PR URL (e.g., `https://github.com/org/repo/pull/123`) or press Enter to skip.
 
 If the user provides a URL, parse it the same way. If they skip, proceed without PR context.
 
@@ -173,37 +173,30 @@ Then navigate into test directories (e.g., `tests/`, `e2e/`, `playwright/`, `cyp
 
 ### GitLab
 
-Launch ALL of these in a single parallel tool call:
+Use the repository selected by the same CLI override / `projects[]` priority above. For a repository with `type: "gitlab"`, resolve its selected `{owner}/{repo}` path (or the explicit CLI GitLab repository path) as `selected_project_id` (`OWNER/REPO`, including any namespace subgroups), not the Jira project key. Keep the selected repository type and path; do not fall back to another repository or host.
 
-**Repo README:**
+If selected config `gitlab.api_url` is nonempty, pass that value explicitly:
 
-```
-mcp__gitlab__get_file_contents:
-  project_id: "{owner}/{repo}"
-  file_path: "README.md"
-```
-
-**Related MRs:**
-
-```
-mcp__gitlab__list_merge_requests:
-  project_id: "{owner}/{repo}"
-  search: "{issue_key}"
-  scope: "all"
-  per_page: 10
+```bash
+node --import tsx scripts/gitlab-read.ts qe-context \
+  --project '{selected_project_id}' --issue-key '{issue_key}' \
+  --api-url '{gitlab.api_url}'
 ```
 
-**Test directory tree** (to discover real test files, page objects, and selectors):
+Otherwise omit `--api-url` so the command uses `GITLAB_API_URL`:
 
-```
-mcp__gitlab__get_repository_tree:
-  project_id: "{owner}/{repo}"
-  path: ""
-  recursive: true
-  per_page: 100
+```bash
+node --import tsx scripts/gitlab-read.ts qe-context \
+  --project '{selected_project_id}' --issue-key '{issue_key}'
 ```
 
-Filter the tree for test-related files (`.spec.ts`, `.test.ts`, `page-objects/`, `selectors/`, `helpers/`, `fixtures/`). Record the actual directory structure, file names, and any page object patterns for use in automation suggestions.
+The base must be HTTPS and end in `/api/v4`. `GITLAB_PAT` is optional environment-only authentication; unauthenticated public reads are allowed. Never send GitHub credentials to GitLab.
+
+This single command reads the decoded README at HEAD, the first ten related MRs with `scope=all`, and the entire recursive repository tree with pagination handled internally. Handle the result before using enrichment:
+
+- **Exit 0**: Parse `{ "context": { "readme": "...", "merge_requests": [...], "tree": [...] }, "warnings": [] }`. Summarize the README and related MR titles/URLs. Filter the complete tree for test-related files (`.spec.ts`, `.test.ts`, `page-objects/`, `selectors/`, `helpers/`, `fixtures/`); record actual paths and any evidenced test patterns in `repo-context.md`.
+- **Exit 3**: Parse `{ "context": null, "warnings": ["safeCode"] }`, display `[3/8] GitLab context unavailable: {safeCode} — proceeding without GitLab enrichment.`, record the warning, and proceed. Do not synthesize a README, MR list, or partial tree.
+- **Exit 1**: Argument syntax error. Correct arguments from the selected config/repository and rerun; if unavailable, note the failure and proceed without optional GitLab context. Never silently switch sources.
 
 ### Local Repository
 
@@ -259,9 +252,9 @@ Save a summary of findings to `agents/jira-qe-story/data/cache/repo-context.md`:
 - Existing test files related to the feature area (e.g., files with "clone", "wizard", "vm" in the name)
 - Page object or helper patterns found (e.g., `page-objects/vm-wizard.ts`)
 - Selector conventions used in the repo (e.g., `data-test=`, `data-testid=`, CSS classes)
-- **QE test repo URL** — `https://gitlab.cee.redhat.com/{project_id}` or `https://github.com/{owner}/{repo}`
+- **QE test repo URL** — for GitLab, derive the web origin from the selected HTTPS API base (remove `/api/v4`) and append `/{selected_project_id}`; for GitHub use `https://github.com/{owner}/{repo}`
 
-This step is **best-effort**. If any MCP call fails (e.g., server not configured), note the failure and proceed without repo context. Repo context enriches the QE story but is not required.
+This step is **best-effort**. If optional GitHub/local enrichment or PR diff reads fail, note the failure and proceed without that context. GitLab exit 3 explicitly follows the warning path above. Preserve `repo-context.md` and `pr-diff.md` as separate summaries of successful evidence; do not describe absent enrichment as collected. Required Jira reads in Step 2 still STOP on failure.
 
 ## Step 4: Generate QE Story Content
 
@@ -457,11 +450,11 @@ Display the final result:
 
 1. **NEVER create a Jira issue without explicit user approval.** This is non-negotiable. The approval gate in Step 6 must be respected.
 2. Never hardcode project keys, assignees, or labels — read from `agents/jira-qe-story/data/qe-config.json` with CLI argument overrides.
-3. Jira `cloudId` is always `"redhat.atlassian.net"`.
+3. Jira reads use the selected config's `jira.cloud_id` DNS hostname via `--site`; never substitute `cloud_uuid`.
 4. Custom field IDs: sprint = `customfield_10020`, story points = `customfield_10028`, QA contact = `customfield_10470`.
 5. Repo context is optional enrichment — if unavailable, proceed without it.
 6. The QE story description must include both acceptance criteria and test scenarios as separate sections.
 7. Preserve the draft JSON in cache after creation so the user can review what was submitted.
-8. If the clone link type name is not "Cloners", discover available types via `getIssueLinkTypes` and find the closest match.
-9. Omit `assignee_account_id` from the `createJiraIssue` call if it is empty — let Jira use the default.
-10. Omit `customfield_10028` (story points) from `additional_fields` if `story_points` is null.
+8. The existing writer retains its Cloners link. If that link type is unavailable, diagnose the available types with `node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' issue-link-types` and inspect the native `issueLinkTypes` response for the intended clone relation. A required diagnostic read failure STOPs. Report the link failure rather than silently changing the approved relation or replacing the writer.
+9. Keep `assignee_account_id` empty in the draft if unspecified; the existing writer then omits `fields.assignee` from its issue payload so Jira uses its default.
+10. Set `story_points` to null in the draft if unspecified; the existing writer then omits `fields.customfield_10028` from its issue payload.

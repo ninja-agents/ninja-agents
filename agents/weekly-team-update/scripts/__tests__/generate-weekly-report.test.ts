@@ -97,12 +97,28 @@ function makeJira(overrides: Partial<JiraItem> = {}): JiraItem {
     url: "https://test.atlassian.net/browse/TEST-123",
     role: "assignee",
     sprint_name: "",
+    resolved_by: "",
     affected_versions: [],
     fix_versions: [],
     nested_prs: [],
     customer_cases: [],
     backport_needed: [],
     ...overrides,
+  };
+}
+
+function makeConfig() {
+  return {
+    team_name: "Test Team",
+    report_title: "Test Report",
+    jira: {
+      cloud_id: "test.atlassian.net",
+      team_filter_id: "100",
+      base_url: "https://jira.example.invalid",
+      projects: ["OCPBUGS", "MTV", "CNV"],
+    },
+    products: [],
+    engineers: [],
   };
 }
 
@@ -614,6 +630,7 @@ describe("filterInProgressJira", () => {
 
 describe("filterGithubSyncedTickets", () => {
   const configWithFilter = {
+    ...makeConfig(),
     products: [
       {
         key: "MTA",
@@ -629,7 +646,7 @@ describe("filterGithubSyncedTickets", () => {
         repos: [],
       },
     ],
-  } as Parameters<typeof filterGithubSyncedTickets>[1];
+  };
 
   it("removes a GitHub-synced MTA ticket with no nested PRs", () => {
     const ticket = makeJira({
@@ -677,10 +694,11 @@ describe("filterGithubSyncedTickets", () => {
 
   it("is a no-op when no product has the flag set", () => {
     const configNoFilter = {
+      ...makeConfig(),
       products: [
         { key: "MTA", name: "MTA", jira_prefixes: ["MTA"], repos: [] },
       ],
-    } as Parameters<typeof filterGithubSyncedTickets>[1];
+    };
     const ticket = makeJira({
       key: "MTA-1234",
       summary: "[tackle2-ui#2840] Some feature",
@@ -855,6 +873,7 @@ describe("determineProduct", () => {
 describe("buildOrgToProduct", () => {
   it("maps each org to its product key", () => {
     const config = {
+      ...makeConfig(),
       products: [
         {
           key: "MTA",
@@ -865,7 +884,7 @@ describe("buildOrgToProduct", () => {
         },
         { key: "MTV", name: "MTV", jira_prefixes: ["MTV"], repos: [] },
       ],
-    } as Parameters<typeof buildOrgToProduct>[0];
+    };
     const map = buildOrgToProduct(config);
     expect(map.get("konveyor")).toBe("MTA");
     expect(map.has("migtools")).toBe(false);
@@ -873,10 +892,11 @@ describe("buildOrgToProduct", () => {
 
   it("returns empty map when no product has github_orgs", () => {
     const config = {
+      ...makeConfig(),
       products: [
         { key: "MTA", name: "MTA", jira_prefixes: ["MTA"], repos: [] },
       ],
-    } as Parameters<typeof buildOrgToProduct>[0];
+    };
     expect(buildOrgToProduct(config).size).toBe(0);
   });
 });
@@ -885,9 +905,7 @@ describe("determineProduct org routing", () => {
   const emptyMap = new Map<string, string>();
   const ocpbugsRe = /nomatch/;
   const ticketIdRe = /nomatch/g;
-  const fakeConfig = { products: [], engineers: [] } as unknown as Parameters<
-    typeof determineProduct
-  >[1];
+  const fakeConfig = makeConfig();
 
   it("routes a konveyor-org PR to MTA via orgToProduct", () => {
     const pr = makePR({ repo: "konveyor/tackle2-hub" });
@@ -1354,6 +1372,10 @@ describe("formatHighlightContext", () => {
                   sprint_name: "Sprint 5",
                   nested_prs: [],
                   customer_cases: [],
+                  resolved_by: "",
+                  affected_versions: [],
+                  fix_versions: [],
+                  backport_needed: [],
                 },
               ],
               completed_prs: [],
@@ -1373,6 +1395,10 @@ describe("formatHighlightContext", () => {
                   sprint_name: "Sprint 5",
                   nested_prs: [],
                   customer_cases: [],
+                  resolved_by: "",
+                  affected_versions: [],
+                  fix_versions: [],
+                  backport_needed: [],
                 },
               ],
               in_progress_prs: [],
@@ -1833,8 +1859,24 @@ describe("computeBackportNeeds", () => {
 // ---------------------------------------------------------------------------
 
 describe("applyBackportDetection", () => {
+  function makeBackportConfig() {
+    return {
+      ...makeConfig(),
+      backport: {
+        OCPBUGS: {
+          supported_versions: ["4.22.z", "4.23.z"],
+          main_target_version: "4.24.0",
+        },
+        MTV: {
+          supported_versions: ["2.11.z", "2.12.z"],
+          main_target_version: "2.13.0",
+        },
+      },
+    };
+  }
+
   it("populates backport_needed on bug tickets using prefix config", () => {
-    const config = loadConfig(resolve(AGENT_ROOT, "data/team-config.json"));
+    const config = makeBackportConfig();
     const tickets = [
       makeJira({
         key: "OCPBUGS-100",
@@ -1849,7 +1891,7 @@ describe("applyBackportDetection", () => {
   });
 
   it("uses MTV versions for MTV-prefixed tickets", () => {
-    const config = loadConfig(resolve(AGENT_ROOT, "data/team-config.json"));
+    const config = makeBackportConfig();
     const tickets = [
       makeJira({
         key: "MTV-3116",
@@ -1868,7 +1910,7 @@ describe("applyBackportDetection", () => {
   });
 
   it("skips tickets whose prefix has no backport config", () => {
-    const config = loadConfig(resolve(AGENT_ROOT, "data/team-config.json"));
+    const config = makeBackportConfig();
     const tickets = [
       makeJira({
         key: "CNV-12345",
@@ -1881,7 +1923,10 @@ describe("applyBackportDetection", () => {
   });
 
   it("is a no-op when config has no backport section", () => {
-    const config = { backport: undefined } as ReturnType<typeof loadConfig>;
+    const config = {
+      ...makeBackportConfig(),
+      backport: undefined,
+    };
     const tickets = [
       makeJira({
         key: "OCPBUGS-100",

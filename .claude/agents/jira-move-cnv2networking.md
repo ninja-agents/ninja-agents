@@ -45,7 +45,7 @@ Prefix every status line with `[N/7]`. One line per step start and milestone.
 
 Read `agents/jira-move-cnv2networking/data/config.json`. Extract:
 
-- `jira.cloud_id`, `jira.cloud_uuid`
+- `jira.cloud_id` — the DNS hostname for `--site`, never `jira.cloud_uuid`
 - `source.jql`
 - `source.bugKeywords.nmstate` — keywords matched anywhere in summary+description
 - `source.bugKeywords.nmstateSummaryOnly` — keywords only matched in summary (not description-only)
@@ -64,23 +64,20 @@ If `targets.rfes.project` equals `"TODO_RFE_PROJECT_KEY"`, display:
 
 ## Step 2: Fetch CNV Tickets
 
-Launch in a single tool call:
+Run one command from the repository root, substituting the exact configured values as shell-quoted arguments:
 
-```
-mcp__atlassian__searchJiraIssuesUsingJql:
-  cloudId: "{jira.cloud_id}"
-  jql: "{source.jql}"
-  maxResults: 100
-  fields: ["summary", "description", "issuetype", "status", "assignee", "priority", "components", "labels", "versions", "fixVersions", "created", "updated"]
-  responseContentFormat: "markdown"
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' search --jql '{source.jql}' --fields summary,description,issuetype,status,assignee,priority,components,labels,versions,fixVersions,created,updated
 ```
 
-If exactly 100 results are returned, paginate with `nextPageToken` until fewer than 100 results are returned. Combine all pages.
+Reads require `JIRA_EMAIL` and `JIRA_API_TOKEN` in the environment only. Exit 0 emits `{issues:[...]}` after completing pagination internally, including short pages with continuation tokens. Do not add `--limit` to source collection. The CLI normalizes `fields.description` to a string while preserving ADF text and URLs; retain all other returned fields unchanged.
+
+For the existing classifier input, adapt the returned issues into `{issues:{nodes:[{id,key,fields}]}}`: one node per issue, copying its native numeric-ID string `id`, `key` and complete returned `fields`. Save that JSON in the existing private cache; keep the model-as-collector boundary and do not add a new collector. Use the same issue data for the existing `tickets.csv` mapping and version resolution.
 
 ### Validation Checkpoint
 
 - If 0 tickets returned: display warning, STOP, ask user to verify the JQL.
-- If any MCP call returned an error: display the error, STOP, ask user how to proceed.
+- If the command exits 1: display the safe stderr diagnostic and STOP before classifier input, CSV, classification, preview or approval. No partial JSON is usable.
 
 ## Step 3: Classify Tickets
 
@@ -219,13 +216,11 @@ For every ticket classified with `target_project = RFE` and empty `review_flag` 
 
 Run all searches in parallel (one per confirmed FRE):
 
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' search --jql 'project = RFE AND text ~ "<2-4 key terms from CNV summary>" AND statusCategory != Done' --fields summary,status --limit 3
 ```
-mcp__atlassian__searchJiraIssuesUsingJql:
-  cloudId: "{jira.cloud_id}"
-  jql: project = RFE AND text ~ "<2-4 key terms from CNV summary>" AND statusCategory != Done
-  maxResults: 3
-  fields: ["summary", "status"]
-```
+
+Escape backslashes and double quotes in extracted terms for the JQL string literal, then shell-quote the complete JQL argument. The explicit limit preserves this lookup's maximum of three results; consume the returned `issues` array. If any duplicate lookup exits 1, display its safe stderr diagnostic and STOP before completing the preview or seeking approval; do not treat failed lookups as no duplicates.
 
 Extract 2-4 meaningful domain-specific terms from the CNV ticket summary (e.g. `"nmstate-topology"` from "nmstate-topology not giving much useful info"). Avoid generic words like "UI", "user", "option", "add".
 
@@ -292,7 +287,7 @@ Then ask:
 
 ## Step 6: Apply Moves
 
-**Important:** `mcp__atlassian__editJiraIssue` cannot perform cross-project moves — it silently leaves the ticket in its original project. The only working mechanism is the Jira Bulk Move REST API called via Bash + curl. The Bash permission `Bash(curl * redhat.atlassian.net/rest/api/3/*)` in `.claude/settings.json` enables this. Auth uses the `JIRA_EMAIL` and `JIRA_API_TOKEN` environment variables (already set in this environment).
+Use the existing Jira Bulk Move REST API via Bash + curl for cross-project moves. The Bash permission `Bash(curl * redhat.atlassian.net/rest/api/3/*)` in `.claude/settings.json` enables this. Auth uses the `JIRA_EMAIL` and `JIRA_API_TOKEN` environment variables. Require the explicit Step 5 approval before any mutation; the post-move component update below is part of those same approved moves.
 
 Skip any ticket with `review_flag` set unless the user explicitly included it in a `select` response.
 
@@ -373,12 +368,11 @@ On COMPLETE: `result.successfulIssues` is an array of numeric issue IDs. `result
 
 `result.successfulIssues` contains numeric issue IDs. Cross-reference each against the `numeric_id` recorded in Step 3 to identify which old CNV key it was, then fetch the new OCPBUGS key:
 
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' issue --key '{numericId}' --fields summary,project
 ```
-mcp__atlassian__getJiraIssue:
-  cloudId: "{jira.cloud_id}"
-  issueIdOrKey: "{numericId}"
-  fields: ["summary", "project"]
-```
+
+Use the native returned `key` and `fields.project` to identify the new key/project. If this read exits 1, display the safe stderr diagnostic and STOP further processing rather than guessing the new key or issuing a component mutation. Report the already confirmed successful move by numeric ID with a new-key lookup warning; a read failure does not undo the move.
 
 Record: old CNV key → new OCPBUGS key.
 
@@ -389,19 +383,15 @@ For each successfully moved ticket:
 - For OCPBUGS bugs: set the single `target_component` string.
 - For RFE feature requests: set each entry from `target_components` (the list resolved during Gate 4 — either `targets.rfes.nmstateComponents` or `targets.rfes.networkingComponents`).
 
-```
-mcp__atlassian__editJiraIssue:
-  cloudId: "{jira.cloud_id}"
-  issueIdOrKey: "{newKey}"
-  fields:
-    components: [{ name: "<component1>" }, ...]   # one entry per item in target_components
-    # OR for OCPBUGS bugs:
-    components: [{ name: "{target_component}" }]
+Build a JSON array containing exactly one `{name: string}` object per approved component: `[{"name":"{target_component}"}]` for an OCPBUGS bug, or one entry per `target_components` item for an RFE. Pass the serialized array as a single shell-quoted argument:
+
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' set-components --key '{newKey}' --components-json '{approved components JSON array}' --approved
 ```
 
-If this call fails, log the error but still record outcome `moved` (the issue is already in the target project).
+Only include `--approved` after the real Step 5 confirmation covering that ticket and its proposed components. The flag is a mechanical guard, not user approval. Invoke one mutation per ticket, sequentially; exit 0 returns native JSON (or `{}` for 204). If a component update exits 1, log its safe stderr diagnostic, record outcome `moved` with a component-update warning, and continue with the remaining approved tickets. Do not mark an already successful move as failed or imply rollback.
 
-Track each ticket's outcome: `moved` (Steps 6b–6e all done) or `failed` (version mapping missing or bulk move rejected for this ticket).
+Track each ticket's outcome: `moved` (bulk move confirmed, with any new-key/component warning recorded separately) or `failed` (version mapping missing or bulk move rejected for this ticket).
 
 ## Step 7: Display Results
 

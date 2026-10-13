@@ -2,21 +2,15 @@
 
 ## System Overview
 
-Ninja Agents is a monorepo of self-contained AI agents that automate recurring engineering workflows. The system has no runtime server or deployed application -- agents execute inside an AI-powered IDE (Claude Code or Cursor) and interact with external services through MCP (Model Context Protocol) servers.
+Ninja Agents is a monorepo of self-contained AI agents that automate recurring engineering workflows. There is no runtime server or deployed application: agents execute inside Claude Code, Cursor, or Codex. GitHub is the sole project MCP server; Jira and GitLab use direct APIs.
 
 ```text
-+------------------+     +-----------+     +------------------+
-|   AI IDE         |     | MCP       |     | External         |
-|   (Claude Code   |<--->| Servers   |<--->| Services         |
-|    or Cursor)    |     |           |     |                  |
-|                  |     | - GitHub  |     | - github.com     |
-|  Agent Spec      |     | - GitLab  |     | - gitlab.cee.    |
-|  (workflow def)  |     | - Jira    |     |   redhat.com     |
-|                  |     |           |     | - redhat.         |
-|  TypeScript      |     +-----------+     |   atlassian.net  |
-|  Scripts         |                       +------------------+
-|  (deterministic) |
-+------------------+
+AI client + canonical workflow spec
+  |-- GitHub MCP ----------------------> GitHub
+  |-- agent-owned direct collectors ---> configured APIs
+  |-- standalone root API commands ----> Jira / optional QE GitLab
+  |       `-- model adapts JSON --------> existing CSV/JSON caches
+  `-- deterministic agent scripts -----> reports / previews / evidence
 ```
 
 ## Component Structure
@@ -30,6 +24,7 @@ ninja-agents/
     weekly-team-update/           # Weekly status report agent
     sprint-review/                 # Sprint retrospective agent
     repo-contextification/        # Documentation audit agent
+  scripts/                        # Standalone jira-rest and gitlab-read commands and tests
   .claude/
     agents/                       # Agent specs — shared source of truth for workflows
     skills/                       # Skill shortcuts (Claude Code entry points)
@@ -64,28 +59,32 @@ agents/{name}/
 
 ### IDE Wiring
 
-Agent specs (`.claude/agents/{name}.md`) are the single source of truth for each workflow. Both IDEs point to the same specs:
+Agent specs (`.claude/agents/{name}.md`) are the single source of truth for each workflow. All three clients point to the same specs; Codex's relative workflow references retain that canonical source:
 
 ```text
 .claude/agents/{name}.md     <-- full workflow definition (steps, rules, validation)
   ^
   |-- .claude/skills/{name}/SKILL.md   (Claude Code: skill shortcut, invoked via /command)
   |-- .cursor/rules/{name}.mdc         (Cursor: project rule, invoked via @name in chat)
+  |-- .agents/skills/{name}/SKILL.md   (Codex: skill with canonical workflow reference)
 ```
 
 ## Data Flow Pipeline
 
-Every agent follows the same three-phase pipeline:
+Reporting agents generally follow a three-phase pipeline; mutation workflows retain their previews and user approval gates, and artifact verification retains its separate evidence contract.
 
-### Phase 1: Data Collection (AI Agent)
+### Phase 1: Data Collection
 
-The AI agent executes MCP tool calls to fetch data from external services. Queries run in parallel batches where possible. Results are written as CSV files to `data/cache/`.
+Existing weekly, sprint-review, sprint-planning, story-point, and CVE collectors access APIs directly. Migrated workflows invoke root `scripts/jira-rest.ts` and optional QE `scripts/gitlab-read.ts`, then the model adapts returned JSON to each workflow's existing CSV/JSON cache schema. GitHub MCP is retained for workflow reads. Root commands are standalone executables, not imports shared between agents.
 
 ```text
-GitHub MCP  ----> github-prs.csv
-GitLab MCP  ----> gitlab-mrs.csv
-Jira MCP    ----> jira-tickets.csv (or sprint-issues.csv)
+Agent-owned API collectors ------------------> existing caches / evidence
+Root Jira REST command --> model adaptation --> jira-tickets.csv / tickets-data.json
+Root GitLab QE context -----------------------> optional repo-context.md enrichment
+GitHub MCP -----------------------------------> workflow PR references / diffs
 ```
+
+Root commands handle pagination internally; explicit Jira search limits are bounded lookups only. Jira ADF descriptions/comments become strings at the API boundary, while other native fields are preserved. Required Jira failures stop collection before classification or approval; optional GitLab failure emits exit 3 with null context and a safe warning so QE can proceed without enrichment. Existing cache quoting and mapping contracts remain unchanged.
 
 ### Phase 2: Deterministic Processing (TypeScript Script)
 
@@ -134,22 +133,24 @@ All dependencies are managed in the root `package.json`. In addition to the lint
 
 Runtime dependencies are managed at the root alongside tooling: `@slack/web-api` supports Slack collection and `semver` provides npm version/range semantics for CVE verification. Other scripts use Node.js built-in modules where sufficient. The `tsx` package provides the TypeScript execution environment.
 
-### MCP Servers
+### Service Access
 
-| Server             | Transport | Endpoint                     | Auth                 |
-| ------------------ | --------- | ---------------------------- | -------------------- |
-| GitHub MCP         | HTTP      | `api.githubcopilot.com/mcp/` | `GITHUB_PAT` env var |
-| GitLab MCP         | stdio     | `npx @zereight/mcp-gitlab`   | `GITLAB_PAT` env var |
-| Atlassian Rovo MCP | HTTP      | `mcp.atlassian.com/v1/mcp`   | Browser OAuth        |
+| Service            | Transport                                    | Credentials                                                 |
+| ------------------ | -------------------------------------------- | ----------------------------------------------------------- |
+| GitHub MCP         | HTTP, `https://api.githubcopilot.com/mcp/`   | `GITHUB_PAT`                                                |
+| Jira               | Direct HTTPS REST                            | `JIRA_EMAIL` and `JIRA_API_TOKEN` for reads and writes      |
+| Optional QE GitLab | Direct HTTPS REST, configured `/api/v4` base | `gitlab.api_url` or `GITLAB_API_URL`; optional `GITLAB_PAT` |
 
-MCP server definitions live in `.mcp.json` (for Claude Code) and `.cursor/mcp.json` (for Cursor). Token references use `${VAR_NAME}` syntax, resolved from the user's shell environment at launch time.
+All four project manifests (`.mcp.json`, `.cursor/mcp.json`, `.codex/config.toml`, `plugin-mcp.json`) define GitHub only. Root Jira commands take a DNS hostname from existing `jira.cloud_id` (Slack: `jira_filing.cloud_id`), never a cloud UUID. Existing per-agent apply/QE writers additionally use private `jira.user_email` with the token. Root commands take credentials only from environment variables and deny redirects.
+
+Writes retain existing user preview/selection approval. Root allowlisted write commands additionally require `--approved`; each invocation performs one mutation, without arbitrary endpoint access. Existing agent-owned writers and bulk-move/poll operations remain in place. See [setup and usage](docs/mcp-setup.md) for configuration, private payload requirements, and safe credential checks.
 
 ## Build and Execution
 
-There is no build step or compiled output. TypeScript files execute directly via `tsx`. The root `tsconfig.json` includes all agent scripts via a glob pattern (`agents/*/scripts/**/*.ts`):
+There is no build step or compiled output. TypeScript executes directly through `tsx` with Node.js 22+ and installed root dependencies. The root `tsconfig.json` type-checks `agents/*/scripts/**/*.ts` and standalone root `scripts/**/*.ts` in one program, without build references or generated declaration prerequisites.
 
 ```bash
-npx tsc --build           # type-check all agents
+./node_modules/.bin/tsc --noEmit -p tsconfig.json # type-check all scripts and tests
 npm run lint              # ESLint across the repo
 npm run format:check      # Prettier check
 ```

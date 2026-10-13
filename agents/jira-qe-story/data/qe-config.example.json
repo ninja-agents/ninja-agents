@@ -5,6 +5,9 @@
     "base_url": "https://your-site.atlassian.net",
     "user_email": "you@example.com"
   },
+  "gitlab": {
+    "api_url": ""
+  },
   "defaults": {
     "target_project_key": "PROJ",
     "issue_type": "Story",

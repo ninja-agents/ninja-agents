@@ -4,10 +4,11 @@ Finds completed Jira tickets missing the Activity Type field, classifies each ti
 
 ## Prerequisites
 
-- **Atlassian Rovo MCP** — Jira read access to your Jira site (for fetching tickets)
-- **`JIRA_API_TOKEN`** — Jira API token for write access ([create one here](https://id.atlassian.com/manage-profile/security/api-tokens))
-- **`jira.user_email`** — your Jira email, set in `data/config.json`
-- Tokens must be set as environment variables before launching Claude Code.
+- **Node.js 22+ and installed root dependencies** — run commands from the repository root.
+- **Jira REST credentials** — `JIRA_EMAIL` and `JIRA_API_TOKEN` in the environment for root CLI reads.
+- **Private config** — `jira.cloud_id` is the Jira DNS hostname; the existing apply writer additionally uses `jira.user_email` from `data/config.json` with `JIRA_API_TOKEN`.
+
+Set credentials before launching your IDE; never pass secrets in command arguments or store tokens in config/cache/output. No Jira MCP server is required. See the [setup guide](../../docs/mcp-setup.md).
 
 ## Usage
 
@@ -37,11 +38,13 @@ npm run jira-add-missing-activity-type:apply -- --dry-run --cache agents/jira-ad
 ## How It Works
 
 1. **Read config** — loads JQL query, classification rules, and Activity Type field mapping from `data/config.json`
-2. **Fetch tickets** — queries Jira for Done tickets with empty Activity Type field (paginated)
-3. **Save to CSV** — writes ticket data to `data/cache/jira-tickets.csv`
+2. **Fetch tickets** — runs `node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' search --jql '{jira.jql}' --fields summary,issuetype,labels`; the CLI completes pagination internally and returns `{issues:[...]}`
+3. **Save to CSV** — the agent maps returned issues to `data/cache/jira-tickets.csv` with header `key,summary,issuetype,labels`, semicolon-joining labels and CSV-quoting commas/quotes
 4. **Classify** — runs `classify-tickets.ts` to match each ticket against rules (labels, keywords, issue type) and generate a preview
 5. **Preview & approve** — displays proposed Activity Type assignments; waits for user approval before any changes
-6. **Apply updates** — sets the Activity Type field on each approved ticket via the Jira API
+6. **Apply updates** — the existing `apply-activity-types.ts` REST writer sets the Activity Type field on each approved ticket
+
+Substitute the configured hostname and literal JQL as safely quoted arguments. `npm run jira:rest -- ...` is an alternative root CLI entrypoint. Do not add manual page loops or `--limit` to collection. A required read failure exits 1: display its safe diagnostic and STOP before classification, preview, or approval; never consume partial results.
 
 ## Configuration
 

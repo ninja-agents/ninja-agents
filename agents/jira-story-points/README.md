@@ -4,9 +4,12 @@ Estimate story points for unpointed Jira tickets by comparing them against histo
 
 ## Prerequisites
 
-- **Atlassian Rovo MCP** — for Jira ticket queries (read-only)
-- **JIRA_API_TOKEN** — for setting fields via REST API (get from [Atlassian API tokens](https://id.atlassian.com/manage-profile/security/api-tokens))
-- Tokens must be set as environment variables before launching Claude Code
+- **Node.js 22+ and installed root dependencies** — run commands from the repository root.
+- **Jira REST credentials** — `JIRA_EMAIL` and `JIRA_API_TOKEN` in the environment for reads.
+- **Existing apply writer** — uses `JIRA_API_TOKEN` with `jira.user_email` from private `data/config.json`.
+- **GitHub API token** — `GITHUB_PAT` for the collector's linked-PR context.
+
+The existing collector and writer use direct APIs, not Jira MCP. Set credentials before launching your IDE; never pass secrets in command arguments or store tokens in config/cache/output. See the [setup guide](../../docs/mcp-setup.md).
 
 ## Usage
 
@@ -24,6 +27,10 @@ In Cursor chat, mention `@jira-story-points` or describe what you need — the r
 ### Manual
 
 ```bash
+# Sync reference data and fetch targets with the existing direct API collector
+node --import tsx agents/jira-story-points/scripts/fetch-data.ts --sync-reference
+node --import tsx agents/jira-story-points/scripts/fetch-data.ts --backlog
+
 # Build reference summary from cached tickets (after agent syncs the cache)
 npm run jira-story-points:build-reference -- --config agents/jira-story-points/data/config.json
 
@@ -34,12 +41,14 @@ npm run jira-story-points:validate -- agents/jira-story-points/data/cache/refere
 ## How It Works
 
 1. **Read config** — loads JQL filters, sizing guide, and estimation preferences
-2. **Sync reference cache** — fetches historical Done tickets with SP from Jira, saves as JSON (skips if cache is <7 days old)
+2. **Sync reference cache** — `scripts/fetch-data.ts --sync-reference` reads historical Done tickets with SP directly from Jira REST, saves as JSON (skips if cache is <7 days old)
 3. **Build reference summary** — generates SP distribution, per-type averages, and a full ticket table
-4. **Identify targets** — fetches the specified ticket or finds unpointed backlog tickets
+4. **Identify targets** — the same collector reads the specified ticket (`--ticket KEY`) or unpointed backlog (`--backlog`) from Jira and collects linked GitHub PR context into `data/cache/target-tickets.json`
 5. **Estimate** — Claude compares each target against historical data and suggests SP with reasoning
 6. **Preview** — displays proposed estimates for user approval
-7. **Apply** — sets the SP field via REST API
+7. **Apply** — only after explicit user approval, the existing `apply-story-points.ts` writer sets the SP field via Jira REST
+
+If the collector exits 1, display its diagnostic and STOP before estimation. Keep the existing local reference/target cache formats; do not add a second root-CLI collection path.
 
 ## Configuration
 
@@ -58,6 +67,7 @@ agents/jira-story-points/
 ├── README.md
 ├── tsconfig.json
 ├── scripts/
+│   ├── fetch-data.ts               # Direct Jira/GitHub API collector
 │   ├── build-reference.ts          # generates reference summary from cached JSON
 │   ├── build-reference.test.ts     # config and parsing tests
 │   ├── validate-output.ts          # validates reference summary completeness

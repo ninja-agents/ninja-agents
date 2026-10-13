@@ -46,7 +46,7 @@ Prettier configuration (`prettier.config.mjs`):
 
 - Double quotes, trailing commas, semicolons
 
-All agent dependencies (`@types/node`, `tsx`, `typescript`, `vitest`) are managed in the root `package.json`. The root `tsconfig.json` includes all agent scripts via a glob pattern (`agents/*/scripts/**/*.ts`).
+All dependencies (`@types/node`, `tsx`, `typescript`, `vitest`, and runtime packages) are managed in the root `package.json`. Use Node.js 22+ with installed root dependencies. The root `tsconfig.json` includes agent scripts (`agents/*/scripts/**/*.ts`) and standalone API commands/tests (`scripts/**/*.ts`) directly, without project references. Run `./node_modules/.bin/tsc --noEmit -p tsconfig.json` to type-check them without emitting build artifacts.
 
 ## Testing
 
@@ -77,12 +77,12 @@ Commit messages use imperative mood and describe the intent, not the mechanics:
 
 ```text
 Add sprint-review agent for sprint retrospective analysis
-Fix GitLab MCP queries returning empty results without scope param
+Fix GitLab REST queries returning empty results without scope param
 Improve create-agent skill with patterns from weekly-team-update
 ```
 
 ## Secrets and Tokens
 
-Never commit tokens, secrets, or `.env` files. All tokens resolve from environment variables at runtime. The `.mcp.json` file uses `${VAR_NAME}` syntax, which the IDE resolves from the user's shell environment.
+Never commit tokens, secrets, or `.env` files. Tokens resolve from environment variables at runtime. GitHub is the sole project MCP server; its manifests resolve `GITHUB_PAT` without storing token values. Jira direct REST reads and writes require `JIRA_EMAIL` and `JIRA_API_TOKEN`; existing per-agent apply/QE writers additionally retain private `jira.user_email` configuration. Optional QE GitLab access uses `gitlab.api_url` or `GITLAB_API_URL` and optionally `GITLAB_PAT`. See [the setup guide](docs/mcp-setup.md) for command usage and presence-only credential checks.
 
-The `.gitignore` blocks `.env` as a safety net, but the standard approach is exported shell variables -- not dotenv files.
+The `.gitignore` blocks `.env` as a safety net, not a secret store. Its `.codex/config.toml` entry does not make that already tracked manifest private; never add credentials or personal/internal configuration there. Preserve private config/cache/report/research exclusions and both legacy `agents/nmstate-cve-verification/data/output/` and current `agents/cve-verification-console-plugins/data/output/` evidence exclusions.

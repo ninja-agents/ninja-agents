@@ -40,9 +40,11 @@ Prefix every status line with `[N/10]`. One line per update — be transparent, 
 
 Read `agents/jira-fix-version/data/config.json`. Extract:
 
-- `jira.cloud_id` — the Jira site URL (from config)
+- `jira.cloud_id` — the Jira DNS hostname (passed to `--site`, never `cloud_uuid`)
 - `source.jql` — the JQL query that finds Done tickets with empty fixVersions
 - `branchToFixVersion` — nested object: `{ "{owner}/{repo}": { "{branch}": { "id": "...", "name": "..." } } }`
+
+Run the root Jira CLI with installed dependencies from the repository root. `JIRA_EMAIL` and `JIRA_API_TOKEN` must be present in the environment only; never put credentials in commands, configs or output. Required Jira reads must exit 0 before consuming their stdout JSON. On exit 1, display only the CLI's safe stderr diagnostic and STOP before classification, cache/report generation or approval; never use partial results. Required GitHub PR-detail read failures also STOP; only the existing Step 4 GraphQL issue resolver has an explicit best-effort fallback. The model adapts these results into the existing caches below; do not add a second collector.
 
 If `config.upcoming_changes` exists, check each entry's `date`. If the date is within 7 days of today or already past by ≤30 days, display:
 `⚠️ Config note: {description} (date: {date}). Verify branchToFixVersion is up to date.`
@@ -58,41 +60,39 @@ rm -f agents/jira-fix-version/data/cache/tickets.csv \
       agents/jira-fix-version/data/cache/resolved-prs.json
 ```
 
-## Step 3: Fetch Tickets (Paginated)
+## Step 3: Fetch Tickets
 
-```
-mcp__atlassian__searchJiraIssuesUsingJql:
-  cloudId: "your-site.atlassian.net"
-  jql: "{source.jql}"
-  maxResults: 100
-  fields: ["summary", "status", "assignee", "issuetype", "description", "resolutiondate"]
-  responseContentFormat: "markdown"
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' search \
+  --jql '{source.jql}' \
+  --fields 'summary,status,assignee,issuetype,description,resolutiondate'
 ```
 
-If exactly 100 results are returned, paginate using `nextPageToken` until fewer than 100 results are returned. Combine all pages.
+Substitute the exact configured `source.jql` without changing its query; quote substituted shell arguments safely. The CLI returns `{ "issues": [...] }`, completing pagination internally, including short pages with continuation tokens. Do not add `--limit` or issue separate page requests.
 
-**Validation:** If 0 tickets returned: display "No tickets found matching the JQL. Nothing to do." STOP. If any MCP call errored: display the error, STOP.
+**Validation:** If 0 tickets returned: display "No tickets found matching the JQL. Nothing to do." STOP. If the command exits 1: display its safe stderr diagnostic and STOP.
 
 Display: `[3/10] Fetched {count} tickets missing fixVersions.`
 
 ## Step 4: Fetch Remote Links + Resolve Issues to PRs
 
-### Batch 1: Fetch Remote Links (All Parallel)
+### Batch 1: Fetch Remote Links
 
-For every ticket, fetch its remote links. Launch ALL in a **single parallel tool call** — one per ticket:
+For every ticket, fetch its remote links with one command per ticket. Reads may run in parallel, but collect and validate all successful results before proceeding:
 
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' remote-links \
+  --key '{ticket_key}'
 ```
-mcp__atlassian__getJiraIssueRemoteIssueLinks:
-  cloudId: "your-site.atlassian.net"
-  issueIdOrKey: "{ticket_key}"
-```
+
+Each successful stdout value is the native remote-link array. Any required read failure STOPs the workflow before classification or preview; an error is not an empty link list.
 
 **After Batch 1 returns:**
 
 For each ticket, collect GitHub URLs from two sources:
 
 1. Remote links: parse each link object's `object.url`
-2. Description: regex-search the raw description string (may be ADF JSON)
+2. Description: regex-search `fields.description`, already normalized by the search CLI to a string preserving ADF link target URLs (never stringify or search raw ADF objects)
 
 Separate into two buckets per ticket:
 
@@ -270,29 +270,22 @@ For each approved ticket, parse `fix_version_ids` (split on `;`) and `fix_versio
 - If `id` is `"TODO"` → emit `{ "name": name }`
 - Otherwise → emit `{ "id": id }`
 
-Build the `fixVersions` array and call:
+Build a nonempty JSON array of exact `{ "id": "..." }` or `{ "name": "..." }` entries. Pass all versions for this ticket in one command, safely quoting the JSON as one argument:
 
-```
-mcp__atlassian__editJiraIssue:
-  cloudId: "your-site.atlassian.net"
-  issueIdOrKey: "{ticket_key}"
-  fields:
-    fixVersions:
-      - id: "12345"
-      - id: "67890"
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' set-fix-versions \
+  --key '{ticket_key}' \
+  --versions-json '[{"id":"12345"},{"id":"67890"}]' \
+  --approved
 ```
 
-Or with fallback:
+For a configured `"TODO"` ID, the corresponding entry instead uses its configured name, e.g. `[{"id":"12345"},{"name":"MTA 8.2.0"}]`. Do not send both `id` and `name` in an entry. Each invocation performs exactly one PUT with `{ "fields": { "fixVersions": [...] } }`; never split a ticket's versions into separate mutations.
 
-```
-    fixVersions:
-      - id: "12345"
-      - name: "MTA 8.2.0"
-```
+`--approved` is required by the CLI but does not replace Step 9's explicit approval. Invoke it only for the approved group/selection. Exit 0 (native JSON or `{}` for HTTP 204) means this ticket succeeded; exit 1 means it failed.
 
-Display per ticket: `[10/10] Setting fixVersions on {key} ({fix_version_names})... done.`
+Only on exit 0, display per ticket: `[10/10] Setting fixVersions on {key} ({fix_version_names})... done.`
 
-On failure: log `[10/10] Warning: Failed to set fixVersions on {key}: {error}`, continue with remaining tickets. If the error mentions "fixVersions" or "version" with a 400/404 status, add: `⚠️ Version ID {id} may be invalid for project {project_key}. Verify it exists in Jira under the project's Versions list and update config.json if needed.`
+On failure: log `[10/10] Warning: Failed to set fixVersions on {key}: {safe CLI diagnostic}`, continue with remaining approved tickets, and record the failure in the summary. The CLI does not expose raw response bodies: if its safe diagnostic reports HTTP 400 or 404, add `⚠️ Configured version IDs/names {fix_version_ids} / {fix_version_names} may be invalid for project {project_key}. Verify them in Jira under the project's Versions list and update config.json if needed.` Do not inspect or request the raw error body, assume success, or retry without approval.
 
 **Summary format:**
 
@@ -313,11 +306,11 @@ Skipped: Y tickets (no merged PR found).
 ## Rules
 
 1. **NEVER apply fixVersions without explicit user approval.** The preview and confirmation in Step 9 is non-negotiable.
-2. **Multiple merged branches → set ALL resolved fix versions** as an array in a single `editJiraIssue` call.
+2. **Multiple merged branches → set ALL resolved fix versions** as an array in one `set-fix-versions` invocation (one PUT).
 3. **Skip PRs where `merged = false`** — only merged PRs determine the fix version.
 4. **Unknown branch → `needs_review`**, never silently drop.
-5. Jira `cloudId` always comes from `config.json` → `jira.cloud_id`.
-6. Use `{ "id": "..." }` in `editJiraIssue`; fall back to `{ "name": "..." }` only when id is `"TODO"`.
+5. Jira `--site` always comes from `config.json` → `jira.cloud_id` (DNS hostname, never `cloud_uuid`).
+6. Use exact `{ "id": "..." }` entries in `--versions-json`; fall back to exact `{ "name": "..." }` only when the configured id is `"TODO"`.
 7. **Apply step is sequential** — process one ticket at a time to avoid rate limits.
 8. Never hardcode JQL or version IDs — read everything from `agents/jira-fix-version/data/config.json`.
 9. The `base.repo.full_name` from the GitHub PR API must exactly match the key in `branchToFixVersion` (e.g., `"openshift/networking-console-plugin"`, not just `"networking-console-plugin"`).

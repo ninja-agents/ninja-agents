@@ -4,12 +4,25 @@ One-line description of what this agent does.
 
 ## Prerequisites
 
-List the MCP servers or CLI tools this agent needs:
+List only the direct API sources and GitHub MCP tools this agent actually uses:
 
-- **GitHub MCP** — for PR and commit data
-- (add or remove as needed)
+- **Node.js 22+ and installed root dependencies** — run commands from the repository root.
+- **GitHub MCP** — the sole project MCP server; include only when this agent uses GitHub tools.
+- **Jira REST** — root commands require environment-only `JIRA_EMAIL` and `JIRA_API_TOKEN` for reads and approved writes. `--site` comes from private config's `jira.cloud_id` DNS hostname (Slack filing uses `jira_filing.cloud_id`), not a URL or cloud UUID.
+- **Existing per-agent Jira writer** (if applicable) — retain its `JIRA_API_TOKEN` plus private `jira.user_email` authentication; do not replace it with a new writer.
+- **GitLab REST** (if used) — reuse existing direct collectors; the root `gitlab-read.ts` exposes optional QE context only, with HTTPS `/api/v4` base from `gitlab.api_url` or `GITLAB_API_URL` and optional environment-only `GITLAB_PAT` for public reads.
 
-Tokens must be set as environment variables before launching your IDE — see [MCP setup guide](../../docs/mcp-setup.md).
+Remove unused prerequisite bullets. Set credentials before launching your IDE, never in command arguments or tracked config/cache/output, and never print secret values. No Jira/GitLab MCP server, browser OAuth, or stdio server is required. See the [setup guide](../../docs/mcp-setup.md).
+
+Reuse existing direct collectors when available. Otherwise, supported root commands include:
+
+```bash
+node --import tsx scripts/jira-rest.ts --site your-site.atlassian.net search --jql 'project = PROJ' --fields summary
+# Alternative: npm run jira:rest -- --site your-site.atlassian.net search --jql 'project = PROJ' --fields summary
+node --import tsx scripts/gitlab-read.ts qe-context --project owner/repo --issue-key PROJ-123
+```
+
+Root command pagination is internal; keep each agent's existing private cache format. Required Jira read failures STOP before output or approval, without partial results. Optional GitLab exit 3 returns `{context:null,warnings:[safeCode]}`: note the warning and proceed without enrichment. Use only supported writes after the workflow's existing explicit approval; the CLI's `--approved` guard never substitutes for user approval.
 
 ## Usage
 
@@ -21,7 +34,7 @@ Tokens must be set as environment variables before launching your IDE — see [M
 
 ### Cursor / Manual
 
-Describe how to use this agent from Cursor (e.g., run scripts directly, use MCP tools manually).
+Describe how to use this agent from Cursor (e.g., run scripts directly or use the configured GitHub MCP tools).
 
 For TypeScript agents, scripts can be run directly:
 
@@ -80,7 +93,7 @@ After creating your agent directory, wire it into both IDEs:
    - Frontmatter: `name`, `description`, `user-invocable: true`
    - Body: usage, what it does, expected output, critical rules
 
-4. **Permissions** — add any MCP tools or bash commands to `.claude/settings.json`
+4. **Permissions** — add only the narrowly scoped GitHub MCP tools or script commands required by the agent to `.claude/settings.json`; never add Jira/GitLab MCP entries or blanket permissions.
 
 ### Cursor
 

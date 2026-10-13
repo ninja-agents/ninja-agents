@@ -4,9 +4,11 @@ Analyze the currently active Jira sprint and generate a data-driven retrospectiv
 
 ## Prerequisites
 
-- **Atlassian Rovo MCP** — for Jira sprint data from your Jira site
+- **Node.js 22+ and installed root dependencies** — run commands from the repository root.
+- **Jira REST credentials** — `JIRA_EMAIL` and `JIRA_API_TOKEN` in the environment for reads.
+- **Private sprint config** — `data/sprint-config.json`, copied from the example.
 
-Tokens must be set as environment variables before launching your IDE.
+The existing collector reads Jira directly; no Jira MCP server is required. Set credentials before launching your IDE, never in command arguments or report/cache files. See the [setup guide](../../docs/mcp-setup.md).
 
 ## Usage
 
@@ -22,30 +24,33 @@ In Cursor chat, mention `@sprint-review` or ask for a "sprint retrospective" —
 
 ### Manual
 
-Run the analysis script directly (requires cached CSV data):
+Fetch the CSV cache, then run the analysis script:
 
 ```bash
+node --import tsx agents/sprint-review/scripts/fetch-data.ts
 npm run sprint-review:generate -- --date 2026-05-07
 ```
 
 ## How It Works
 
 1. Reads sprint config (`data/sprint-config.json`)
-2. Discovers the story point custom field by querying a sample issue
-3. Fetches all issues in the active sprint via Jira JQL
-4. Fetches recently-updated issues to detect scope changes
-5. Saves data to CSV cache files
+2. Runs `scripts/fetch-data.ts` against the Jira REST API to discover the active sprint, using the configured story point field
+3. Fetches active-sprint issues and completed-issue changelogs for cycle time analysis
+4. Writes a header-only scope-change cache; recently updated issues and linked blocker details are not collected
+5. Saves normalized data to this agent's CSV cache files
 6. Runs the TypeScript analysis script which computes metrics, cycle time, the Retro Discussion Guide, and generates the report
 7. Agent writes Key Takeaways section with actionable observations
 8. Displays the final report
+
+If the collector exits 1, display its diagnostic and STOP before analysis; do not proceed with empty data or route collection through a second root-CLI path.
 
 ## Setup
 
 The sprint configuration file contains internal IDs and is gitignored. To set up:
 
 ```bash
-cp data/sprint-config.example.json data/sprint-config.json
-# Edit sprint-config.json with your team's real data
+cp agents/sprint-review/data/sprint-config.example.json agents/sprint-review/data/sprint-config.json
+# Edit the private sprint-config.json with your team's real data
 ```
 
 ## Configuration
@@ -66,6 +71,7 @@ agents/sprint-review/
 ├── README.md
 ├── tsconfig.json
 ├── scripts/
+│   ├── fetch-data.ts               # Direct Jira REST collector
 │   └── generate-sprint-review.ts    # Analysis engine
 └── data/
     ├── sprint-config.example.json  # Template (committed)

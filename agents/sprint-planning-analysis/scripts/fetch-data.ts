@@ -154,7 +154,7 @@ async function jiraSearchPaginated(
   config: SprintConfig,
   jql: string,
   fields: string[],
-): Promise<JiraSearchResult["issues"]> {
+): Promise<NonNullable<JiraSearchResult["issues"]>> {
   const allIssues: JiraSearchResult["issues"] = [];
   let nextPageToken: string | undefined;
 

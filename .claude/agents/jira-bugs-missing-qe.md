@@ -38,7 +38,7 @@ Prefix every status line with `[N/7]` where N is the current step number. Displa
 
 Read `agents/jira-bugs-missing-qe/data/config.json` to get:
 
-- `jira.cloud_id` — always `"redhat.atlassian.net"`
+- `jira.cloud_id` — configured Jira DNS hostname for REST reads
 - `jira.base_url` — the Jira instance URL
 - `jira.jql` — the JQL query to find bugs missing QA Contact
 - `jira.qa_contact_field` — the custom field ID (`customfield_10470`)
@@ -56,30 +56,13 @@ rm -f agents/jira-bugs-missing-qe/data/cache/*.json agents/jira-bugs-missing-qe/
 
 ## Step 2: Fetch Bugs Missing QA Contact
 
-Launch a single Jira query to find all resolved bugs missing QA Contact:
+Run one command from the repository root, substituting the exact configured values as shell-quoted arguments:
 
-```
-mcp__atlassian__searchJiraIssuesUsingJql:
-  cloudId: "redhat.atlassian.net"
-  jql: '{jql from config}'
-  maxResults: 100
-  fields: ["summary", "comment"]
-  responseContentFormat: "markdown"
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' search --jql '{jira.jql}' --fields summary
 ```
 
-### Pagination
-
-If the query returns exactly 100 results, paginate using `nextPageToken`:
-
-```
-mcp__atlassian__searchJiraIssuesUsingJql:
-  cloudId: "redhat.atlassian.net"
-  jql: '{same JQL}'
-  maxResults: 100
-  nextPageToken: "{token from previous response}"
-```
-
-Repeat until fewer than 100 results are returned. Combine all pages before proceeding.
+Reads require `JIRA_EMAIL` and `JIRA_API_TOKEN` in the environment only. `--site` is the configured DNS hostname, never a cloud UUID. Exit 0 emits `{issues:[...]}` after completing all pagination internally. Do not add `--limit`; collect every matching key before Step 3.
 
 Display: `[2/7] Fetched {count} bugs missing QA Contact.`
 
@@ -88,24 +71,21 @@ Display: `[2/7] Fetched {count} bugs missing QA Contact.`
 After data collection, verify:
 
 - Check the Jira query succeeded (no errors). If the query returned 0 tickets: display "No bugs found missing QA Contact. Nothing to do." STOP.
-- If the MCP call returned an error: display the error, STOP, ask user how to proceed.
+- On exit 1, display the safe stderr diagnostic and STOP before cache generation, identification, preview, or approval. No partial JSON is usable.
 
 If validation fails, display what's missing and STOP.
 
-## Step 3: Fetch Changelogs
+## Step 3: Fetch Comments and Changelogs
 
-For each bug from Step 2, fetch the full issue with changelog to detect status transitions. Launch parallel `getJiraIssue` calls in batches of up to 10:
+For every key from Step 2, fetch the summary, all comments and all changelog histories:
 
-```
-mcp__atlassian__getJiraIssue:
-  cloudId: "redhat.atlassian.net"
-  issueIdOrKey: "{ticket key}"
-  fields: ["summary"]
-  expand: "changelog"
-  responseContentFormat: "markdown"
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' issue --key '{ticket key}' --fields summary --comments --changelog
 ```
 
-Launch ALL calls in a batch as a single parallel tool call. Wait for the batch to complete, then launch the next batch of up to 10.
+Run commands in parallel batches of at most 10. Wait for all commands in the batch before launching the next batch. Each exit-0 response is a native issue object with complete `fields.comment.comments` and `changelog.histories`; the CLI pages both endpoints internally and normalizes comment bodies to text, preserving ADF links and paragraph boundaries. Do not use an expanded issue's truncated history or only the comments embedded in search results.
+
+If any command exits 1, display its safe stderr diagnostic and STOP before writing caches, identifying verifiers, producing a preview, or requesting approval. Never identify a verifier from an incomplete batch or partial history.
 
 Display: `[3/7] Fetched changelogs for {count} bugs.`
 
@@ -159,7 +139,7 @@ Each ticket is an object with this shape:
 | `changelog[].toString`        | `changelog.histories[].items[].toString`       | New status name              |
 | `changelog[].created`         | `changelog.histories[].created`                | ISO-8601                     |
 
-**Important:** Flatten changelog histories — each `items[]` entry within a history becomes its own changelog object. Only include items where `field === "status"`.
+**Important:** Map **every** returned comment to `{author: comment.author.displayName, authorAccountId: comment.author.accountId, body: comment.body, created: comment.created}` without filtering evidence first. Flatten **all** changelog histories — each item where `field === "status"` becomes its own `{author: history.author.displayName, authorAccountId: history.author.accountId, field: item.field, fromString: item.fromString, toString: item.toString, created: history.created}` object. Exclude only non-status items. Preserve the array-of-tickets cache schema above and leave verification/negation detection to the existing script.
 
 ### last-updated.txt
 
@@ -219,7 +199,7 @@ Wait for the user's response:
 
 ## Step 7: Apply Updates and Write Summary
 
-Run the apply script to set QA Contact via the Jira REST API. This uses Basic Auth with `JIRA_API_TOKEN` (env var) and `jira.user_email` (from config) — not the Rovo MCP, which cannot write to these issues.
+Run the existing apply script to set QA Contact via the Jira REST API. This uses Basic Auth with `JIRA_API_TOKEN` (env var) and `jira.user_email` (from config).
 
 ```bash
 npx tsx agents/jira-bugs-missing-qe/scripts/apply-qa-contacts.ts --config agents/jira-bugs-missing-qe/data/config.json --cache agents/jira-bugs-missing-qe/data/cache
@@ -274,7 +254,7 @@ After the script completes, display its output to the user.
 2. **NEVER assign a QA Contact when no verifier can be identified.** Skip unmatched tickets — do not guess.
 3. **NEVER overwrite an existing QA Contact value.** The JQL query already filters for empty values, but if a ticket somehow has one set, skip it.
 4. Never hardcode JQL, field IDs, or detection keywords — read from `agents/jira-bugs-missing-qe/data/config.json`.
-5. Jira `cloudId` is always `"redhat.atlassian.net"`.
+5. Read `jira.cloud_id` from config as the DNS hostname for `--site`; never use a cloud UUID.
 6. QA Contact custom field: `customfield_10470`. Set it as `{ "accountId": "{account_id}" }`.
 7. Changelog transitions take priority over comment keywords (more reliable signal). ON_QA→Closed is a lower-confidence fallback.
 8. If an update fails, log the error, continue with remaining tickets — do not STOP.

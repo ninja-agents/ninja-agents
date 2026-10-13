@@ -39,7 +39,7 @@ Prefix every status line with `[N/6]` where N is the current step number. Displa
 
 Read `agents/jira-add-missing-activity-type/data/config.json` to get:
 
-- `jira.cloud_id` — always `"redhat.atlassian.net"`
+- `jira.cloud_id` — configured Jira DNS hostname for REST reads
 - `jira.jql` — the JQL query to find tickets missing Activity Type
 - `jira.activity_type_field` — the custom field ID (`customfield_10464`)
 - `classification_rules[]` — ordered list of rules, each with `activity_type` (value + id) and `match` conditions (issue_types, labels, keywords)
@@ -53,30 +53,13 @@ rm -f agents/jira-add-missing-activity-type/data/cache/*.csv agents/jira-add-mis
 
 ## Step 2: Fetch Tickets
 
-Launch a single Jira query to find all tickets missing Activity Type:
+Run one command from the repository root, substituting `jira.cloud_id` and the exact `jira.jql` from config as shell-quoted arguments:
 
-```
-mcp__atlassian__searchJiraIssuesUsingJql:
-  cloudId: "redhat.atlassian.net"
-  jql: '{jql from config}'
-  maxResults: 100
-  fields: ["summary", "issuetype", "labels"]
-  responseContentFormat: "markdown"
+```bash
+node --import tsx scripts/jira-rest.ts --site '{jira.cloud_id}' search --jql '{jira.jql}' --fields summary,issuetype,labels
 ```
 
-### Pagination
-
-If the query returns exactly 100 results, paginate using `nextPageToken`:
-
-```
-mcp__atlassian__searchJiraIssuesUsingJql:
-  cloudId: "redhat.atlassian.net"
-  jql: '{same JQL}'
-  maxResults: 100
-  nextPageToken: "{token from previous response}"
-```
-
-Repeat until fewer than 100 results are returned. Combine all pages before proceeding.
+Reads require `JIRA_EMAIL` and `JIRA_API_TOKEN` in the environment only. `--site` is the configured DNS hostname, never a cloud UUID. Exit 0 emits one native JSON object `{issues:[...]}`; the command completes pagination internally, including short pages with continuation tokens. Do not add `--limit` or perform a second collection path. Use the returned `issues` array for the existing CSV mapping below.
 
 Display: `[2/6] Fetched {count} tickets missing Activity Type.`
 
@@ -85,7 +68,7 @@ Display: `[2/6] Fetched {count} tickets missing Activity Type.`
 After data collection, verify:
 
 - Check the Jira query succeeded (no errors). If the query returned 0 tickets: display "No tickets found missing Activity Type. Nothing to do." STOP.
-- If the MCP call returned an error: display the error, STOP, ask user how to proceed.
+- On exit 1, display the safe stderr diagnostic and STOP before saving caches, classification, preview, or approval. No partial JSON is usable.
 
 If validation fails, display what's missing and STOP.
 
@@ -155,7 +138,7 @@ Wait for the user's response:
 
 ## Step 6: Apply Updates and Write Summary
 
-Run the apply script to update tickets via the Jira REST API. This uses Basic Auth with `JIRA_API_TOKEN` (env var) and `jira.user_email` (from config) — not the Rovo MCP, which cannot write to these issues.
+Run the existing apply script to update tickets via the Jira REST API. This uses Basic Auth with `JIRA_API_TOKEN` (env var) and `jira.user_email` (from config).
 
 ```bash
 npx tsx agents/jira-add-missing-activity-type/scripts/apply-activity-types.ts --config agents/jira-add-missing-activity-type/data/config.json --cache agents/jira-add-missing-activity-type/data/cache
@@ -207,7 +190,7 @@ After the script completes, display its output to the user.
 1. **NEVER update a ticket without explicit user approval.** The preview and confirmation in Step 5 is non-negotiable.
 2. **NEVER overwrite an existing Activity Type value.** The JQL query already filters for empty values, but if a ticket somehow has one set, skip it.
 3. Never hardcode JQL, field IDs, or classification rules — read from `agents/jira-add-missing-activity-type/data/config.json`.
-4. Jira `cloudId` is always `"redhat.atlassian.net"`.
+4. Read `jira.cloud_id` from config as the DNS hostname for `--site`; never use a cloud UUID.
 5. Activity Type custom field: `customfield_10464`. Set it as `{ "id": "{option_id}" }` — not by value string.
 6. Classification rules are applied in config order (first match wins). Tickets matching no rule get the default Activity Type.
 7. If an update fails, log the error, continue with remaining tickets — do not STOP.

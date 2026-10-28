@@ -55,6 +55,8 @@ The agent writes Highlights and the product Summary. All other sections are gene
 
 If the collector exits 1, display its diagnostic and STOP before report generation; do not substitute empty data or add a second root-CLI collection path.
 
+The collector spaces sequential GitHub requests at least 2.1 seconds apart across engineers. HTTP 429 and rate-limit HTTP 403 responses trigger up to three retries: it honors `Retry-After` and primary quota reset headers, waits at least 60 seconds, and doubles the cooldown after each retry. Other GitHub HTTP errors, transport errors, and exhausted retries exit 1 before replacing the GitHub PR cache; failed queries never count as empty activity. Diagnostics include the failed URL and response body. See [GitHub's rate-limit guidance](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api#exceeding-the-rate-limit).
+
 ## Output Format
 
 - **Summary > Highlights** — agent-written completed business outcomes

@@ -7,6 +7,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseHierarchyIssue, type HierarchyNode } from "./jira-hierarchy.js";
+import { createGithubRequest } from "./collector-helpers.js";
 
 const SCRIPT_DIR = import.meta.dirname;
 const DATA_DIR = resolve(SCRIPT_DIR, "..", "data");
@@ -132,24 +133,7 @@ const JIRA_EMAIL = process.env.JIRA_EMAIL ?? "";
 
 // --- HTTP helpers ---
 
-async function githubRequest(url: string): Promise<Record<string, unknown>> {
-  try {
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `token ${GITHUB_PAT}`,
-        Accept: "application/vnd.github.v3+json",
-      },
-    });
-    if (!res.ok) {
-      console.error(`  GitHub error ${res.status}: ${url.slice(0, 80)}`);
-      return { items: [] };
-    }
-    return (await res.json()) as Record<string, unknown>;
-  } catch (e) {
-    console.error(`  GitHub error: ${String(e)}`);
-    return { items: [] };
-  }
-}
+const githubRequest = createGithubRequest(GITHUB_PAT);
 
 async function gitlabRequest(url: string): Promise<unknown[]> {
   try {
@@ -852,4 +836,9 @@ async function main(): Promise<void> {
 }
 
 const isDirectRun = process.argv[1]?.endsWith("fetch-data.ts");
-if (isDirectRun) void main();
+if (isDirectRun) {
+  void main().catch((error: unknown) => {
+    console.error(`Fatal collection error: ${String(error)}`);
+    process.exitCode = 1;
+  });
+}

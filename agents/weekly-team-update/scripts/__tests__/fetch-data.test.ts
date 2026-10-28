@@ -303,102 +303,6 @@ describe("fetch-data integration", () => {
     delete process.env.GITLAB_PAT;
   });
 
-  describe("GitHub API Handling", () => {
-    it("should handle successful GitHub PR fetch", async () => {
-      const mockPr = {
-        number: 123,
-        title: "Test PR",
-        repository_url: "https://api.github.com/repos/org/repo",
-        state: "open",
-        created_at: "2026-08-15T10:00:00Z",
-        html_url: "https://github.com/org/repo/pull/123",
-        body: "Fixes #456",
-        pull_request: {},
-      };
-
-      fetchMock.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ items: [mockPr] }),
-      });
-
-      // The script would process this
-      const response = await fetch("test-url");
-      const data = (await response.json()) as { items: unknown[] };
-
-      expect(data.items).toHaveLength(1);
-      expect(data.items[0]).toMatchObject({
-        number: 123,
-        title: "Test PR",
-      });
-    });
-
-    it("should handle GitHub API errors gracefully", async () => {
-      fetchMock.mockResolvedValue({
-        ok: false,
-        status: 403,
-      });
-
-      const response = await fetch("test-url");
-      expect(response.ok).toBe(false);
-      expect(response.status).toBe(403);
-    });
-
-    it("should handle GitHub network errors", async () => {
-      fetchMock.mockRejectedValue(new Error("Network error"));
-
-      await expect(fetch("test-url")).rejects.toThrow("Network error");
-    });
-
-    it("should handle empty GitHub PR list", async () => {
-      fetchMock.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ items: [] }),
-      });
-
-      const response = await fetch("test-url");
-      const data = (await response.json()) as { items: unknown[] };
-
-      expect(data.items).toHaveLength(0);
-    });
-
-    it("should parse repository name from repository_url", () => {
-      const repoUrl = "https://api.github.com/repos/openshift/console";
-      const repoParts = repoUrl.split("/");
-      const repo =
-        repoParts.length >= 2
-          ? `${repoParts[repoParts.length - 2]}/${repoParts[repoParts.length - 1]}`
-          : "";
-
-      expect(repo).toBe("openshift/console");
-    });
-
-    it("should handle malformed repository_url", () => {
-      const repoUrl = "invalid-url";
-      const repoParts = repoUrl.split("/");
-      const repo =
-        repoParts.length >= 2
-          ? `${repoParts[repoParts.length - 2]}/${repoParts[repoParts.length - 1]}`
-          : "";
-
-      expect(repo).toBe("");
-    });
-
-    it("should deduplicate PRs by key (repo:number)", () => {
-      const seenPrKeys = new Set<string>();
-      const key1 = "https://api.github.com/repos/org/repo:123";
-      const key2 = "https://api.github.com/repos/org/repo:123";
-      const key3 = "https://api.github.com/repos/org/repo:456";
-
-      seenPrKeys.add(key1);
-
-      expect(seenPrKeys.has(key2)).toBe(true);
-      expect(seenPrKeys.has(key3)).toBe(false);
-
-      seenPrKeys.add(key3);
-      expect(seenPrKeys.size).toBe(2);
-    });
-  });
-
   describe("Jira API Handling", () => {
     it("should handle successful Jira ticket fetch", async () => {
       const mockTicket = {
@@ -967,20 +871,6 @@ describe("fetch-data integration", () => {
       } catch (e) {
         expect(String(e)).toContain("Network timeout");
       }
-    });
-
-    it("should return empty results on API errors", async () => {
-      fetchMock.mockResolvedValue({
-        ok: false,
-        status: 500,
-        text: () => Promise.resolve("Internal Server Error"),
-      });
-
-      const response = await fetch("test-url");
-
-      // Script returns { items: [] } on GitHub errors
-      // and { issues: [] } on Jira errors
-      expect(response.ok).toBe(false);
     });
   });
 

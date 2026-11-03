@@ -1485,11 +1485,18 @@ describe("config helpers", () => {
     expect(map.size).toBe(config!.engineers.length);
   });
 
-  it.skipIf(!config)("buildJiraDisplayToName maps display names", () => {
-    const map = buildJiraDisplayToName(config!);
-    expect(map.size).toBeGreaterThan(0);
-    expect(map.get("Scott Dickerson")).toBe("Scott Dickers");
-  });
+  it.skipIf(!config)(
+    "buildJiraDisplayToName maps every alias to its engineer",
+    () => {
+      const map = buildJiraDisplayToName(config!);
+      expect(map.size).toBeGreaterThan(0);
+      for (const e of config!.engineers) {
+        for (const dn of e.jira_display_names ?? []) {
+          expect(map.get(dn)).toBe(e.name);
+        }
+      }
+    },
+  );
 
   it.skipIf(!config)("buildTicketIdRe matches known prefixes", () => {
     const re = buildTicketIdRe(config!);

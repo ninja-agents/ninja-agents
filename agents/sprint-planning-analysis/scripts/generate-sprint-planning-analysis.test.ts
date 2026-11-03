@@ -2300,6 +2300,9 @@ describe("target-sprint completed-work credit", () => {
     const dm = text.split("**Alice**\n")[1].split("\n")[0];
     expect(dm).toContain("**26 SP planned**");
     expect(dm).toContain("avg. SP is 20 (20)");
+    expect(text).toContain(
+      "> Reduced availability: **50% capacity**, so plan for about **16 SP** total including 6 SP already done.",
+    );
     expect(dm).not.toMatch(
       /already done|completed|remaining|recommended|capacity|PTO|shorter sprint|thanks/i,
     );

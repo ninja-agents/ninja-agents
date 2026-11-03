@@ -371,6 +371,40 @@ describe("loadCustomerCases", () => {
   });
 });
 
+describe("loadGithubPrs / loadGitlabMrs", () => {
+  it("resolves cached legacy engineer names through the configured aliases", () => {
+    const dir = resolve(tmpdir(), `prs-alias-${process.pid}`);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      resolve(dir, "github-prs.csv"),
+      [
+        "engineer,number,title,repo,state,created_at,merged_at,html_url,issue_refs",
+        "Scott Dickers,1,Legacy row,o/r,merged,2026-11-01T00:00:00Z,2026-11-02T00:00:00Z,https://example/1,",
+        "Scott Dickerson,2,Canonical row,o/r,merged,2026-11-01T00:00:00Z,2026-11-02T00:00:00Z,https://example/2,",
+      ].join("\n"),
+    );
+    writeFileSync(
+      resolve(dir, "gitlab-mrs.csv"),
+      [
+        "engineer,iid,title,project_path,state,created_at,merged_at,web_url",
+        "Phillip Bailey,7,Legacy MR,p/r,merged,2026-11-01T00:00:00Z,2026-11-02T00:00:00Z,https://example/mr/7",
+      ].join("\n"),
+    );
+    const alias = new Map([
+      ["Scott Dickers", "Scott Dickerson"],
+      ["Phillip Bailey", "Phillip Rhodes"],
+    ]);
+    const prs = loadGithubPrs(dir, alias);
+    expect(prs.map((p) => p.engineer)).toEqual([
+      "Scott Dickerson",
+      "Scott Dickerson",
+    ]);
+    const mrs = loadGitlabMrs(dir, alias);
+    expect(mrs[0].engineer).toBe("Phillip Rhodes");
+    rmSync(dir, { recursive: true });
+  });
+});
+
 describe("mergeCustomerCases", () => {
   it("merges cases into matching tickets", () => {
     const tickets = [

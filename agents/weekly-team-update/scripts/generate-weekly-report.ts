@@ -298,7 +298,22 @@ export function parseDate(s: string): Date | null {
 // Data loading
 // ---------------------------------------------------------------------------
 
-export function loadGithubPrs(cacheDir: string): PRItem[] {
+// The cache stores the engineer name resolved at fetch time. Resolve it again
+// through the configured jira_display_names aliases so an engineer renamed
+// after the cache was built keeps their PRs instead of splitting into a second
+// group under the old name.
+function resolveCachedEngineer(
+  name: string,
+  jiraDisplayToName?: Map<string, string>,
+): string {
+  if (!name) return name;
+  return jiraDisplayToName?.get(name) ?? name;
+}
+
+export function loadGithubPrs(
+  cacheDir: string,
+  jiraDisplayToName?: Map<string, string>,
+): PRItem[] {
   const rows = loadCsvFile(resolve(cacheDir, "github-prs.csv"));
   const items: PRItem[] = [];
   for (const r of rows) {
@@ -313,7 +328,7 @@ export function loadGithubPrs(cacheDir: string): PRItem[] {
         : [];
       const refs = refsRaw.map((x) => x.replace(/^#/, ""));
       items.push({
-        engineer: r.engineer ?? "",
+        engineer: resolveCachedEngineer(r.engineer ?? "", jiraDisplayToName),
         number: parseInt(r.number ?? "0", 10),
         title: r.title ?? "",
         repo: r.repo ?? "",
@@ -335,13 +350,16 @@ export function loadGithubPrs(cacheDir: string): PRItem[] {
   return items;
 }
 
-export function loadGitlabMrs(cacheDir: string): PRItem[] {
+export function loadGitlabMrs(
+  cacheDir: string,
+  jiraDisplayToName?: Map<string, string>,
+): PRItem[] {
   const rows = loadCsvFile(resolve(cacheDir, "gitlab-mrs.csv"));
   const items: PRItem[] = [];
   for (const r of rows) {
     try {
       items.push({
-        engineer: r.engineer ?? "",
+        engineer: resolveCachedEngineer(r.engineer ?? "", jiraDisplayToName),
         number: parseInt(r.iid ?? "0", 10),
         title: r.title ?? "",
         repo: r.project_path ?? "",
@@ -1717,8 +1735,9 @@ export function main(argv: string[] = process.argv): void {
 
   // Load data
   console.log(`Loading CSVs from ${cacheDir}/...`);
-  const githubPrs = loadGithubPrs(cacheDir);
-  const gitlabMrs = loadGitlabMrs(cacheDir);
+  const jiraDisplayToName = buildJiraDisplayToName(config);
+  const githubPrs = loadGithubPrs(cacheDir, jiraDisplayToName);
+  const gitlabMrs = loadGitlabMrs(cacheDir, jiraDisplayToName);
   const jiraTickets = loadJiraTickets(cacheDir, config);
   const customerCases = loadCustomerCases(cacheDir);
   mergeCustomerCases(jiraTickets, customerCases);

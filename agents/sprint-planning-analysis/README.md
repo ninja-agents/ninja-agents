@@ -79,21 +79,31 @@ Example: 20 SP average + 6 SP already Done recommends **26 total SP**, leaving
 
 Each eligible engineer's primary DM contains two sentences: planned SP, historical
 average with a chronological per-sprint breakdown, and “let's plan accordingly”.
-Historical zero values remain `0`; missing sprint entries remain `-`. Engineers
-without a velocity baseline do not receive a primary DM.
+When capacity is below normal, a third line follows: the PTO days out and days
+available (or just the reduced capacity for a shortened sprint), the capacity
+percentage, and the sustainable total SP including completed credit. Full-capacity
+engineers get no such line. Historical zero values remain `0`; missing sprint
+entries remain `-`. Engineers without a velocity baseline do not receive a primary
+DM.
 
-Completed credit, PTO/shorter-sprint capacity adjustments, recommendations and
-risks remain in the detailed report sections. Tech-lead direct-report bullets
-retain their detailed credit, remaining work, capacity, recommendations and risk.
+Completed credit, recommendations and risks remain in the detailed report
+sections; capacity appears in the primary DM as that single availability line.
+Tech-lead direct-report bullets retain their detailed credit, remaining work,
+capacity, recommendations and risk, and, when present, the repeated drop/keep
+question with nested multi-sprint item lines.
 
 Eligible primary DMs get a separate drop/keep question for unfinished,
 non-Duplicate items with full target membership and more than one distinct
 started Jira sprint ID. Only `closed` and `active` memberships count; all `future`
 memberships, including an upcoming target, are excluded independently of the
 velocity lookback. Each linked item lists only its started-sprint count and names.
-Ownership follows the assignee plus a distinct configured QE QA contact; a tech
-lead does not inherit direct-report items. Known zero historical averages remain
-eligible; engineers without a baseline receive neither message.
+Ownership follows the assignee plus a distinct configured QE QA contact. A tech
+lead's own drop/keep list covers only items they own; the "Additional info" block
+repeats the same drop/keep question under each direct report that has qualifying
+items, followed by that report's nested item bullets, so the lead can answer for
+those items too. Both asks request a decision only. Known zero
+historical averages remain eligible; engineers without a baseline receive neither
+message.
 
 The collector appends `sprint_history` as CSV-escaped JSON of normalized
 `{id, name, state}` memberships, including future ones, without changing the

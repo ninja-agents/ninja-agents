@@ -2381,7 +2381,7 @@ describe("zero target-credit presentation", () => {
   );
 
   it.each(["PTO", "shorter sprint"] as const)(
-    "preserves %s calculations with simple DMs and no zero-credit additions",
+    "preserves %s calculations with an explicit availability line in the DM",
     (kind) => {
       const config: SprintConfig = {
         ...BASE_CONFIG,
@@ -2434,6 +2434,11 @@ describe("zero target-credit presentation", () => {
       expect(dm).toContain("avg. SP is 20 (20)");
       expect(dm).not.toMatch(
         /already done|completed|remaining|recommended|capacity|PTO|shorter sprint|thanks/i,
+      );
+      expect(text).toContain(
+        kind === "PTO"
+          ? "> Reduced availability: 5d out of 10d sprint, 5d available → **50% capacity**, so plan for about **10 SP** total."
+          : "> Reduced availability: **50% capacity**, so plan for about **10 SP** total.",
       );
       expect(text.replace(/^\|.*$/gm, "")).not.toMatch(/already done|\+ 0/i);
     },
@@ -2698,7 +2703,7 @@ describe("multi-sprint DM followups", () => {
     expect(text).not.toContain("> These unfinished");
   });
 
-  it("places a lead's own review before unchanged lead details without copying direct-report items", () => {
+  it("holds the drop/keep question in front of each direct report's nested multi-sprint items", () => {
     const config: SprintConfig = {
       ...BASE_CONFIG,
       tech_leads: { Alice: ["Bob"] },
@@ -2708,19 +2713,30 @@ describe("multi-sprint DM followups", () => {
       makeIssue({ key: "BOB", assignee_id: "bob-id", sprint_history: history }),
     ];
     const { text } = render(issues, { config });
-    const { text: before } = render(
-      issues.map((issue) => ({ ...issue, sprint_history: null })),
-      { config },
-    );
     const alice = dm(text, "Alice");
     expect(alice).toContain("> - [ALICE]");
-    expect(alice).not.toContain("> - [BOB]");
-    expect(alice.indexOf("> These unfinished")).toBeLessThan(
+    expect(alice.indexOf("> - [ALICE]")).toBeLessThan(
       alice.indexOf("> Additional info"),
     );
-    expect(alice.split("> Additional info")[1]).toBe(
-      dm(before, "Alice").split("> Additional info")[1],
+    expect(alice.split("> Additional info")[0]).not.toContain("> - [BOB]");
+    const reportLines = alice.split("> Additional info")[1].split("\n");
+    const bobIndex = reportLines.findIndex((line) =>
+      line.startsWith("> - Bob:"),
     );
+    expect(bobIndex).toBeGreaterThan(-1);
+    expect(reportLines[bobIndex + 1]).toBe(
+      ">   These unfinished items span more than one started sprint. Should we drop any of them from Test Sprint 2? Please indicate which to drop or keep:",
+    );
+    expect(reportLines[bobIndex + 2]).toMatch(/^> {3}- \[BOB\]\(/);
+    expect(reportLines[bobIndex + 2]).toMatch(
+      /\(2 started sprints: Test Sprint 0, Test Sprint 1\)$/,
+    );
+    expect(
+      alice.match(
+        /^> {1,3}These unfinished items span more than one started sprint\. Should we drop/gm,
+      )?.length,
+    ).toBe(2);
     expect(dm(text, "Bob")).toContain("> - [BOB]");
+    expect(dm(text, "Bob")).toContain("> These unfinished");
   });
 });

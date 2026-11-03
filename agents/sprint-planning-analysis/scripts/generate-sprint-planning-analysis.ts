@@ -661,7 +661,7 @@ export function calculateCapacityAdjustment(
 
   return {
     capacity_pct: capacityPct,
-    pto_details: `${engineerPTO.workdays_out}d out of ${actualWorkdays}d sprint`,
+    pto_details: `${engineerPTO.workdays_out}d out of ${actualWorkdays}d sprint, ${engineerPTO.workdays_available}d available`,
   };
 }
 
@@ -1526,6 +1526,15 @@ export function formatReport(
       ln(
         `> From the planning agent, you currently have **${spStr(loadEntry.target_sp)} SP planned**. Your avg. SP is ${spStr(p.avg_sp)}${breakdown}; let's plan accordingly.`,
       );
+      if (loadEntry.capacity_pct < 1) {
+        const pct = Math.round(loadEntry.capacity_pct * 100);
+        const availability = loadEntry.pto_details
+          ? `${loadEntry.pto_details} → `
+          : "";
+        ln(
+          `> Reduced availability: ${availability}**${pct}% capacity**, so plan for about **${spStr(loadEntry.recommended_sp)} SP** total${loadEntry.completed_sp !== 0 ? ` including ${spStr(loadEntry.completed_sp)} SP already done` : ""}.`,
+        );
+      }
       const reviewItems = reviewByOwner.get(p.name);
       if (reviewItems && reviewItems.length > 0) {
         ln(">");
@@ -1563,6 +1572,17 @@ export function formatReport(
           ln(
             `> - ${reportName}: ${spStr(rl.target_sp)} SP assigned${rl.completed_sp !== 0 ? `, ${spStr(rl.completed_sp)} SP already done` : ""}, ${spStr(rl.remaining_sp)} SP remaining, avg ${rl.baseline_sprints > 0 ? spStr(rAvgSp) + " SP" : "no baseline"}${rBreakdown}, ${rCapacity}% capacity, recommended total ${rl.baseline_sprints > 0 ? spStr(rl.recommended_sp) + " SP" : "no baseline"} → ${rRatio} remaining load (${rRisk})`,
           );
+          const reportReviewItems = reviewByOwner.get(reportName) ?? [];
+          if (reportReviewItems.length > 0) {
+            ln(
+              `>   These unfinished items span more than one started sprint. Should we drop any of them from ${sprintName}? Please indicate which to drop or keep:`,
+            );
+            for (const item of reportReviewItems) {
+              ln(
+                `>   - [${item.key}](${item.url}) — ${item.summary} (${item.sprints.length} started sprints: ${item.sprints.map((s) => s.name).join(", ")})`,
+              );
+            }
+          }
         }
       }
 

@@ -363,12 +363,42 @@ export function loadVelocityHistory(jsonPath: string): VelocityHistory | null {
   return JSON.parse(readFileSync(jsonPath, "utf-8")) as VelocityHistory;
 }
 
+// Cached velocity summaries store the engineer name as it looked when that
+// sprint was fetched. Resolve those names through the configured
+// jira_display_names aliases so a renamed engineer keeps their history instead
+// of silently regressing to "no baseline". Rows that resolve to the same
+// engineer are combined rather than dropped.
+export function buildVelocityEngineerMap(
+  byEngineer: VelocitySummary["by_engineer"],
+  displayToName: Map<string, string>,
+): Map<string, VelocitySummary["by_engineer"][number]> {
+  const map = new Map<string, VelocitySummary["by_engineer"][number]>();
+  for (const entry of byEngineer) {
+    const name = displayToName.get(entry.name.toLowerCase()) ?? entry.name;
+    const existing = map.get(name);
+    map.set(
+      name,
+      existing
+        ? {
+            name,
+            assigned: existing.assigned + entry.assigned,
+            completed: existing.completed + entry.completed,
+            sp_completed: existing.sp_completed + entry.sp_completed,
+            sp_remaining: existing.sp_remaining + entry.sp_remaining,
+          }
+        : { ...entry, name },
+    );
+  }
+  return map;
+}
+
 export function computeIndividualVelocityAverages(
   previousVelocities: VelocitySummary[],
   config: SprintConfig,
 ): IndividualVelocityAverage[] {
-  const byNameMaps = previousVelocities.map(
-    (v) => new Map(v.by_engineer.map((e) => [e.name, e])),
+  const displayToName = buildDisplayToName(config);
+  const byNameMaps = previousVelocities.map((v) =>
+    buildVelocityEngineerMap(v.by_engineer, displayToName),
   );
 
   const roleMap = new Map(config.engineers.map((e) => [e.name, e.role]));
@@ -680,7 +710,10 @@ export function computeLoadDistribution(
     displayToName,
   );
 
-  const velByEngineer = new Map(velocity.by_engineer.map((e) => [e.name, e]));
+  const velByEngineer = buildVelocityEngineerMap(
+    velocity.by_engineer,
+    displayToName,
+  );
   const avgByName = individualAverages
     ? new Map(individualAverages.map((a) => [a.name, a]))
     : null;

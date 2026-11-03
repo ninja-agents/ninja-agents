@@ -588,6 +588,35 @@ describe("computeLoadDistribution", () => {
     expect(alice.load_ratio).toBe(1);
   });
 
+  it("uses a cached display-name alias as the baseline", () => {
+    const issues = [
+      makeIssue({ key: "T-1", assignee_id: "bob-id", story_points: 20 }),
+    ];
+    const velocity = makeVelocity({
+      by_engineer: [
+        {
+          name: "Bob Jones",
+          assigned: 30,
+          completed: 24,
+          sp_completed: 40,
+          sp_remaining: 20,
+        },
+      ],
+    });
+    const load = computeLoadDistribution(
+      issues,
+      velocity,
+      BASE_CONFIG,
+      accountIdToName,
+      displayToName,
+    );
+    const bob = load.find((l) => l.name === "Bob")!;
+    expect(bob.prev_sp_completed).toBe(40);
+    expect(bob.prev_completed).toBe(24);
+    expect(bob.baseline_sprints).toBe(1);
+    expect(bob.risk).not.toBe("new");
+  });
+
   it("flags heavy when load > 1.5x previous", () => {
     const issues = [
       makeIssue({ key: "T-1", assignee_id: "alice-id", story_points: 100 }),
@@ -1224,6 +1253,51 @@ describe("computeIndividualVelocityAverages", () => {
     const bob = result.find((r) => r.name === "Bob")!;
     expect(bob.avg_sp_completed).toBe(50);
     expect(bob.avg_items_completed).toBe(21);
+  });
+
+  it("resolves cached display-name aliases to the configured engineer", () => {
+    // A cache written before a rename still keys by the old Jira display name.
+    const stale = makeVelocity({
+      by_engineer: [
+        {
+          name: "Bob Jones",
+          assigned: 30,
+          completed: 24,
+          sp_completed: 60,
+          sp_remaining: 20,
+        },
+      ],
+    });
+    const result = computeIndividualVelocityAverages([stale], BASE_CONFIG);
+    const bob = result.find((r) => r.name === "Bob")!;
+    expect(bob.sprints_available).toBe(1);
+    expect(bob.avg_sp_completed).toBe(60);
+    expect(bob.avg_items_completed).toBe(24);
+  });
+
+  it("combines alias and canonical rows for the same engineer", () => {
+    const stale = makeVelocity({
+      by_engineer: [
+        {
+          name: "Bob Jones",
+          assigned: 30,
+          completed: 24,
+          sp_completed: 60,
+          sp_remaining: 20,
+        },
+        {
+          name: "Bob",
+          assigned: 10,
+          completed: 5,
+          sp_completed: 20,
+          sp_remaining: 0,
+        },
+      ],
+    });
+    const result = computeIndividualVelocityAverages([stale], BASE_CONFIG);
+    const bob = result.find((r) => r.name === "Bob")!;
+    expect(bob.avg_sp_completed).toBe(80);
+    expect(bob.avg_items_completed).toBe(29);
   });
 
   it("computes 3-sprint average correctly", () => {

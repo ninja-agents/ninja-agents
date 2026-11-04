@@ -56,6 +56,26 @@ describe("parseLinks", () => {
     expect(links).toHaveLength(2);
   });
 
+  it("does not attribute links under a new section to the previous engineer", () => {
+    const content = [
+      "## In Progress",
+      "",
+      "**Alice Brown:**",
+      "- [PR #1 - Fix](https://github.com/org/repo/pull/1)",
+      "",
+      "## Recommendations",
+      "",
+      "| Item | Why |",
+      "| --- | --- |",
+      "| [PR #900 - Tidy](https://github.com/org/repo/pull/900) | Open 4d without merge |",
+    ].join("\n");
+
+    const links = parseLinks(content);
+
+    expect(links[0].engineer).toBe("Alice Brown");
+    expect(links[1].engineer).toBeNull();
+  });
+
   it("returns empty for content with no links", () => {
     expect(parseLinks("Just plain text")).toHaveLength(0);
   });

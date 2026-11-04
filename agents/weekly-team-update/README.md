@@ -34,6 +34,7 @@ Fetch the CSV cache, then run the report scripts:
 ```bash
 node --import tsx agents/weekly-team-update/scripts/fetch-data.ts
 npx tsx agents/weekly-team-update/scripts/generate-weekly-report.ts --date 2026-05-06
+npx tsx agents/weekly-team-update/scripts/finalize-report.ts --date 2026-05-06
 npx tsx agents/weekly-team-update/scripts/validate-report-links.ts
 ```
 
@@ -47,11 +48,14 @@ npx tsx agents/weekly-team-update/scripts/validate-report-links.ts
    - GitLab MRs (merged + open) for each engineer, with `scope=all`
 3. Merges per-engineer and sprint-based Jira results (dedup by key), follows Jira parent links for weekly work and PR references, and saves normalized CSVs in `data/cache/`
 4. Runs `scripts/generate-weekly-report.ts` for deterministic formatting (body sections)
-5. Agent writes Highlights and product summaries using the generated context; product summaries group relevant work under linked Features and Epics
-6. Validates all links with `scripts/validate-report-links.ts`
-7. Saves report to `data/output/weekly-update-{date}.md`
+5. Runs `scripts/finalize-report.ts` to verify backport claims and append the Recommendations section
+6. Agent writes Highlights and product summaries using the generated context; product summaries group relevant work under linked Features and Epics
+7. Validates all links with `scripts/validate-report-links.ts`
+8. Saves report to `data/output/weekly-update-{date}.md`
 
 The agent writes Highlights and the product Summary. All other sections are generated deterministically by the TypeScript script.
+
+The local-LLM variant (`scripts/run-local.ts`) runs the same stages, including backport verification and the Recommendations section, and filters its prompt context so the model never sees a version the verified report dropped.
 
 If the collector exits 1, display its diagnostic and STOP before report generation; do not substitute empty data or add a second root-CLI collection path.
 
@@ -64,6 +68,7 @@ The collector spaces sequential GitHub requests at least 2.1 seconds apart acros
 - **Completed This Week** — by product, then engineer, PRs nested under Jira tickets
 - **In Progress** — same structure
 - **Blockers & Critical Issues** — real external blockers only
+- **Recommendations** — deterministic follow-up table for backports, review, stale PRs, and stalled tickets
 
 ## Setup
 
@@ -82,6 +87,7 @@ Edit `data/team-config.json` to customize:
 - **Publishing destination and fork** in `publishing.github_repository` and `publishing.github_fork` (`OWNER/REPO`); the real values stay in the gitignored `team-config.json`
 - **Jira** cloud ID, filter ID, and base URL
 - **Products** with Jira prefixes and tracked repos
+- **Follow-up thresholds** in `followups` (`pending_review_days`, `stale_pr_days`, `stale_ticket_days`, `max_rows_per_category`) for the Recommendations section
 - **Engineers** with GitHub/GitLab usernames and Jira account IDs (product is inferred from work item data)
 
 To find a Jira account ID, use the root CLI with the DNS hostname from `jira.cloud_id` (not a URL or cloud UUID):
@@ -102,6 +108,7 @@ agents/weekly-team-update/
 ├── scripts/
 │   ├── fetch-data.ts               # Direct GitHub, Jira, and GitLab API collector
 │   ├── generate-weekly-report.ts    # Deterministic report generator
+│   ├── finalize-report.ts           # Backport verification + Recommendations section
 │   ├── validate-report-links.ts     # Link validation
 │   └── __tests__/                   # Vitest test suites
 └── data/

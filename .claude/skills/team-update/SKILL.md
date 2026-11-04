@@ -25,10 +25,11 @@ Launches the `weekly-team-update` agent which:
    - Nests PRs under their parent Jira tickets
    - Organizes by product and engineer
    - Generates formatted markdown with placeholders for Highlights and product summaries
-4. **Writes Summary** — the agent writes 2–4 completed business Highlights, then compact product bullets with linked Feature and Epic groups for relevant work. Product bullets omit outcomes already in Highlights.
-5. **Validates all links** via `agents/weekly-team-update/scripts/validate-report-links.ts`
-6. **Saves to file**: `agents/weekly-team-update/data/output/weekly-update-{YYYY-MM-DD}.md`
-7. **Displays** the report
+4. **Runs `agents/weekly-team-update/scripts/finalize-report.ts`** which verifies every backport claim against Jira fix versions, done clones, and merged release-branch PRs, then appends the deterministic `## Recommendations` section.
+5. **Writes Summary** — the agent writes 2–4 completed business Highlights, then compact product bullets with linked Feature and Epic groups for relevant work. Product bullets omit outcomes already in Highlights.
+6. **Validates all links** via `agents/weekly-team-update/scripts/validate-report-links.ts`
+7. **Saves to file**: `agents/weekly-team-update/data/output/weekly-update-{YYYY-MM-DD}.md`
+8. **Displays** the report
 
 **Time:** Varies with Jira parent lookups.
 
@@ -56,6 +57,10 @@ A weekly report with:
 
 - Real external blockers only
 - Omitted entirely if no blockers exist
+
+### Recommendations
+
+- Deterministic follow-up table: remaining backports, open backport PRs, PRs awaiting review, stale PRs, stalled tickets
 
 ## Critical Rules
 

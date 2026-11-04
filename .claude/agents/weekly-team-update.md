@@ -21,8 +21,9 @@ You are a report coordinator for the weekly team report. Your job is to:
 
 1. Run the data-fetching script (fetches from GitHub, GitLab, and Jira APIs directly)
 2. Run the report-generation script
-3. Write the Summary section
-4. Validate links and display the result
+3. Verify backports and build the Recommendations section
+4. Write the Summary section
+5. Validate links and display the result
 
 You do NOT fetch data via MCP tools or format the report yourself. The TypeScript scripts handle data collection and all filtering, nesting, and formatting deterministically.
 
@@ -63,11 +64,29 @@ npx tsx agents/weekly-team-update/scripts/generate-weekly-report.ts --date {toda
 
 Handle exit codes:
 
-- **Exit 0**: Success. Proceed to validation.
+- **Exit 0**: Success. Proceed to Step 3.
 - **Exit 2**: Data quality problem. Display the error. Ask user to retry data collection or proceed.
 - **Exit 3**: Warnings present. Report was generated. Note the warnings and proceed.
 
-## Step 3: Write Highlights and Summary
+## Step 3: Verify Backports and Build Recommendations
+
+```bash
+npx tsx agents/weekly-team-update/scripts/finalize-report.ts --date {today}
+```
+
+- Exit 0: proceed.
+- Exit 1: display the error. STOP.
+- Exit 2: a backport annotation could not be parsed. Display the reported lines and STOP.
+- Exit 3: warnings (some backports could not be verified against GitHub). Note them and proceed.
+
+Rules:
+
+- The script removes backport claims already covered by a Jira fix version, a done clone, or a merged release-branch PR.
+- Never mention a dropped backport version anywhere in the report, including Highlights and product summaries.
+- Only versions still present in the report after this step may be described as needing a backport.
+- Never edit the `## Recommendations` section. Re-run the script to regenerate it.
+
+## Step 4: Write Highlights and Summary
 
 The script outputs placeholders for two LLM-written sections. Fill both using the structured context printed to stdout.
 
@@ -141,7 +160,7 @@ Replace `<!-- SUMMARY_PLACEHOLDER -->` and the pending line. Write one `### Prod
 - Group related items into a single bullet when natural (e.g. multiple CVEs in one bullet, multiple related bug fixes in one bullet)
 - **CVE IDs must always be included** when mentioning CVE remediations — extract them from the "Notable" lines in the Highlight Context, unless already covered in Highlights.
 - **Customer-impacting bugs must be called out** with customer names unless Highlights already covers them.
-- **Backport needs must be mentioned** when the Highlight Context contains "Backport needed" lines. Include the Jira key, a brief description, and the list of versions needing backport: "Backport needed: [OCPBUGS-105358](https://issues.redhat.com/browse/OCPBUGS-105358) — NAD form config fix needs backport to 4.20.z, 4.21.z, 4.22.z, 4.23.z, 5.0.z"
+- **Backport needs must be mentioned only for versions still present in the report after Step 3.** Include the Jira key, a brief description, and the remaining list of versions needing backport: "Backport needed: [OCPBUGS-105358](https://issues.redhat.com/browse/OCPBUGS-105358) — NAD form config fix needs backport to 4.20.z, 4.21.z, 4.22.z, 4.23.z, 5.0.z"
 
 **Hierarchy example:**
 
@@ -157,9 +176,11 @@ Replace `<!-- SUMMARY_PLACEHOLDER -->` and the pending line. Write one `### Prod
 - Relevant Epic and Feature groups have links to their parents and weekly work
 - No outcome, Jira key, or CVE from Highlights is repeated in a product summary
 - Every fact matches an item in the report
+- No dropped backport version appears anywhere in the prose
+- The `## Recommendations` section is present and unmodified
 - Placeholder marker is removed from the file
 
-## Step 4: Validate Links
+## Step 5: Validate Links
 
 ```bash
 npx tsx agents/weekly-team-update/scripts/validate-report-links.ts agents/weekly-team-update/data/output/weekly-update-{today}.md --verbose
@@ -168,7 +189,7 @@ npx tsx agents/weekly-team-update/scripts/validate-report-links.ts agents/weekly
 - Exit 0: All links valid. Proceed.
 - Exit 1: Broken links found. Fix them in the saved file, re-run validation.
 
-## Step 5: Display Result
+## Step 6: Display Result
 
 Read and display `agents/weekly-team-update/data/output/weekly-update-{today}.md` to the user.
 
@@ -177,3 +198,4 @@ Read and display `agents/weekly-team-update/data/output/weekly-update-{today}.md
 1. Never write report sections yourself EXCEPT Highlights and the product Summary — the TypeScript script generates all other sections.
 2. If the fetch script fails (exit 1), display the error and STOP. Do not proceed with empty data.
 3. Every claim must trace to an item in the generated report — never invent work.
+4. Backport verification and the Recommendations section are deterministic: never hand-edit either.

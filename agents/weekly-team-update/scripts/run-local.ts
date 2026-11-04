@@ -2,6 +2,7 @@
 import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { reconcileBackportClaims } from "./finalize-report.js";
 
 const SCRIPT_DIR = import.meta.dirname;
 const BASE_DIR = resolve(SCRIPT_DIR, "..");
@@ -153,11 +154,21 @@ async function main(): Promise<void> {
   const hcStart = genOutput.indexOf("--- Highlight Context ---");
   const highlightContext = hcStart >= 0 ? genOutput.slice(hcStart) : genOutput;
 
+  // Step 3: Verify backport claims and append Recommendations
+  run(
+    `npx tsx agents/weekly-team-update/scripts/finalize-report.ts --date ${TODAY} --report ${OUTPUT_PATH}`,
+    "Verifying backports and building Recommendations...",
+  );
+
   let report = readFileSync(OUTPUT_PATH, "utf-8");
+
+  // The generator's context predates verification, so drop the claims the
+  // report no longer makes before the model can echo them.
+  const verifiedContext = reconcileBackportClaims(highlightContext, report);
 
   if (report.includes("<!-- HIGHLIGHTS_PLACEHOLDER -->")) {
     const execSummary = await callLlm(
-      highlightContext,
+      verifiedContext,
       report,
       HIGHLIGHTS_SYSTEM_PROMPT,
     );
@@ -177,7 +188,7 @@ async function main(): Promise<void> {
         )?.[1]
         ?.trim() ?? "";
     let summary = await callLlm(
-      highlightContext,
+      verifiedContext,
       report,
       SUMMARY_SYSTEM_PROMPT,
       highlights,
@@ -185,7 +196,7 @@ async function main(): Promise<void> {
     let repeated = repeatedSummaryReferences(highlights, summary);
     if (repeated.length > 0) {
       summary = await callLlm(
-        highlightContext,
+        verifiedContext,
         report,
         SUMMARY_SYSTEM_PROMPT +
           "\nRemove every mention of these references already in Highlights: " +

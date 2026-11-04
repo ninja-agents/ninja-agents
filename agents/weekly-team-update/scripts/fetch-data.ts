@@ -50,6 +50,7 @@ interface GitHubPr {
   state: string;
   created_at: string;
   merged_at: string;
+  updated_at: string;
   html_url: string;
   issue_refs: string;
 }
@@ -114,6 +115,7 @@ interface GitLabMr {
   state: string;
   created_at: string;
   merged_at: string;
+  updated_at: string;
   web_url: string;
 }
 
@@ -401,6 +403,7 @@ async function main(): Promise<void> {
         state: "merged",
         created_at: str(pr.created_at),
         merged_at: mergedAt,
+        updated_at: str(pr.updated_at),
         html_url: str(pr.html_url),
         issue_refs: extractIssueRefs(pr.body as string | undefined),
       });
@@ -431,6 +434,7 @@ async function main(): Promise<void> {
         state: "open",
         created_at: str(pr.created_at),
         merged_at: "",
+        updated_at: str(pr.updated_at),
         html_url: str(pr.html_url),
         issue_refs: extractIssueRefs(pr.body as string | undefined),
       });
@@ -441,13 +445,13 @@ async function main(): Promise<void> {
   console.log(`  Total GitHub PRs: ${githubPrs.length}`);
 
   const githubCsvLines = [
-    "engineer,number,title,repo,state,created_at,merged_at,html_url,issue_refs",
+    "engineer,number,title,repo,state,created_at,merged_at,updated_at,html_url,issue_refs",
   ];
   for (const pr of githubPrs) {
     githubCsvLines.push(
       `${csvEscape(pr.engineer)},${pr.number},${csvEscape(pr.title)},` +
         `${pr.repo},${pr.state},${pr.created_at},${pr.merged_at},` +
-        `${pr.html_url},${pr.issue_refs}`,
+        `${pr.updated_at},${pr.html_url},${pr.issue_refs}`,
     );
   }
   writeFileSync(
@@ -715,6 +719,7 @@ async function main(): Promise<void> {
           state: "merged",
           created_at: str(mrObj.created_at),
           merged_at: str(mrObj.merged_at),
+          updated_at: str(mrObj.updated_at ?? ""),
           web_url: webUrl,
         });
       }
@@ -737,6 +742,7 @@ async function main(): Promise<void> {
           state: "open",
           created_at: str(mrObj.created_at),
           merged_at: "",
+          updated_at: str(mrObj.updated_at ?? ""),
           web_url: webUrl,
         });
       }
@@ -746,13 +752,13 @@ async function main(): Promise<void> {
   console.log(`  Total GitLab MRs: ${gitlabMrs.length}`);
 
   const gitlabCsvLines = [
-    "engineer,iid,title,project_path,state,created_at,merged_at,web_url",
+    "engineer,iid,title,project_path,state,created_at,merged_at,updated_at,web_url",
   ];
   for (const mr of gitlabMrs) {
     gitlabCsvLines.push(
       `${csvEscape(mr.engineer)},${mr.iid},${csvEscape(mr.title)},` +
         `${mr.project_path},${mr.state},${mr.created_at},` +
-        `${mr.merged_at},${mr.web_url}`,
+        `${mr.merged_at},${mr.updated_at},${mr.web_url}`,
     );
   }
   writeFileSync(

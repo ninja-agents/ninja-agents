@@ -67,6 +67,13 @@ export function parseLinks(content: string): LinkInfo[] {
     const line = lines[i];
     const lineNum = i + 1;
 
+    // Engineer headings only scope the bullets under them; a new section (for
+    // example the appended `## Recommendations` table) must not inherit the
+    // last engineer, or PR author checks fail for other people's PRs.
+    if (line.startsWith("## ")) {
+      currentEngineer = null;
+    }
+
     const engMatch = line.match(/^\*\*([A-Z][a-z]+ [A-Z][a-z]+)/);
     if (engMatch) {
       currentEngineer = engMatch[1];

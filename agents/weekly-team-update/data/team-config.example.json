@@ -21,6 +21,12 @@
       "main_target_version": "2.0.0"
     }
   },
+  "followups": {
+    "pending_review_days": 3,
+    "stale_pr_days": 7,
+    "stale_ticket_days": 14,
+    "max_rows_per_category": 8
+  },
   "products": [
     {
       "key": "ALPHA",

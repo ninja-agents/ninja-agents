@@ -133,6 +133,8 @@ export interface CoverageContext {
 export interface FollowupsConfig {
   pending_review_days: number;
   stale_pr_days: number;
+  /** PRs older than this are dormant, not this week's action. 0 disables. */
+  stale_pr_max_days: number;
   stale_ticket_days: number;
   max_rows_per_category: number;
 }
@@ -140,6 +142,7 @@ export interface FollowupsConfig {
 export const DEFAULT_FOLLOWUPS: FollowupsConfig = {
   pending_review_days: 3,
   stale_pr_days: 7,
+  stale_pr_max_days: 90,
   stale_ticket_days: 14,
   max_rows_per_category: 8,
 };
@@ -167,10 +170,56 @@ export interface RecommendationsInput {
   followups: FollowupsConfig;
   /** Jira display name -> engineer name, so owners match the rest of the report. */
   jiraDisplayToName?: Map<string, string>;
+  /** Done clones, used to tell an unfixed bug from one already fixed on main. */
+  clones?: Map<string, CloneFact[]>;
+}
+
+// Statuses that mean nobody has started the fix yet. Anything else (In
+// Progress, ON_QA, POST, Dev Complete, Verified) may already be fixed on main
+// without carrying a fix version, so absence there proves nothing.
+const UNSTARTED_STATUSES = new Set([
+  "new",
+  "open",
+  "to do",
+  "assigned",
+  "backlog",
+  "triage",
+  "untriaged",
+]);
+
+/**
+ * True when a fix demonstrably exists, false only when the ticket has not been
+ * started, undefined when the evidence cannot tell.
+ */
+function fixEvidence(
+  ticket: TicketFacts | undefined,
+  clones: CloneFact[] | undefined,
+): boolean | undefined {
+  if (!ticket) return undefined;
+  if (
+    (ticket.fix_versions ?? []).some((version) =>
+      normalizeVersionStream(version),
+    )
+  ) {
+    return true;
+  }
+  const doneCloneWithFix = (clones ?? []).some(
+    (clone) =>
+      clone.clone_status_category === "done" &&
+      clone.clone_fix_versions.some((version) =>
+        normalizeVersionStream(version),
+      ),
+  );
+  if (doneCloneWithFix) return true;
+  return UNSTARTED_STATUSES.has(ticket.status.trim().toLowerCase())
+    ? false
+    : undefined;
 }
 
 export interface RecommendationsResult {
   rows: RecommendationRow[];
+  /** Open PRs hidden as dormant rather than truncated by the row cap. */
+  dormantPrs: number;
   cappedCounts: Map<string, number>;
 }
 
@@ -459,6 +508,32 @@ function filterNeedsEntry(
 }
 
 /**
+ * Authoritative backport list for prose authors: the versions the report still
+ * claims after verification, so a dropped version cannot leak back into
+ * Highlights or a product summary from the generator's earlier context.
+ */
+export function formatVerifiedClaims(markdown: string): string {
+  const byKey = new Map<string, string[]>();
+  for (const claim of parseBackportClaims(markdown).claims) {
+    const versions = byKey.get(claim.key) ?? [];
+    for (const version of claim.versions) {
+      if (!versions.includes(version)) versions.push(version);
+    }
+    byKey.set(claim.key, versions);
+  }
+
+  const lines = ["--- Verified Backport Claims ---"];
+  if (byKey.size === 0) {
+    lines.push("(none)");
+  } else {
+    for (const [key, versions] of byKey) {
+      lines.push(`${key}: ${versions.join(", ")}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+/**
  * Replaces an existing section (heading through the next `## ` or EOF) or
  * appends it at the end. Applying the same body twice is a no-op.
  */
@@ -524,8 +599,18 @@ function extractKeys(title: string): string[] {
   return keys;
 }
 
-function byAgeThenItem(a: RecommendationRow, b: RecommendationRow): number {
-  if (a.ageDays !== b.ageDays) return b.ageDays - a.ageDays;
+/**
+ * Stale PRs are ordered least-stale first: the newest blocker is the one
+ * someone can still act on, and the cap then hides abandoned work rather than
+ * live work.
+ */
+function byCategoryUrgency(
+  category: RecommendationRow["category"],
+  a: RecommendationRow,
+  b: RecommendationRow,
+): number {
+  const delta = a.ageDays - b.ageDays;
+  if (delta !== 0) return category === "Stale PR" ? delta : -delta;
   return a.item.localeCompare(b.item);
 }
 
@@ -575,16 +660,23 @@ export function buildRecommendations(
       (version) => `release-${version.replace(/\.z$/, "")}`,
     );
     const requested = `Needs backport to ${versions.join(", ")}`;
+    const fixed = fixEvidence(ticket, input.clones?.get(key));
+
+    // An unfixed bug cannot be backported yet, so the action is the fix.
+    const notes: string[] = [];
+    if (fixed === false) notes.push("no fix on main yet");
+    if (entry.unverified) notes.push("GitHub evidence unavailable");
+
     grouped.get("Backport")!.push({
       category: "Backport",
       item: `[${key}](${jiraBase}/${key})`,
-      why: entry.unverified
-        ? `${requested} (GitHub evidence unavailable)`
-        : requested,
+      why: notes.length > 0 ? `${requested} (${notes.join("; ")})` : requested,
       action:
-        targets.length === 1
-          ? `Open backport PR to ${targets[0]}`
-          : `Open backport PRs to ${targets.join(", ")}`,
+        fixed === false
+          ? `Fix on main first, then backport to ${targets.join(", ")}`
+          : targets.length === 1
+            ? `Open backport PR to ${targets[0]}`
+            : `Open backport PRs to ${targets.join(", ")}`,
       owner: ticket
         ? (jiraDisplayToName?.get(ticket.assignee_name) ?? ticket.assignee_name)
         : "",
@@ -592,6 +684,7 @@ export function buildRecommendations(
     });
   }
 
+  let dormant = 0;
   for (const pr of prs) {
     if (pr.state !== "open") continue;
     const age = ageInDays(pr.updated_at, now);
@@ -620,6 +713,13 @@ export function buildRecommendations(
     // 3/4. Review and staleness, only when the update time is known.
     if (age === null) continue;
     if (age >= followups.stale_pr_days) {
+      if (
+        followups.stale_pr_max_days > 0 &&
+        age > followups.stale_pr_max_days
+      ) {
+        dormant += 1;
+        continue;
+      }
       grouped.get("Stale PR")!.push({
         category: "Stale PR",
         item,
@@ -659,7 +759,9 @@ export function buildRecommendations(
   const rows: RecommendationRow[] = [];
   const cappedCounts = new Map<string, number>();
   for (const category of CATEGORY_ORDER) {
-    const categoryRows = (grouped.get(category) ?? []).sort(byAgeThenItem);
+    const categoryRows = (grouped.get(category) ?? []).sort((a, b) =>
+      byCategoryUrgency(category, a, b),
+    );
     const limit = followups.max_rows_per_category;
     if (limit > 0 && categoryRows.length > limit) {
       cappedCounts.set(category, categoryRows.length - limit);
@@ -669,12 +771,13 @@ export function buildRecommendations(
     }
   }
 
-  return { rows, cappedCounts };
+  return { rows, cappedCounts, dormantPrs: dormant };
 }
 
 export function renderRecommendations(
   rows: RecommendationRow[],
   cappedCounts: Map<string, number>,
+  dormant: { count: number; afterDays: number } = { count: 0, afterDays: 0 },
 ): string {
   const parts: string[] = [
     "Follow-ups from this report that need a small action.",
@@ -684,19 +787,27 @@ export function renderRecommendations(
   if (rows.length === 0) {
     parts.push("_No follow-ups this week._");
   } else {
-    parts.push("| Item | Why it needs attention | Suggested action | Owner |");
-    parts.push("| --- | --- | --- | --- |");
+    parts.push(
+      "| Category | Item | Why it needs attention | Suggested action | Owner |",
+    );
+    parts.push("| --- | --- | --- | --- | --- |");
     for (const row of rows) {
       parts.push(
-        `| ${escapeCell(row.item)} | ${escapeCell(row.why)} | ${escapeCell(row.action)} | ${escapeCell(row.owner)} |`,
+        `| ${row.category} | ${escapeCell(row.item)} | ${escapeCell(row.why)} | ${escapeCell(row.action)} | ${escapeCell(row.owner)} |`,
       );
     }
     for (const category of CATEGORY_ORDER) {
       const hidden = cappedCounts.get(category);
       if (hidden) {
         parts.push("");
-        parts.push(`_${hidden} more not listed._`);
+        parts.push(`_${hidden} more not listed (${category})._`);
       }
+    }
+    if (dormant.count > 0) {
+      parts.push("");
+      parts.push(
+        `_${dormant.count} open PR${dormant.count === 1 ? "" : "s"} untouched for over ${dormant.afterDays} days not listed._`,
+      );
     }
   }
 
@@ -1014,10 +1125,15 @@ async function main(): Promise<void> {
     now: new Date(),
     followups,
     jiraDisplayToName: buildJiraDisplayToName(teamConfig),
+    clones,
   });
   const section = renderRecommendations(
     recommendations.rows,
     recommendations.cappedCounts,
+    {
+      count: recommendations.dormantPrs,
+      afterDays: followups.stale_pr_max_days,
+    },
   );
   const next = upsertSection(
     applied.markdown,
@@ -1042,6 +1158,7 @@ async function main(): Promise<void> {
     `Backport claims: ${claims.length} line(s), ${dropped.length} version(s) dropped, ${removedClaims} line(s) kept.`,
   );
   console.log(`Recommendations: ${recommendations.rows.length} row(s).`);
+  console.log(`\n${formatVerifiedClaims(finalMarkdown)}`);
 
   if (args.check) {
     if (finalMarkdown === markdown) {

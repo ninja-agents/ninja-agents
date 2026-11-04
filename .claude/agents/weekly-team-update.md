@@ -83,7 +83,7 @@ Rules:
 
 - The script removes backport claims already covered by a Jira fix version, a done clone, or a merged release-branch PR.
 - Never mention a dropped backport version anywhere in the report, including Highlights and product summaries.
-- Only versions still present in the report after this step may be described as needing a backport.
+- Only versions still present in the report after this step may be described as needing a backport. Take them from the `--- Verified Backport Claims ---` block this step prints, and ignore the `Backport needed` and `Backport risk` lines in the generator context, which predate verification.
 - Never edit the `## Recommendations` section. Re-run the script to regenerate it.
 
 ## Step 4: Write Highlights and Summary
@@ -104,6 +104,7 @@ Write 2-4 bullets, 150-200 words max. This is an executive briefing, not a techn
 
 - Each bullet: `- **Bold lead-in:** description ([KEY](url))`
 - Inline Jira links (not reference-style)
+- Link a PR as `[PR #N - title](url)`, matching the label the generator emits. The validator compares link text to the live PR title, so `[PR #561](url)` reports title drift.
 - Single-line bullets (no wrapping)
 - No em dashes; use colons, semicolons, or parentheses
 - Only completed milestones and realized outcomes; no in-progress items or future plans
@@ -173,7 +174,7 @@ Replace `<!-- SUMMARY_PLACEHOLDER -->` and the pending line. Write one `### Prod
 
 - Every configured product has a `### ProductName` sub-heading with a bullet list
 - All sentences use active voice
-- Relevant Epic and Feature groups have links to their parents and weekly work
+- Every in-progress bullet names its `Feature > Epic` pair when the Jira Hierarchy Context supplies one; only work with no parent stays as prose
 - No outcome, Jira key, or CVE from Highlights is repeated in a product summary
 - Every fact matches an item in the report
 - No dropped backport version appears anywhere in the prose

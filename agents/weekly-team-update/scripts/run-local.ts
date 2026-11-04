@@ -6,7 +6,10 @@ import { reconcileBackportClaims } from "./finalize-report.js";
 
 const SCRIPT_DIR = import.meta.dirname;
 const BASE_DIR = resolve(SCRIPT_DIR, "..");
-const TODAY = new Date().toISOString().slice(0, 10);
+// Local calendar date, matching the skills that look the report up with
+// `date +%Y-%m-%d` and the date finalize derives for its default path.
+const now = new Date();
+const TODAY = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 const OUTPUT_PATH = resolve(
   BASE_DIR,
   "data/output",

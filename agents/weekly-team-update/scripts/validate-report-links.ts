@@ -293,6 +293,8 @@ export class ReportLinkValidator {
 
     const actualTitle = (data.title as string) ?? "";
     let descInText = link.link_text.replace(/^(PR #\d+ - |MR \d+ - )/, "");
+    // Table cells escape `|` as `\|`; the live title does not.
+    descInText = descInText.replace(/\\\|/g, "|");
     descInText = descInText.replace(/\s*\([^)]*\)\s*$/, "").trim();
     if (
       descInText &&

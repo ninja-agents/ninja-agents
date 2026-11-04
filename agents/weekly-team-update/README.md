@@ -87,7 +87,7 @@ Edit `data/team-config.json` to customize:
 - **Publishing destination and fork** in `publishing.github_repository` and `publishing.github_fork` (`OWNER/REPO`); the real values stay in the gitignored `team-config.json`
 - **Jira** cloud ID, filter ID, and base URL
 - **Products** with Jira prefixes and tracked repos
-- **Follow-up thresholds** in `followups` (`pending_review_days`, `stale_pr_days`, `stale_ticket_days`, `max_rows_per_category`) for the Recommendations section
+- **Follow-up thresholds** in `followups` (`pending_review_days`, `stale_pr_days`, `stale_pr_max_days`, `stale_ticket_days`, `max_rows_per_category`) for the Recommendations section
 - **Engineers** with GitHub/GitLab usernames and Jira account IDs (product is inferred from work item data)
 
 To find a Jira account ID, use the root CLI with the DNS hostname from `jira.cloud_id` (not a URL or cloud UUID):

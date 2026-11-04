@@ -7,6 +7,7 @@ import {
   renderRecommendations,
   upsertSection,
   reconcileBackportClaims,
+  formatVerifiedClaims,
   DEFAULT_FOLLOWUPS,
   type BackportClaim,
   type CoverageContext,
@@ -376,6 +377,18 @@ describe("buildRecommendations", () => {
       jiraBaseUrl: "https://redhat.atlassian.net/browse",
       now: NOW,
       followups: DEFAULT_FOLLOWUPS,
+      clones: new Map([
+        [
+          "OCPBUGS-135361",
+          [
+            {
+              clone_key: "OCPBUGS-135361-child",
+              clone_status_category: "done",
+              clone_fix_versions: ["5.0.z"],
+            },
+          ],
+        ],
+      ]),
     });
 
     expect(rows).toHaveLength(1);
@@ -385,6 +398,61 @@ describe("buildRecommendations", () => {
       why: "Needs backport to 4.23.z",
       action: "Open backport PR to release-4.23",
       owner: "Dana Whitfield",
+    });
+  });
+
+  it("asks for the main-branch fix first when nothing is fixed yet", () => {
+    const { rows } = buildRecommendations({
+      verdicts: [
+        { ...neededVerdict, key: "OCPBUGS-87865", version: "4.19.z" },
+        { ...neededVerdict, key: "OCPBUGS-87865", version: "5.0.z" },
+      ],
+      tickets: new Map([
+        [
+          "OCPBUGS-87865",
+          makeTicket({
+            key: "OCPBUGS-87865",
+            status: "New",
+            assignee_name: "Dana Whitfield",
+          }),
+        ],
+      ]),
+      prs: [],
+      jiraBaseUrl: "https://redhat.atlassian.net/browse",
+      now: NOW,
+      followups: DEFAULT_FOLLOWUPS,
+      clones: new Map(),
+    });
+
+    expect(rows[0]).toMatchObject({
+      why: "Needs backport to 4.19.z, 5.0.z (no fix on main yet)",
+      action: "Fix on main first, then backport to release-4.19, release-5.0",
+    });
+  });
+
+  it("does not claim a fix is missing for a ticket already in QA", () => {
+    const { rows } = buildRecommendations({
+      verdicts: [neededVerdict],
+      tickets: new Map([
+        [
+          "OCPBUGS-1",
+          makeTicket({
+            key: "OCPBUGS-1",
+            status: "ON_QA",
+            fix_versions: [],
+          }),
+        ],
+      ]),
+      prs: [],
+      jiraBaseUrl: "https://redhat.atlassian.net/browse",
+      now: NOW,
+      followups: DEFAULT_FOLLOWUPS,
+      clones: new Map(),
+    });
+
+    expect(rows[0]).toMatchObject({
+      why: "Needs backport to 4.23.z",
+      action: "Open backport PR to release-4.23",
     });
   });
 
@@ -405,8 +473,55 @@ describe("buildRecommendations", () => {
     expect(rows).toHaveLength(8);
     expect(cappedCounts.get("Review")).toBe(4);
     expect(renderRecommendations(rows, cappedCounts)).toContain(
-      "4 more not listed.",
+      "4 more not listed (Review).",
     );
+  });
+
+  it("hides dormant PRs and counts them in the overflow note", () => {
+    const prs = [
+      makePr({ number: 1, updated_at: daysAgo(9) }),
+      makePr({ number: 2, updated_at: daysAgo(50) }),
+      makePr({ number: 3, updated_at: daysAgo(200) }),
+    ];
+
+    const { rows, cappedCounts, dormantPrs } = buildRecommendations({
+      verdicts: [],
+      tickets: new Map(),
+      prs,
+      jiraBaseUrl: "https://redhat.atlassian.net/browse",
+      now: NOW,
+      followups: DEFAULT_FOLLOWUPS,
+    });
+
+    expect(rows.map((row) => row.ageDays)).toEqual([9, 50]);
+    expect(cappedCounts.size).toBe(0);
+    expect(dormantPrs).toBe(1);
+    expect(
+      renderRecommendations(rows, cappedCounts, {
+        count: dormantPrs,
+        afterDays: DEFAULT_FOLLOWUPS.stale_pr_max_days,
+      }),
+    ).toContain("_1 open PR untouched for over 90 days not listed._");
+  });
+
+  it("keeps the newest stale PRs when the category is capped", () => {
+    const prs = [
+      makePr({ number: 1, updated_at: daysAgo(400) }),
+      makePr({ number: 2, updated_at: daysAgo(90) }),
+      makePr({ number: 3, updated_at: daysAgo(9) }),
+    ];
+
+    const { rows } = buildRecommendations({
+      verdicts: [],
+      tickets: new Map(),
+      prs,
+      jiraBaseUrl: "https://redhat.atlassian.net/browse",
+      now: NOW,
+      followups: { ...DEFAULT_FOLLOWUPS, max_rows_per_category: 2 },
+    });
+
+    expect(rows.map((row) => row.category)).toEqual(["Stale PR", "Stale PR"]);
+    expect(rows.map((row) => row.ageDays)).toEqual([9, 90]);
   });
 
   const neededVerdict: Verdict = {
@@ -464,7 +579,12 @@ describe("buildRecommendations", () => {
   it("lists a version once when a ticket and its orphan PR both claim it", () => {
     const { rows } = buildRecommendations({
       verdicts: [neededVerdict, { ...neededVerdict }],
-      tickets: new Map([["OCPBUGS-1", makeTicket({ key: "OCPBUGS-1" })]]),
+      tickets: new Map([
+        [
+          "OCPBUGS-1",
+          makeTicket({ key: "OCPBUGS-1", fix_versions: ["5.1.0"] }),
+        ],
+      ]),
       prs: [],
       jiraBaseUrl: "https://redhat.atlassian.net/browse",
       now: NOW,
@@ -510,6 +630,32 @@ describe("buildRecommendations", () => {
     });
 
     expect(rows[0].owner).toBe("Dana Field");
+  });
+});
+
+describe("formatVerifiedClaims", () => {
+  it("lists the surviving versions per key", () => {
+    const markdown = [
+      `- [PR #653 - OCPBUGS-1: fix](https://github.com/o/r/pull/653) (merged Nov 1)${SUFFIX}4.23.z`,
+      `- [OCPBUGS-1 - fix](https://redhat.atlassian.net/browse/OCPBUGS-1) (New)${SUFFIX}4.23.z`,
+      `- [OCPBUGS-2 - other](https://redhat.atlassian.net/browse/OCPBUGS-2) (New)${SUFFIX}4.19.z, 5.0.z`,
+    ].join("\n");
+
+    const block = formatVerifiedClaims(markdown);
+
+    expect(block).toBe(
+      [
+        "--- Verified Backport Claims ---",
+        "OCPBUGS-1: 4.23.z",
+        "OCPBUGS-2: 4.19.z, 5.0.z",
+      ].join("\n"),
+    );
+  });
+
+  it("says none when the report makes no claims", () => {
+    expect(formatVerifiedClaims("- no claims here")).toBe(
+      "--- Verified Backport Claims ---\n(none)",
+    );
   });
 });
 

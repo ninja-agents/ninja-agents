@@ -24,6 +24,7 @@
   "followups": {
     "pending_review_days": 3,
     "stale_pr_days": 7,
+    "stale_pr_max_days": 90,
     "stale_ticket_days": 14,
     "max_rows_per_category": 8
   },

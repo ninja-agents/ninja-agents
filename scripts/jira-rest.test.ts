@@ -1794,6 +1794,23 @@ describe("five strictly approval-gated mutations", () => {
     },
   );
 
+  it("transports the Related relate link type unchanged", async () => {
+    const body = { ...linkBody(), type: { name: "Related" } };
+    const file = await bodyFile(body);
+    const transport = fixture([new Response(null, { status: 201 })]);
+    const result = await invoke(
+      command("link-issues", "--body-file", file, "--approved"),
+      transport.fetcher,
+    );
+    expect(result.code).toBe(0);
+    expect(result.value).toEqual({});
+    expect(transport.calls).toHaveLength(1);
+    expect(transport.calls[0].url.pathname).toBe("/rest/api/3/issueLink");
+    expect(
+      JSON.parse(bodyString(transport.calls[0].init.body)) as unknown,
+    ).toEqual(body);
+  });
+
   it.each([
     "set-fix-versions",
     "set-components",

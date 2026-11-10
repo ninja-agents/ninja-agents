@@ -311,7 +311,9 @@ function validateAdf(value: unknown): void {
 function validateBody(action: string, value: unknown): JsonObject {
   if (action === "link-issues") {
     const body = exact(value, ["type", "inwardIssue", "outwardIssue"]);
-    if (exact(body.type, ["name"]).name !== "Relates")
+    // Instances name the relate link type either Relates or Related.
+    const linkType = exact(body.type, ["name"]).name;
+    if (linkType !== "Relates" && linkType !== "Related")
       invalid("JIRA_BODY_UNSAFE");
     for (const field of ["inwardIssue", "outwardIssue"]) {
       const key = exact(body[field], ["key"]).key;

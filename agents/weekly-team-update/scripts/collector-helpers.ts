@@ -20,6 +20,16 @@ export function matchingActiveSprintName(
   return "";
 }
 
+export function isExternalContributor(
+  login: string,
+  teamLogins: ReadonlySet<string>,
+): boolean {
+  const normalized = login.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized.endsWith("[bot]")) return false;
+  return !teamLogins.has(normalized);
+}
+
 export function githubRateLimitRetryDelayMs(
   status: number,
   headers: Pick<Headers, "get">,

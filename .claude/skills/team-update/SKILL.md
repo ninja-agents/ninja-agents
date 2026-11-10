@@ -18,7 +18,7 @@ No arguments needed - automatically queries all data sources and generates the r
 
 Launches the `weekly-team-update` agent which:
 
-1. **Fetches activity** from GitHub, GitLab, and Jira, including the active Jira sprint backlog and parent hierarchy for weekly work.
+1. **Fetches activity** from GitHub, GitLab, and Jira, including the active Jira sprint backlog, parent hierarchy for weekly work, and merged outside contributions for the repos listed in `external_contributions.repos`.
 2. **Saves data to CSV** in `agents/weekly-team-update/data/cache/` (including `jira-hierarchy.csv`).
 3. **Runs `agents/weekly-team-update/scripts/generate-weekly-report.ts`** which deterministically:
    - Filters by date window and resolution
@@ -47,6 +47,7 @@ A weekly report with:
 - Organized by product, then by engineer
 - PRs/MRs with merge dates, Jira tickets resolved as Done
 - Strict 7-day window: only items merged/resolved in the last 7 days
+- **Additional Contributions** — merged PRs from outside contributors in tracked repos, grouped by product and labeled by GitHub login, never attributed to an engineer
 
 ### In Progress
 

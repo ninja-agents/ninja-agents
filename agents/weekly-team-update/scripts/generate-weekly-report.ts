@@ -32,6 +32,7 @@ export interface PRItem {
   ticket_id?: string;
   customer_cases: CustomerCase[];
   backport_needed: string[];
+  external?: boolean;
 }
 
 export interface CustomerCase {
@@ -340,6 +341,7 @@ export function loadGithubPrs(
         issue_refs: refs,
         customer_cases: [],
         backport_needed: [],
+        external: r.external === "1",
       });
     } catch (e: unknown) {
       process.stderr.write(
@@ -1182,9 +1184,59 @@ export function fmtTestTaskSummary(testTickets: JiraItem[]): string {
   return `- ${testTickets.length} CNV release test execution tasks completed — Tier 1/2 testing for CNV ${versionStr} (${links}${extra})`;
 }
 
+export function formatAdditionalContributions(
+  prs: PRItem[],
+  config: TeamConfig,
+  ticketIdRe: RegExp,
+): Map<string, PRItem[]> {
+  const repoToProduct = buildRepoToProduct(config);
+  const prefixToProduct = buildPrefixToProduct(config);
+  const orgToProduct = buildOrgToProduct(config);
+  const ocpbugsSummaryRe = buildOcpbugsSummaryRepoRe(config);
+  const byProduct = new Map<string, PRItem[]>();
+
+  for (const pr of prs) {
+    const product = determineProduct(
+      pr,
+      config,
+      repoToProduct,
+      prefixToProduct,
+      ocpbugsSummaryRe,
+      ticketIdRe,
+      orgToProduct,
+    );
+    const list = byProduct.get(product);
+    if (list) {
+      list.push(pr);
+    } else {
+      byProduct.set(product, [pr]);
+    }
+  }
+
+  for (const list of byProduct.values()) {
+    list.sort((a, b) => {
+      const aTime = parseDate(a.merged_at)?.getTime();
+      const bTime = parseDate(b.merged_at)?.getTime();
+      if (aTime === undefined && bTime === undefined) return 0;
+      if (aTime === undefined) return 1;
+      if (bTime === undefined) return -1;
+      return bTime - aTime;
+    });
+  }
+
+  return byProduct;
+}
+
+export function fmtAdditionalPrLink(pr: PRItem): string {
+  const label = pr.source === "github" ? "PR" : "MR";
+  const num = pr.source === "github" ? `#${pr.number}` : `!${pr.number}`;
+  return `- [${label} ${num} - ${pr.title}](${pr.url}) (merged ${fmtDate(pr.merged_at)}) by @${pr.engineer}`;
+}
+
 export function formatCompletedSection(
   sections: Map<string, Map<string, EngineerBlock>>,
   config: TeamConfig,
+  additionalByProduct: Map<string, PRItem[]> = new Map(),
 ): string {
   const lines: string[] = [];
   const productNames = new Map(config.products.map((p) => [p.key, p.name]));
@@ -1201,7 +1253,8 @@ export function formatCompletedSection(
         break;
       }
     }
-    if (!hasCompleted) continue;
+    const additional = additionalByProduct.get(pk) ?? [];
+    if (!hasCompleted && additional.length === 0) continue;
 
     const pn = productNames.get(pk) ?? pk;
     lines.push(pn !== pk ? `\n### ${pk} (${pn})\n` : `\n### ${pk}\n`);
@@ -1236,6 +1289,12 @@ export function formatCompletedSection(
         lines.push(fmtPrLink(pr, 0));
       }
 
+      lines.push("");
+    }
+
+    if (additional.length > 0) {
+      lines.push("**Additional Contributions:**");
+      for (const pr of additional) lines.push(fmtAdditionalPrLink(pr));
       lines.push("");
     }
   }
@@ -1780,9 +1839,16 @@ export function main(argv: string[] = process.argv): void {
   }
 
   // Filter
-  const completedPrs = filterCompletedPrs(allPrs, windowStart, windowEnd);
+  const teamPrs = allPrs.filter((p) => !p.external);
+  const externalPrs = allPrs.filter((p) => p.external);
+  const completedPrs = filterCompletedPrs(teamPrs, windowStart, windowEnd);
   const prCutoff = new Date(reportDate.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const openPrs = filterOpenPrs(allPrs, prCutoff);
+  const openPrs = filterOpenPrs(teamPrs, prCutoff);
+  const additionalByProduct = formatAdditionalContributions(
+    filterCompletedPrs(externalPrs, windowStart, windowEnd),
+    config,
+    ticketIdRe,
+  );
   const completedJiraAll = filterCompletedJira(
     jiraTickets,
     windowStart,
@@ -1920,7 +1986,9 @@ export function main(argv: string[] = process.argv): void {
   }
 
   reportLines.push("## Completed This Week");
-  reportLines.push(formatCompletedSection(sections, config));
+  reportLines.push(
+    formatCompletedSection(sections, config, additionalByProduct),
+  );
 
   reportLines.push("## In Progress");
   reportLines.push(formatInProgressSection(sections, config));
@@ -1939,6 +2007,9 @@ export function main(argv: string[] = process.argv): void {
   console.log(`\n--- Report Statistics ---`);
   console.log(
     `  GitHub PRs merged: ${completedPrs.filter((p) => p.source === "github").length}`,
+  );
+  console.log(
+    `  Additional PRs (outside team): ${[...additionalByProduct.values()].reduce((n, l) => n + l.length, 0)}`,
   );
   console.log(
     `  GitLab MRs merged: ${completedPrs.filter((p) => p.source === "gitlab").length}`,

@@ -39,6 +39,8 @@ import {
   fmtPrLink,
   fmtTicketLink,
   fmtTestTaskSummary,
+  fmtAdditionalPrLink,
+  formatAdditionalContributions,
   formatCompletedSection,
   formatInProgressSection,
   generateHighlights,
@@ -401,6 +403,38 @@ describe("loadGithubPrs / loadGitlabMrs", () => {
     ]);
     const mrs = loadGitlabMrs(dir, alias);
     expect(mrs[0].engineer).toBe("Phillip Rhodes");
+    rmSync(dir, { recursive: true });
+  });
+
+  it("reads the external column and defaults legacy rows to team PRs", () => {
+    const dir = resolve(tmpdir(), `prs-external-${process.pid}`);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      resolve(dir, "github-prs.csv"),
+      [
+        "engineer,number,title,repo,state,created_at,merged_at,updated_at,html_url,issue_refs,external",
+        "octocat,5,Outside fix,openshift/networking-console-plugin,merged,2026-11-01T00:00:00Z,2026-11-02T00:00:00Z,2026-11-02T00:00:00Z,https://example/5,,1",
+        "Scott Dickerson,6,Team fix,konveyor/tackle2-ui,merged,2026-11-01T00:00:00Z,2026-11-02T00:00:00Z,2026-11-02T00:00:00Z,https://example/6,,0",
+      ].join("\n"),
+    );
+    const prs = loadGithubPrs(dir);
+    expect(prs.map((p) => p.external)).toEqual([true, false]);
+    rmSync(dir, { recursive: true });
+  });
+
+  it("treats rows without an external column as team PRs", () => {
+    const dir = resolve(tmpdir(), `prs-legacy-${process.pid}`);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      resolve(dir, "github-prs.csv"),
+      [
+        "engineer,number,title,repo,state,created_at,merged_at,html_url,issue_refs",
+        "Scott Dickerson,7,Legacy header,konveyor/tackle2-ui,merged,2026-11-01T00:00:00Z,2026-11-02T00:00:00Z,https://example/7,",
+      ].join("\n"),
+    );
+    const prs = loadGithubPrs(dir);
+    expect(prs).toHaveLength(1);
+    expect(prs[0].external).toBe(false);
     rmSync(dir, { recursive: true });
   });
 });
@@ -1049,6 +1083,146 @@ describe("fmtTestTaskSummary", () => {
 });
 
 // ---------------------------------------------------------------------------
+// formatAdditionalContributions / fmtAdditionalPrLink
+// ---------------------------------------------------------------------------
+
+describe("fmtAdditionalPrLink", () => {
+  it("labels the contributor login after the merged date", () => {
+    const pr = makePR({
+      engineer: "octocat",
+      number: 42,
+      title: "Fix bug",
+      url: "https://github.com/org/repo/pull/42",
+      merged_at: "2026-05-05T10:00:00Z",
+    });
+    expect(fmtAdditionalPrLink(pr)).toBe(
+      "- [PR #42 - Fix bug](https://github.com/org/repo/pull/42) (merged May 5) by @octocat",
+    );
+  });
+});
+
+describe("formatAdditionalContributions", () => {
+  const config = existsSync(CONFIG_PATH) ? loadConfig(CONFIG_PATH) : null;
+
+  it.skipIf(!config)("groups repos into products, newest merge first", () => {
+    const ticketIdRe = buildTicketIdRe(config!);
+    const prs = [
+      makePR({
+        engineer: "octocat",
+        number: 1,
+        repo: "kubev2v/forklift-console-plugin",
+        merged_at: "2026-05-01T10:00:00Z",
+      }),
+      makePR({
+        engineer: "hubot",
+        number: 2,
+        repo: "openshift/nmstate-console-plugin",
+        merged_at: "2026-05-03T10:00:00Z",
+      }),
+      makePR({
+        engineer: "octocat",
+        number: 3,
+        repo: "kubev2v/forklift-console-plugin",
+        merged_at: "2026-05-04T10:00:00Z",
+      }),
+    ];
+
+    const byProduct = formatAdditionalContributions(prs, config!, ticketIdRe);
+
+    expect(byProduct.get("MTV")!.map((p) => p.number)).toEqual([3, 1]);
+    expect(
+      byProduct.get("Networking Console Plugins")!.map((p) => p.number),
+    ).toEqual([2]);
+  });
+
+  it.skipIf(!config)("returns an empty map for no contributions", () => {
+    const ticketIdRe = buildTicketIdRe(config!);
+    expect(formatAdditionalContributions([], config!, ticketIdRe).size).toBe(0);
+  });
+
+  it.skipIf(!config)("places unrecognized repos under Other", () => {
+    const ticketIdRe = buildTicketIdRe(config!);
+    const byProduct = formatAdditionalContributions(
+      [makePR({ engineer: "octocat", repo: "owner/unknown-repo" })],
+      config!,
+      ticketIdRe,
+    );
+    expect(byProduct.get("Other")).toHaveLength(1);
+  });
+});
+
+describe("formatCompletedSection additional contributions", () => {
+  const config = existsSync(CONFIG_PATH) ? loadConfig(CONFIG_PATH) : null;
+
+  it.skipIf(!config)("renders an outside-only product with its heading", () => {
+    const ticketIdRe = buildTicketIdRe(config!);
+    const sections = organize([], [], [], [], config!, ticketIdRe);
+    const externalPrs = [
+      makePR({
+        engineer: "octocat",
+        number: 9,
+        title: "Outside fix",
+        repo: "kubev2v/forklift-console-plugin",
+        url: "https://github.com/kubev2v/forklift-console-plugin/pull/9",
+      }),
+    ];
+    const byProduct = formatAdditionalContributions(
+      externalPrs,
+      config!,
+      ticketIdRe,
+    );
+
+    const out = formatCompletedSection(sections, config!, byProduct);
+
+    expect(out).toContain("### MTV (Migration Toolkit for Virtualization)");
+    expect(out).toContain("**Additional Contributions:**");
+    expect(out).toContain(
+      "- [PR #9 - Outside fix](https://github.com/kubev2v/forklift-console-plugin/pull/9) (merged May 5) by @octocat",
+    );
+    expect(out).not.toContain("**octocat:**");
+  });
+
+  it.skipIf(!config)("omits headings for products with no work at all", () => {
+    const ticketIdRe = buildTicketIdRe(config!);
+    const sections = organize([], [], [], [], config!, ticketIdRe);
+    const out = formatCompletedSection(sections, config!, new Map());
+    expect(out.trim()).toBe("");
+  });
+
+  it.skipIf(!config)(
+    "places the additional block after the engineer bullets",
+    () => {
+      const ticketIdRe = buildTicketIdRe(config!);
+      const teamPr = makePR({
+        engineer: config!.engineers[0].name,
+        number: 11,
+        title: "Team fix",
+        repo: "kubev2v/forklift-console-plugin",
+      });
+      const sections = organize([], [teamPr], [], [], config!, ticketIdRe);
+      const byProduct = formatAdditionalContributions(
+        [
+          makePR({
+            engineer: "octocat",
+            number: 12,
+            title: "Outside fix",
+            repo: "kubev2v/forklift-console-plugin",
+          }),
+        ],
+        config!,
+        ticketIdRe,
+      );
+
+      const out = formatCompletedSection(sections, config!, byProduct);
+      const engineerAt = out.indexOf(`**${config!.engineers[0].name}:**`);
+      const additionalAt = out.indexOf("**Additional Contributions:**");
+      expect(engineerAt).toBeGreaterThanOrEqual(0);
+      expect(additionalAt).toBeGreaterThan(engineerAt);
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
 // generateHighlights
 // ---------------------------------------------------------------------------
 
@@ -1583,11 +1757,28 @@ describe("end-to-end", () => {
         reportDate.getTime() + 1 * 24 * 60 * 60 * 1000,
       );
 
-      const completedPrs = filterCompletedPrs(allPrs, windowStart, windowEnd);
+      const completedPrs = filterCompletedPrs(
+        allPrs.filter((p) => !p.external),
+        windowStart,
+        windowEnd,
+      );
       const prCutoff = new Date(
         reportDate.getTime() - 30 * 24 * 60 * 60 * 1000,
       );
-      const openPrs = filterOpenPrs(allPrs, prCutoff);
+      const openPrs = filterOpenPrs(
+        allPrs.filter((p) => !p.external),
+        prCutoff,
+      );
+      const windowExternalPrs = filterCompletedPrs(
+        allPrs.filter((p) => p.external),
+        windowStart,
+        windowEnd,
+      );
+      const additionalByProduct = formatAdditionalContributions(
+        windowExternalPrs,
+        config!,
+        ticketIdRe,
+      );
       const completedJiraAll = filterCompletedJira(
         jiraTickets,
         windowStart,
@@ -1659,7 +1850,9 @@ describe("end-to-end", () => {
       }
 
       reportLines.push("## Completed This Week");
-      reportLines.push(formatCompletedSection(sections, config!));
+      reportLines.push(
+        formatCompletedSection(sections, config!, additionalByProduct),
+      );
 
       reportLines.push("## In Progress");
       reportLines.push(formatInProgressSection(sections, config!));
@@ -1672,6 +1865,22 @@ describe("end-to-end", () => {
       expect(reportText.indexOf("## Summary\n")).toBeLessThan(
         reportText.indexOf("### Highlights"),
       );
+
+      const additionalCount = [...additionalByProduct.values()].reduce(
+        (n, list) => n + list.length,
+        0,
+      );
+      expect(additionalCount).toBe(windowExternalPrs.length);
+      if (additionalCount === 0) {
+        expect(reportText).not.toContain("**Additional Contributions:**");
+      } else {
+        expect(reportText.indexOf("## Completed This Week")).toBeLessThan(
+          reportText.indexOf("**Additional Contributions:**"),
+        );
+        for (const pr of windowExternalPrs) {
+          expect(reportText).not.toContain(`**${pr.engineer}:**`);
+        }
+      }
     },
   );
 });

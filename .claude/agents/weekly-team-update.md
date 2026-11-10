@@ -162,6 +162,7 @@ Replace `<!-- SUMMARY_PLACEHOLDER -->` and the pending line. Write one `### Prod
 - **CVE IDs must always be included** when mentioning CVE remediations — extract them from the "Notable" lines in the Highlight Context, unless already covered in Highlights.
 - **Customer-impacting bugs must be called out** with customer names unless Highlights already covers them.
 - **Backport needs must be mentioned only for versions still present in the report after Step 3.** Include the Jira key, a brief description, and the remaining list of versions needing backport: "Backport needed: [OCPBUGS-105358](https://issues.redhat.com/browse/OCPBUGS-105358) — NAD form config fix needs backport to 4.20.z, 4.21.z, 4.22.z, 4.23.z, 5.0.z"
+- `**Additional Contributions:**` blocks are outside work: cite the contributor's GitHub login, never attribute those PRs to a team member.
 
 **Hierarchy example:**
 
@@ -178,6 +179,7 @@ Replace `<!-- SUMMARY_PLACEHOLDER -->` and the pending line. Write one `### Prod
 - No outcome, Jira key, or CVE from Highlights is repeated in a product summary
 - Every fact matches an item in the report
 - No dropped backport version appears anywhere in the prose
+- Every `**Additional Contributions:**` block is left exactly as generated
 - The `## Recommendations` section is present and unmodified
 - Placeholder marker is removed from the file
 
@@ -200,3 +202,4 @@ Read and display `agents/weekly-team-update/data/output/weekly-update-{today}.md
 2. If the fetch script fails (exit 1), display the error and STOP. Do not proceed with empty data.
 3. Every claim must trace to an item in the generated report — never invent work.
 4. Backport verification and the Recommendations section are deterministic: never hand-edit either.
+5. Additional Contributions are deterministic: never move them into engineer blocks or hand-edit them.

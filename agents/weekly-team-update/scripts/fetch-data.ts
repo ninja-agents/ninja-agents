@@ -7,7 +7,10 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseHierarchyIssue, type HierarchyNode } from "./jira-hierarchy.js";
-import { createGithubRequest } from "./collector-helpers.js";
+import {
+  createGithubRequest,
+  isExternalContributor,
+} from "./collector-helpers.js";
 
 const SCRIPT_DIR = import.meta.dirname;
 const DATA_DIR = resolve(SCRIPT_DIR, "..", "data");
@@ -38,6 +41,7 @@ interface TeamConfig {
   gitlab?: {
     api_url?: string;
   };
+  external_contributions?: { repos: string[] };
   products: Array<{ jira_prefixes: string[] }>;
   engineers: Engineer[];
 }
@@ -53,6 +57,7 @@ interface GitHubPr {
   updated_at: string;
   html_url: string;
   issue_refs: string;
+  external: boolean;
 }
 
 interface JiraTicket {
@@ -406,6 +411,7 @@ async function main(): Promise<void> {
         updated_at: str(pr.updated_at),
         html_url: str(pr.html_url),
         issue_refs: extractIssueRefs(pr.body as string | undefined),
+        external: false,
       });
       seenPrKeys.add(key);
     }
@@ -437,21 +443,82 @@ async function main(): Promise<void> {
         updated_at: str(pr.updated_at),
         html_url: str(pr.html_url),
         issue_refs: extractIssueRefs(pr.body as string | undefined),
+        external: false,
       });
       seenPrKeys.add(key);
     }
   }
 
+  const externalRepos = config.external_contributions?.repos ?? [];
+  const teamLogins = new Set(engineers.map((e) => e.github.toLowerCase()));
+  let externalCount = 0;
+  for (const repo of externalRepos) {
+    const query = `repo:${repo} is:pr is:merged merged:${SEVEN_DAYS_AGO}..${TODAY}`;
+    let data: Record<string, unknown>;
+    try {
+      data = await githubRequest(
+        `https://api.github.com/search/issues?q=${encodeURIComponent(query)}&per_page=100`,
+      );
+    } catch (e: unknown) {
+      console.warn(
+        `  WARN: outside contributions for ${repo} unavailable: ${String(e)}`,
+      );
+      continue;
+    }
+    const items = (data.items ?? []) as Array<Record<string, unknown>>;
+    const totalCount = Number(data.total_count ?? items.length);
+    if (totalCount > items.length) {
+      console.warn(
+        `  WARN: outside contributions for ${repo} truncated (${items.length}/${totalCount})`,
+      );
+    }
+    for (const pr of items) {
+      const login = str(
+        (pr.user as Record<string, unknown> | undefined)?.login,
+      );
+      if (!isExternalContributor(login, teamLogins)) continue;
+      const repoUrl = str(pr.repository_url);
+      const prNumber = Number(pr.number);
+      const key = `${repoUrl}:${prNumber}`;
+      if (seenPrKeys.has(key)) continue;
+      const repoParts = repoUrl.split("/");
+      const prRepo =
+        repoParts.length >= 2
+          ? `${repoParts[repoParts.length - 2]}/${repoParts[repoParts.length - 1]}`
+          : "";
+      const pullRequest = pr.pull_request as
+        | Record<string, unknown>
+        | undefined;
+      githubPrs.push({
+        engineer: login,
+        number: prNumber,
+        title: str(pr.title),
+        repo: prRepo,
+        state: "merged",
+        created_at: str(pr.created_at),
+        merged_at: pullRequest?.merged_at ? str(pullRequest.merged_at) : "",
+        updated_at: str(pr.updated_at),
+        html_url: str(pr.html_url),
+        issue_refs: extractIssueRefs(pr.body as string | undefined),
+        external: true,
+      });
+      seenPrKeys.add(key);
+      externalCount++;
+    }
+  }
+  console.log(`  External contributions: ${externalCount}`);
+
   console.log(`  Total GitHub PRs: ${githubPrs.length}`);
 
   const githubCsvLines = [
-    "engineer,number,title,repo,state,created_at,merged_at,updated_at,html_url,issue_refs",
+    "engineer,number,title,repo,state,created_at,merged_at,updated_at,html_url,issue_refs,external",
   ];
   for (const pr of githubPrs) {
     githubCsvLines.push(
       `${csvEscape(pr.engineer)},${pr.number},${csvEscape(pr.title)},` +
         `${pr.repo},${pr.state},${pr.created_at},${pr.merged_at},` +
-        `${pr.updated_at},${pr.html_url},${pr.issue_refs}`,
+        `${pr.updated_at},${pr.html_url},${pr.issue_refs},` +
+        `${pr.external ? 1 : 0}`,
     );
   }
   writeFileSync(

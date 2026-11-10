@@ -42,6 +42,9 @@
       "repos": ["my-org/beta-ui"]
     }
   ],
+  "external_contributions": {
+    "repos": ["my-org/alpha-frontend"]
+  },
   "engineers": [
     {
       "name": "Jane Doe",

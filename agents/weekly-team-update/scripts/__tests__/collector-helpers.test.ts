@@ -1,6 +1,9 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createGithubRequest } from "../collector-helpers.js";
+import {
+  createGithubRequest,
+  isExternalContributor,
+} from "../collector-helpers.js";
 
 vi.mock("node:timers/promises", () => ({ setTimeout: vi.fn() }));
 
@@ -166,5 +169,30 @@ describe("GitHub collector requests", () => {
       "Connection reset",
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("isExternalContributor", () => {
+  const teamLogins = new Set(["team-alpha", "team-beta"]);
+
+  it("excludes team logins regardless of case and surrounding space", () => {
+    expect(isExternalContributor("TEAM-ALPHA", teamLogins)).toBe(false);
+    expect(isExternalContributor(" team-beta ", teamLogins)).toBe(false);
+  });
+
+  it("excludes GitHub App accounts", () => {
+    expect(isExternalContributor("dependabot[bot]", teamLogins)).toBe(false);
+    expect(isExternalContributor("openshift-merge-bot[bot]", teamLogins)).toBe(
+      false,
+    );
+  });
+
+  it("excludes empty and whitespace-only logins", () => {
+    expect(isExternalContributor("", teamLogins)).toBe(false);
+    expect(isExternalContributor("   ", teamLogins)).toBe(false);
+  });
+
+  it("includes any other author", () => {
+    expect(isExternalContributor("octocat", teamLogins)).toBe(true);
   });
 });

@@ -43,6 +43,7 @@ npx tsx agents/weekly-team-update/scripts/validate-report-links.ts
 1. Reads `data/team-config.json` for engineer usernames and product mappings
 2. Runs `scripts/fetch-data.ts`, which collects directly from the GitHub, Jira, and GitLab APIs:
    - GitHub PRs (merged + open) for each engineer
+   - Outside contributions (merged PRs by non-team authors) for repos listed in `external_contributions.repos`
    - Jira tickets (assignee + QA contact, updated in last 7 days) for each engineer
    - Jira sprint backlog (all tickets in the active sprint, regardless of update date) to ensure In Progress items are never missed
    - GitLab MRs (merged + open) for each engineer, with `scope=all`
@@ -66,6 +67,7 @@ The collector spaces sequential GitHub requests at least 2.1 seconds apart acros
 - **Summary > Highlights** — agent-written completed business outcomes
 - **Summary > Products** — compact activity grouped under linked Jira Features and Epics, without repeating Highlights
 - **Completed This Week** — by product, then engineer, PRs nested under Jira tickets
+- **Completed This Week > Additional Contributions** — merged PRs from outside contributors in tracked repos, labeled by GitHub login
 - **In Progress** — same structure
 - **Blockers & Critical Issues** — real external blockers only
 - **Recommendations** — deterministic follow-up table for backports, review, stale PRs, and stalled tickets
@@ -87,6 +89,7 @@ Edit `data/team-config.json` to customize:
 - **Publishing destination and fork** in `publishing.github_repository` and `publishing.github_fork` (`OWNER/REPO`); the real values stay in the gitignored `team-config.json`
 - **Jira** cloud ID, filter ID, and base URL
 - **Products** with Jira prefixes and tracked repos
+- **Outside-contribution repos** in `external_contributions.repos` (`OWNER/REPO` list)
 - **Follow-up thresholds** in `followups` (`pending_review_days`, `stale_pr_days`, `stale_pr_max_days`, `stale_ticket_days`, `max_rows_per_category`) for the Recommendations section
 - **Engineers** with GitHub/GitLab usernames and Jira account IDs (product is inferred from work item data)
 

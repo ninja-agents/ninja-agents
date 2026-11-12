@@ -33,12 +33,15 @@
       "key": "ALPHA",
       "name": "Product Alpha",
       "jira_prefixes": ["ALPHA"],
+      "jira_components": ["Alpha Plugin"],
+      "ocpbugs_summary_repos": ["alpha-frontend"],
       "repos": ["my-org/alpha-frontend", "my-org/alpha-backend"]
     },
     {
       "key": "BETA",
       "name": "Product Beta",
       "jira_prefixes": ["BETA"],
+      "sprint_tracked": false,
       "repos": ["my-org/beta-ui"]
     }
   ],

@@ -19,6 +19,7 @@ import {
   buildRepoToProduct,
   buildPrefixToProduct,
   buildOrgToProduct,
+  buildComponentToProduct,
   buildOcpbugsSummaryRepoRe,
   buildAccountIdToName,
   buildJiraDisplayToName,
@@ -91,7 +92,7 @@ function makeJira(overrides: Partial<JiraItem> = {}): JiraItem {
     key: "TEST-123",
     summary: "Test ticket",
     status: "Closed",
-    resolution: "Done",
+    resolution: "",
     resolutiondate: "2026-05-05T10:00:00Z",
     statuscategorychangedate: "2026-05-05T10:00:00Z",
     issuetype: "Story",
@@ -530,6 +531,17 @@ describe("filterOpenPrs", () => {
     ];
     expect(filterOpenPrs(prs)).toHaveLength(2);
   });
+
+  it("excludes PRs opened after the report window end", () => {
+    const cutoff = new Date("2026-04-10T00:00:00Z");
+    const end = new Date("2026-05-05T00:00:00Z");
+    const prs = [
+      makePR({ state: "open", created_at: "2026-05-04T10:00:00Z" }),
+      makePR({ state: "open", created_at: "2026-05-10T10:00:00Z" }),
+    ];
+    expect(filterOpenPrs(prs, cutoff, end)).toHaveLength(1);
+    expect(filterOpenPrs(prs, cutoff)).toHaveLength(2);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -555,6 +567,24 @@ describe("filterCompletedJira", () => {
       }),
     ];
     expect(filterCompletedJira(tickets, ws, we)).toHaveLength(0);
+  });
+
+  it("excludes tickets whose resolution date falls after the window", () => {
+    const tickets = [
+      makeJira({
+        resolution: "Done",
+        statuscategorychangedate: "2026-05-01T10:00:00Z",
+        resolutiondate: "2026-05-06T10:00:00Z",
+      }),
+    ];
+    expect(filterCompletedJira(tickets, ws, we)).toHaveLength(1);
+
+    const beyondWindow = makeJira({
+      resolution: "Done",
+      statuscategorychangedate: "2026-05-01T10:00:00Z",
+      resolutiondate: "2026-05-10T10:00:00Z",
+    });
+    expect(filterCompletedJira([beyondWindow], ws, we)).toHaveLength(0);
   });
 
   it("excludes tickets outside window", () => {
@@ -644,6 +674,25 @@ describe("filterInProgressJira", () => {
     expect(filterInProgressJira([bugDevOther])).toHaveLength(0);
   });
 
+  it("keeps dev-role Bugs parked in MODIFIED, including sprintless products", () => {
+    const pattern = /^MIG-NET-Frontend Sprint \d+$/;
+    const modifiedBug = makeJira({
+      key: "CNV-100807",
+      issuetype: "Bug",
+      role: "assignee",
+      status: "MODIFIED",
+      sprint_name: "",
+      customer_cases: [],
+    });
+    expect(filterInProgressJira([modifiedBug])).toHaveLength(1);
+    expect(
+      filterInProgressJira([modifiedBug], pattern, () => false),
+    ).toHaveLength(1);
+    expect(
+      filterInProgressJira([modifiedBug], pattern, () => true),
+    ).toHaveLength(0);
+  });
+
   it("includes Bug with customer accounts regardless of status", () => {
     const bugNew = makeJira({
       issuetype: "Bug",
@@ -689,6 +738,63 @@ describe("filterInProgressJira", () => {
       makeJira({ status: "POST", sprint_name: "Some Other Sprint" }),
     ];
     expect(filterInProgressJira(tickets)).toHaveLength(2);
+  });
+
+  it("excludes tickets that are resolved Done but still in an open status", () => {
+    const releasePending = makeJira({
+      key: "CNV-88823",
+      status: "Release Pending",
+      resolution: "Done",
+    });
+    expect(filterInProgressJira([releasePending])).toHaveLength(0);
+  });
+
+  it("excludes unstarted backlog only for products that require a started status", () => {
+    const backlog = makeJira({
+      key: "CNV-100550",
+      issuetype: "Story",
+      status: "New",
+      priority: "Major",
+    });
+    expect(filterInProgressJira([backlog])).toHaveLength(1);
+    expect(
+      filterInProgressJira([backlog], undefined, undefined, () => true),
+    ).toHaveLength(0);
+
+    const criticalBacklog = makeJira({
+      key: "CNV-94126",
+      issuetype: "Story",
+      status: "New",
+      priority: "Critical",
+    });
+    expect(
+      filterInProgressJira([criticalBacklog], undefined, undefined, () => true),
+    ).toHaveLength(1);
+  });
+
+  it("keeps sprintless tickets whose product is not sprint tracked", () => {
+    const pattern = /^MIG-NET-Frontend Sprint \d+$/;
+    const sprintless = makeJira({
+      key: "CNV-40001",
+      status: "In Progress",
+      sprint_name: "",
+    });
+    const sprinted = makeJira({
+      key: "MTV-5000",
+      status: "In Progress",
+      sprint_name: "MIG-NET-Frontend Sprint 9",
+    });
+    const requiresSprint = (t: JiraItem): boolean => t.key.startsWith("MTV-");
+
+    expect(
+      filterInProgressJira([sprintless, sprinted], pattern, requiresSprint),
+    ).toHaveLength(2);
+    expect(
+      filterInProgressJira([sprintless], pattern, requiresSprint),
+    ).toHaveLength(1);
+    expect(
+      filterInProgressJira([sprintless], pattern, () => true),
+    ).toHaveLength(0);
   });
 });
 
@@ -931,6 +1037,79 @@ describe("determineProduct", () => {
         ticketIdRe,
       ),
     ).toBe("Other");
+  });
+
+  it.skipIf(!config)("routes OCPBUGS by CNV component", () => {
+    const ticket = makeJira({
+      key: "OCPBUGS-900001",
+      summary: "Console plugin regression",
+      components: ["Console Kubevirt Plugin"],
+    });
+    expect(
+      determineProduct(
+        ticket,
+        config!,
+        buildRepoToProduct(config!),
+        buildPrefixToProduct(config!),
+        buildOcpbugsSummaryRepoRe(config!),
+        buildTicketIdRe(config!),
+        buildOrgToProduct(config!),
+        buildComponentToProduct(config!),
+      ),
+    ).toBe("CNV");
+  });
+
+  it.skipIf(!config)("routes OCPBUGS by CONSOLE component", () => {
+    const ticket = makeJira({
+      key: "OCPBUGS-900001",
+      summary: "Console plugin regression",
+      components: ["Management Console"],
+    });
+    expect(
+      determineProduct(
+        ticket,
+        config!,
+        buildRepoToProduct(config!),
+        buildPrefixToProduct(config!),
+        buildOcpbugsSummaryRepoRe(config!),
+        buildTicketIdRe(config!),
+        buildOrgToProduct(config!),
+        buildComponentToProduct(config!),
+      ),
+    ).toBe("CONSOLE");
+  });
+
+  it.skipIf(!config)(
+    "falls through to summary match for networking components",
+    () => {
+      const ticket = makeJira({
+        key: "OCPBUGS-900002",
+        summary: "nmstate-console-plugin crash",
+        components: ["Networking / nmstate-console-plugin"],
+      });
+      expect(
+        determineProduct(
+          ticket,
+          config!,
+          buildRepoToProduct(config!),
+          buildPrefixToProduct(config!),
+          buildOcpbugsSummaryRepoRe(config!),
+          buildTicketIdRe(config!),
+          buildOrgToProduct(config!),
+          buildComponentToProduct(config!),
+        ),
+      ).toBe("Networking Console Plugins");
+    },
+  );
+});
+
+describe("buildOcpbugsSummaryRepoRe", () => {
+  const config = existsSync(CONFIG_PATH) ? loadConfig(CONFIG_PATH) : null;
+
+  it.skipIf(!config)("uses ocpbugs_summary_repos overrides", () => {
+    const re = buildOcpbugsSummaryRepoRe(config!);
+    expect(re.test("openshift console plugin bug")).toBe(false);
+    expect(re.test("kubevirt-plugin crash")).toBe(true);
   });
 });
 
@@ -1907,6 +2086,12 @@ describe("normalizeVersionStream", () => {
 
   it("strips openshift- prefix", () => {
     expect(normalizeVersionStream("openshift-4.22")).toBe("4.22.z");
+  });
+
+  it("strips the CNV v prefix", () => {
+    expect(normalizeVersionStream("CNV v4.19.46")).toBe("4.19.z");
+    expect(normalizeVersionStream("CNV v4.22.z")).toBe("4.22.z");
+    expect(normalizeVersionStream("openshift-5.0")).toBe("5.0.z");
   });
 
   it("returns empty for unrecognized formats", () => {

@@ -91,6 +91,7 @@ export interface TicketFacts {
   key: string;
   status: string;
   assignee_name: string;
+  qa_contact_name: string;
   statuscategorychangedate: string;
   affected_versions: string[];
   fix_versions: string[];
@@ -170,6 +171,12 @@ export interface RecommendationsInput {
   followups: FollowupsConfig;
   /** Jira display name -> engineer name, so owners match the rest of the report. */
   jiraDisplayToName?: Map<string, string>;
+  /**
+   * Ticket key -> team engineer, covering tickets the engineer owns as QA
+   * contact. Preferred over the raw Jira assignee, which can be someone outside
+   * the team.
+   */
+  engineerByKey?: Map<string, string>;
   /** Done clones, used to tell an unfixed bug from one already fixed on main. */
   clones?: Map<string, CloneFact[]>;
 }
@@ -587,6 +594,22 @@ function ageInDays(iso: string, now: Date): number | null {
   return days < 0 ? 0 : days;
 }
 
+/**
+ * Clock the follow-up ages are measured against: the end of the report's own
+ * day, so ages describe the week the report covers rather than the moment it
+ * runs. Anchoring to the date (instead of the wall clock) also keeps repeated
+ * runs of the same date byte-identical.
+ */
+export function recommendationNow(
+  reportDate: string,
+  wallClock: Date = new Date(),
+): Date {
+  const endOfReportDay = new Date(`${reportDate}T00:00:00Z`);
+  if (!Number.isFinite(endOfReportDay.getTime())) return wallClock;
+  endOfReportDay.setUTCDate(endOfReportDay.getUTCDate() + 1);
+  return endOfReportDay;
+}
+
 function escapeCell(value: string): string {
   return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ").trim();
 }
@@ -625,6 +648,7 @@ export function buildRecommendations(
     now,
     followups,
     jiraDisplayToName,
+    engineerByKey,
   } = input;
   const jiraBase = jiraBaseUrl.replace(/\/$/, "");
 
@@ -751,7 +775,9 @@ export function buildRecommendations(
       why: `No status change in ${age}d`,
       action: "Check with the assignee or update status",
       owner:
-        jiraDisplayToName?.get(ticket.assignee_name) ?? ticket.assignee_name,
+        engineerByKey?.get(ticket.key) ??
+        jiraDisplayToName?.get(ticket.assignee_name) ??
+        ticket.assignee_name,
       ageDays: age,
     });
   }
@@ -896,6 +922,7 @@ function loadTicketFacts(cacheDir: string): Map<string, TicketFacts> {
       key,
       status: row.status ?? "",
       assignee_name: row.assignee_name ?? "",
+      qa_contact_name: row.qa_contact_name ?? "",
       statuscategorychangedate: row.statuscategorychangedate ?? "",
       affected_versions: splitList(row.affected_versions),
       fix_versions: splitList(row.fix_versions),
@@ -1060,6 +1087,14 @@ async function main(): Promise<void> {
   const clones = loadCloneFacts(args.cacheDir);
   const prs = loadPrRows(args.cacheDir);
   const supportedVersions = supportedVersionsByPrefix(config);
+  const jiraDisplayToName = buildJiraDisplayToName(teamConfig);
+  const engineerByKey = new Map<string, string>();
+  for (const [key, facts] of tickets) {
+    const engineer =
+      jiraDisplayToName.get(facts.assignee_name) ??
+      jiraDisplayToName.get(facts.qa_contact_name);
+    if (engineer) engineerByKey.set(key, engineer);
+  }
 
   // Pass 1: Jira-side evidence only. Keys that survive need a GitHub check.
   const preliminary = claims.map((claim) =>
@@ -1122,9 +1157,10 @@ async function main(): Promise<void> {
     tickets,
     prs,
     jiraBaseUrl: config.jira.base_url,
-    now: new Date(),
+    now: recommendationNow(args.date),
     followups,
     jiraDisplayToName: buildJiraDisplayToName(teamConfig),
+    engineerByKey,
     clones,
   });
   const section = renderRecommendations(

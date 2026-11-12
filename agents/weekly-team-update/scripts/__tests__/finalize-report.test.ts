@@ -8,6 +8,7 @@ import {
   upsertSection,
   reconcileBackportClaims,
   formatVerifiedClaims,
+  recommendationNow,
   DEFAULT_FOLLOWUPS,
   type BackportClaim,
   type CoverageContext,
@@ -29,6 +30,7 @@ function makeTicket(overrides: Partial<TicketFacts> = {}): TicketFacts {
     key: "OCPBUGS-1",
     status: "Verified",
     assignee_name: "Dana Whitfield",
+    qa_contact_name: "",
     statuscategorychangedate: daysAgo(2),
     affected_versions: ["4.23"],
     fix_versions: [],
@@ -288,6 +290,38 @@ describe("idempotency", () => {
   });
 });
 
+describe("recommendationNow", () => {
+  const wallClock = new Date("2026-11-10T17:00:00Z");
+
+  it("anchors a back-dated report to the end of its own day", () => {
+    expect(recommendationNow("2026-11-04", wallClock).toISOString()).toBe(
+      "2026-11-05T00:00:00.000Z",
+    );
+  });
+
+  it("anchors a report generated on its own date to that day, not the clock", () => {
+    expect(recommendationNow("2026-11-10", wallClock).toISOString()).toBe(
+      "2026-11-11T00:00:00.000Z",
+    );
+    expect(
+      recommendationNow(
+        "2026-11-10",
+        new Date("2026-11-10T23:59:00Z"),
+      ).toISOString(),
+    ).toBe("2026-11-11T00:00:00.000Z");
+  });
+
+  it("anchors future-dated reports the same way", () => {
+    expect(recommendationNow("2026-12-01", wallClock).toISOString()).toBe(
+      "2026-12-02T00:00:00.000Z",
+    );
+  });
+
+  it("falls back to the wall clock for an unparsable date", () => {
+    expect(recommendationNow("not-a-date", wallClock)).toBe(wallClock);
+  });
+});
+
 describe("buildRecommendations", () => {
   function makePr(overrides: Partial<PrRow> = {}): PrRow {
     return {
@@ -345,6 +379,59 @@ describe("buildRecommendations", () => {
       "Unblock: rebase, close, or escalate",
       "Check with the assignee or update status",
     ]);
+  });
+
+  it("attributes stalled tickets to the team engineer, not an external assignee", () => {
+    const { rows } = buildRecommendations({
+      verdicts: [],
+      tickets: new Map([
+        [
+          "CNV-76488",
+          makeTicket({
+            key: "CNV-76488",
+            status: "In Progress",
+            assignee_name: "Sam Torres",
+            qa_contact_name: "Dana Whitfield",
+            statuscategorychangedate: daysAgo(127),
+          }),
+        ],
+      ]),
+      prs: [],
+      jiraBaseUrl: "https://redhat.atlassian.net/browse",
+      now: NOW,
+      followups: DEFAULT_FOLLOWUPS,
+      jiraDisplayToName: new Map([["Dana Whitfield", "Dana Whitfield"]]),
+      engineerByKey: new Map([["CNV-76488", "Dana Whitfield"]]),
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].owner).toBe("Dana Whitfield");
+  });
+
+  it("falls back to the Jira assignee when no team engineer owns the ticket", () => {
+    const { rows } = buildRecommendations({
+      verdicts: [],
+      tickets: new Map([
+        [
+          "CNV-76488",
+          makeTicket({
+            key: "CNV-76488",
+            status: "In Progress",
+            assignee_name: "Sam Torres",
+            qa_contact_name: "",
+            statuscategorychangedate: daysAgo(127),
+          }),
+        ],
+      ]),
+      prs: [],
+      jiraBaseUrl: "https://redhat.atlassian.net/browse",
+      now: NOW,
+      followups: DEFAULT_FOLLOWUPS,
+      jiraDisplayToName: new Map([["Dana Whitfield", "Dana Whitfield"]]),
+      engineerByKey: new Map(),
+    });
+
+    expect(rows[0].owner).toBe("Sam Torres");
   });
 
   it("builds a backport row from a surviving claim", () => {

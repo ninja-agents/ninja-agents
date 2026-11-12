@@ -57,6 +57,7 @@ export interface JiraItem {
   resolved_by: string;
   affected_versions: string[];
   fix_versions: string[];
+  components?: string[];
   nested_prs: PRItem[];
   customer_cases: CustomerCase[];
   backport_needed: string[];
@@ -95,6 +96,9 @@ interface TeamConfig {
     key: string;
     name: string;
     jira_prefixes: string[];
+    jira_components?: string[];
+    ocpbugs_summary_repos?: string[];
+    sprint_tracked?: boolean;
     repos: string[];
     filter_github_synced_without_pr?: boolean;
     github_orgs?: string[];
@@ -103,7 +107,7 @@ interface TeamConfig {
     name: string;
     directory: string;
     github: string;
-    gitlab: string;
+    gitlab?: string;
     jira_account_id: string;
     jira_display_names: string[];
     role: string;
@@ -187,9 +191,25 @@ export function buildPrefixToProduct(config: TeamConfig): Map<string, string> {
   return mapping;
 }
 
+export function buildComponentToProduct(
+  config: TeamConfig,
+): Map<string, string> {
+  const mapping = new Map<string, string>();
+  for (const p of config.products) {
+    for (const component of p.jira_components ?? []) {
+      mapping.set(component, p.key);
+    }
+  }
+  return mapping;
+}
+
 export function buildOcpbugsSummaryRepoRe(config: TeamConfig): RegExp {
   const repoNames = new Set<string>();
   for (const p of config.products) {
+    if (p.ocpbugs_summary_repos !== undefined) {
+      for (const name of p.ocpbugs_summary_repos) repoNames.add(name);
+      continue;
+    }
     for (const repo of p.repos) {
       const parts = repo.split("/");
       if (parts.length === 2 && parts[1].length > 3) {
@@ -441,6 +461,7 @@ export function loadJiraTickets(
       resolved_by: r.resolved_by ?? "",
       affected_versions: (r.affected_versions ?? "").split("|").filter(Boolean),
       fix_versions: (r.fix_versions ?? "").split("|").filter(Boolean),
+      components: (r.components ?? "").split("|").filter(Boolean),
       nested_prs: [],
       customer_cases: [],
       backport_needed: [],
@@ -571,13 +592,17 @@ export function filterCompletedPrs(
   });
 }
 
-export function filterOpenPrs(prs: PRItem[], cutoffDate?: Date): PRItem[] {
+export function filterOpenPrs(
+  prs: PRItem[],
+  cutoffDate?: Date,
+  endDate?: Date,
+): PRItem[] {
   return prs.filter((p) => {
     if (p.state !== "open" && p.state !== "opened") return false;
-    if (cutoffDate) {
-      const created = parseDate(p.created_at);
-      if (created !== null && created < cutoffDate) return false;
-    }
+    const created = parseDate(p.created_at);
+    if (cutoffDate && created !== null && created < cutoffDate) return false;
+    // A report must not list a PR opened after its own date.
+    if (endDate && created !== null && created >= endDate) return false;
     return true;
   });
 }
@@ -591,11 +616,17 @@ export function filterCompletedJira(
     if (t.resolution !== "Done") return false;
     const filterDate =
       parseDate(t.statuscategorychangedate) ?? parseDate(t.resolutiondate);
-    return (
-      filterDate !== null &&
-      filterDate >= windowStart &&
-      filterDate <= windowEnd
-    );
+    if (
+      filterDate === null ||
+      filterDate < windowStart ||
+      filterDate > windowEnd
+    ) {
+      return false;
+    }
+    // Completed rows print the resolution date, so a resolution dated after the
+    // window would make a back-dated report describe a future event.
+    const shownDate = parseDate(t.resolutiondate);
+    return shownDate === null || shownDate <= windowEnd;
   });
 }
 
@@ -638,14 +669,24 @@ export function filterGithubSyncedTickets(
 export function filterInProgressJira(
   tickets: JiraItem[],
   sprintPattern?: RegExp,
+  requiresSprint: (ticket: JiraItem) => boolean = () => true,
+  requiresStarted: (ticket: JiraItem) => boolean = () => false,
 ): JiraItem[] {
   const excludedStatuses = new Set(["Done", "Closed", "Resolved", "Verified"]);
+  const notStartedStatuses = new Set([
+    "New",
+    "Refinement",
+    "To Do",
+    "Backlog",
+    "Grooming",
+  ]);
   const devStatuses = new Set([
     "ASSIGNED",
     "In Progress",
     "Dev Complete",
     "Review",
     "POST",
+    "MODIFIED",
     "To Do",
     "Release Pending",
   ]);
@@ -653,7 +694,27 @@ export function filterInProgressJira(
 
   return tickets.filter((t) => {
     if (excludedStatuses.has(t.status)) return false;
-    if (sprintPattern && !sprintPattern.test(t.sprint_name)) return false;
+    // Resolved work is reported under Completed This Week; statuses such as
+    // Release Pending keep a Done ticket open, so without this check the same
+    // ticket appears as both completed and in progress.
+    if (t.resolution === "Done") return false;
+    if (
+      sprintPattern &&
+      requiresSprint(t) &&
+      !sprintPattern.test(t.sprint_name)
+    )
+      return false;
+    const isHighPriority =
+      t.priority === "Blocker" || t.priority === "Critical";
+    // Products without sprints have no committed-but-unstarted state, so their
+    // untriaged backlog stays out of the in-progress section unless it is a
+    // blocker or critical ticket.
+    if (
+      requiresStarted(t) &&
+      notStartedStatuses.has(t.status) &&
+      !isHighPriority
+    )
+      return false;
     if (t.issuetype === "Bug" || t.issuetype === "Vulnerability") {
       if (t.customer_cases.length === 0) {
         const relevant = t.role === "qa_contact" ? qeStatuses : devStatuses;
@@ -761,6 +822,7 @@ export function determineProduct(
   ocpbugsSummaryRe: RegExp,
   ticketIdRe: RegExp,
   orgToProduct: Map<string, string> = new Map(),
+  componentToProduct: Map<string, string> = new Map(),
 ): string {
   if (
     "key" in item &&
@@ -773,6 +835,10 @@ export function determineProduct(
     const prefix = jira.key.includes("-") ? jira.key.split("-")[0] : "";
 
     if (prefix === "OCPBUGS") {
+      for (const component of jira.components ?? []) {
+        const mapped = componentToProduct.get(component);
+        if (mapped) return mapped;
+      }
       const m = ocpbugsSummaryRe.exec(jira.summary);
       if (m && repoToProduct.has(m[0])) {
         return repoToProduct.get(m[0])!;
@@ -831,7 +897,10 @@ export function shouldConsolidateTestTasks(tickets: JiraItem[]): {
 // ---------------------------------------------------------------------------
 
 export function normalizeVersionStream(version: string): string {
-  const v = version.replace(/^openshift-/i, "").trim();
+  const v = version
+    .replace(/^openshift-/i, "")
+    .replace(/^cnv\s+v/i, "")
+    .trim();
   if (/^\d+\.\d+\.z$/.test(v)) return v;
   const m = v.match(/^(\d+\.\d+)(?:\.\d+)?$/);
   if (m) return `${m[1]}.z`;
@@ -990,6 +1059,7 @@ export function organize(
   const prefixToProduct = buildPrefixToProduct(config);
   const orgToProduct = buildOrgToProduct(config);
   const ocpbugsSummaryRe = buildOcpbugsSummaryRepoRe(config);
+  const componentToProduct = buildComponentToProduct(config);
   const productOrder = [...config.products.map((p) => p.key), "Other"];
   const engineerNames = config.engineers.map((e) => e.name);
 
@@ -1024,6 +1094,7 @@ export function organize(
       ocpbugsSummaryRe,
       ticketIdRe,
       orgToProduct,
+      componentToProduct,
     );
     getBlock(product, t.engineer).completed_tickets.push(t);
   }
@@ -1036,6 +1107,7 @@ export function organize(
       ocpbugsSummaryRe,
       ticketIdRe,
       orgToProduct,
+      componentToProduct,
     );
     getBlock(product, p.engineer).completed_prs.push(p);
   }
@@ -1048,6 +1120,7 @@ export function organize(
       ocpbugsSummaryRe,
       ticketIdRe,
       orgToProduct,
+      componentToProduct,
     );
     getBlock(product, t.engineer).in_progress_tickets.push(t);
   }
@@ -1060,6 +1133,7 @@ export function organize(
       ocpbugsSummaryRe,
       ticketIdRe,
       orgToProduct,
+      componentToProduct,
     );
     getBlock(product, p.engineer).in_progress_prs.push(p);
   }
@@ -1843,7 +1917,7 @@ export function main(argv: string[] = process.argv): void {
   const externalPrs = allPrs.filter((p) => p.external);
   const completedPrs = filterCompletedPrs(teamPrs, windowStart, windowEnd);
   const prCutoff = new Date(reportDate.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const openPrs = filterOpenPrs(teamPrs, prCutoff);
+  const openPrs = filterOpenPrs(teamPrs, prCutoff, windowEnd);
   const additionalByProduct = formatAdditionalContributions(
     filterCompletedPrs(externalPrs, windowStart, windowEnd),
     config,
@@ -1866,7 +1940,34 @@ export function main(argv: string[] = process.argv): void {
   const sprintPattern = config.sprint_name_pattern
     ? new RegExp(config.sprint_name_pattern)
     : undefined;
-  const ipJira = filterInProgressJira(jiraTickets, sprintPattern);
+  const repoToProduct = buildRepoToProduct(config);
+  const prefixToProduct = buildPrefixToProduct(config);
+  const ocpbugsSummaryRe = buildOcpbugsSummaryRepoRe(config);
+  const orgToProduct = buildOrgToProduct(config);
+  const componentToProduct = buildComponentToProduct(config);
+  const sprintTrackedProducts = new Set(
+    config.products.filter((p) => p.sprint_tracked !== false).map((p) => p.key),
+  );
+  const requiresSprint = (t: JiraItem): boolean =>
+    sprintTrackedProducts.has(
+      determineProduct(
+        t,
+        config,
+        repoToProduct,
+        prefixToProduct,
+        ocpbugsSummaryRe,
+        ticketIdRe,
+        orgToProduct,
+        componentToProduct,
+      ),
+    );
+  const requiresStarted = (t: JiraItem): boolean => !requiresSprint(t);
+  const ipJira = filterInProgressJira(
+    jiraTickets,
+    sprintPattern,
+    requiresSprint,
+    requiresStarted,
+  );
 
   const wsStr = windowStart.toISOString().slice(0, 10);
   const rdStr = reportDate.toISOString().slice(0, 10);

@@ -28,7 +28,7 @@ const SEVEN_DAYS_AGO_ISO = `${SEVEN_DAYS_AGO}T00:00:00Z`;
 interface Engineer {
   name: string;
   github: string;
-  gitlab: string;
+  gitlab?: string;
   jira_account_id: string;
 }
 
@@ -77,6 +77,7 @@ interface JiraTicket {
   resolved_by: string;
   affected_versions: string;
   fix_versions: string;
+  components: string;
   issuelinks: JiraIssueLink[];
 }
 
@@ -333,6 +334,11 @@ function parseJiraIssue(
         .map((v) => str(v.name))
         .filter(Boolean)
     : [];
+  const componentsArr = Array.isArray(f.components)
+    ? (f.components as Array<Record<string, unknown>>)
+        .map((c) => str(c.name))
+        .filter(Boolean)
+    : [];
 
   return {
     key: issue.key,
@@ -351,6 +357,7 @@ function parseJiraIssue(
     resolved_by: "",
     affected_versions: versionsArr.join("|"),
     fix_versions: fixVersionsArr.join("|"),
+    components: componentsArr.join("|"),
     issuelinks: (f.issuelinks ?? []) as JiraIssueLink[],
   };
 }
@@ -559,6 +566,7 @@ async function main(): Promise<void> {
     "issuelinks",
     "versions",
     "fixVersions",
+    "components",
     "parent",
   ];
 
@@ -633,7 +641,7 @@ async function main(): Promise<void> {
   }
 
   const jiraCsvLines = [
-    "key,summary,status,resolution,resolutiondate,statuscategorychangedate,issuetype,priority,assignee_id,assignee_name,qa_contact_id,qa_contact_name,sprint_name,resolved_by,affected_versions,fix_versions",
+    "key,summary,status,resolution,resolutiondate,statuscategorychangedate,issuetype,priority,assignee_id,assignee_name,qa_contact_id,qa_contact_name,sprint_name,resolved_by,affected_versions,fix_versions,components",
   ];
   for (const ticket of jiraTickets.values()) {
     jiraCsvLines.push(
@@ -644,7 +652,7 @@ async function main(): Promise<void> {
         `${csvEscape(ticket.assignee_name)},${ticket.qa_contact_id},` +
         `${csvEscape(ticket.qa_contact_name)},${ticket.sprint_name},` +
         `${csvEscape(ticket.resolved_by)},${csvEscape(ticket.affected_versions)},` +
-        `${csvEscape(ticket.fix_versions)}`,
+        `${csvEscape(ticket.fix_versions)},${csvEscape(ticket.components)}`,
     );
   }
   writeFileSync(
@@ -765,6 +773,10 @@ async function main(): Promise<void> {
     const gitlabBase = GITLAB_API.split("/api/")[0] + "/";
 
     for (const eng of engineers) {
+      if (!eng.gitlab) {
+        console.log(`  ${eng.name} (no GitLab account configured, skipping)`);
+        continue;
+      }
       console.log(`  ${eng.name} (${eng.gitlab})...`);
 
       const mergedUrl =

@@ -6,6 +6,7 @@ import {
   type HierarchyNode,
   type HierarchyWork,
 } from "./jira-hierarchy.js";
+import { WAITING_STATUSES } from "./collector-helpers.js";
 
 const GREEN = "\x1b[92m";
 const YELLOW = "\x1b[93m";
@@ -13,6 +14,14 @@ const RED = "\x1b[91m";
 const RESET = "\x1b[0m";
 
 const JIRA_GITHUB_REF_RE = /\[([a-zA-Z0-9_-]+)#(\d+)\]/;
+
+// Jira localization: Atlassian returns translated names when the caller's
+// profile locale is not English. Keep both forms so older caches still work.
+const RESOLUTION_DONE_ALIASES: Record<string, true> = {
+  Done: true,
+  完成: true,
+  Completed: true,
+};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,6 +58,7 @@ export interface JiraItem {
   resolution: string;
   resolutiondate: string;
   statuscategorychangedate: string;
+  status_entered_date: string;
   issuetype: string;
   priority: string;
   url: string;
@@ -453,6 +463,7 @@ export function loadJiraTickets(
       resolution: r.resolution ?? "",
       resolutiondate: r.resolutiondate ?? "",
       statuscategorychangedate: r.statuscategorychangedate ?? "",
+      status_entered_date: r.status_entered_date ?? "",
       issuetype: r.issuetype ?? "",
       priority: r.priority ?? "",
       url,
@@ -613,7 +624,7 @@ export function filterCompletedJira(
   windowEnd: Date,
 ): JiraItem[] {
   return tickets.filter((t) => {
-    if (t.resolution !== "Done") return false;
+    if (!RESOLUTION_DONE_ALIASES[t.resolution]) return false;
     const filterDate =
       parseDate(t.statuscategorychangedate) ?? parseDate(t.resolutiondate);
     if (
@@ -672,32 +683,37 @@ export function filterInProgressJira(
   requiresSprint: (ticket: JiraItem) => boolean = () => true,
   requiresStarted: (ticket: JiraItem) => boolean = () => false,
 ): JiraItem[] {
-  const excludedStatuses = new Set(["Done", "Closed", "Resolved", "Verified"]);
-  const notStartedStatuses = new Set([
-    "New",
-    "Refinement",
-    "To Do",
-    "Backlog",
-    "Grooming",
-  ]);
-  const devStatuses = new Set([
-    "ASSIGNED",
-    "In Progress",
-    "Dev Complete",
-    "Review",
-    "POST",
-    "MODIFIED",
-    "To Do",
-    "Release Pending",
-  ]);
-  const qeStatuses = new Set(["ON_QA"]);
-
+  const excludedStatuses: Record<string, true> = {
+    Done: true,
+    Closed: true,
+    已关闭: true,
+    Resolved: true,
+    Verified: true,
+  };
+  const notStartedStatuses: Record<string, true> = {
+    New: true,
+    全新: true,
+    Refinement: true,
+    "To Do": true,
+    Backlog: true,
+    Grooming: true,
+  };
+  const devStatuses: Record<string, true> = {
+    ASSIGNED: true,
+    "In Progress": true,
+    "Dev Complete": true,
+    Review: true,
+    POST: true,
+    MODIFIED: true,
+    "To Do": true,
+    "Release Pending": true,
+    Testing: true,
+    ON_QA: true,
+  };
+  const qeStatuses: Record<string, true> = { ON_QA: true, Testing: true };
   return tickets.filter((t) => {
-    if (excludedStatuses.has(t.status)) return false;
-    // Resolved work is reported under Completed This Week; statuses such as
-    // Release Pending keep a Done ticket open, so without this check the same
-    // ticket appears as both completed and in progress.
-    if (t.resolution === "Done") return false;
+    if (excludedStatuses[t.status]) return false;
+    if (RESOLUTION_DONE_ALIASES[t.resolution]) return false;
     if (
       sprintPattern &&
       requiresSprint(t) &&
@@ -709,16 +725,12 @@ export function filterInProgressJira(
     // Products without sprints have no committed-but-unstarted state, so their
     // untriaged backlog stays out of the in-progress section unless it is a
     // blocker or critical ticket.
-    if (
-      requiresStarted(t) &&
-      notStartedStatuses.has(t.status) &&
-      !isHighPriority
-    )
+    if (requiresStarted(t) && notStartedStatuses[t.status] && !isHighPriority)
       return false;
     if (t.issuetype === "Bug" || t.issuetype === "Vulnerability") {
       if (t.customer_cases.length === 0) {
         const relevant = t.role === "qa_contact" ? qeStatuses : devStatuses;
-        if (!relevant.has(t.status)) return false;
+        if (!relevant[t.status]) return false;
       }
     }
     return true;
@@ -1199,6 +1211,16 @@ export function fmtReportDate(d: Date): string {
   const year = d.getUTCFullYear();
   return `${month} ${day}, ${year}`;
 }
+export { WAITING_STATUSES } from "./collector-helpers.js";
+
+const DAY_MS = 86_400_000;
+
+export function daysInStatus(iso: string, now: Date): number | null {
+  const parsed = parseDate(iso);
+  if (!parsed) return null;
+  const days = Math.floor((now.getTime() - parsed.getTime()) / DAY_MS);
+  return days < 0 ? 0 : days;
+}
 
 function fmtBackportNeeded(versions: string[]): string {
   if (versions.length === 0) return "";
@@ -1224,7 +1246,11 @@ function fmtCustomerCases(cases: CustomerCase[]): string {
   return ` — ${label}: ${names.join(", ")}`;
 }
 
-export function fmtTicketLink(t: JiraItem, completed: boolean = true): string {
+export function fmtTicketLink(
+  t: JiraItem,
+  completed: boolean = true,
+  now?: Date,
+): string {
   const qaTag = t.role === "qa_contact" ? " (QA)" : "";
   const ccStr = fmtCustomerCases(t.customer_cases);
   const bpStr = fmtBackportNeeded(t.backport_needed);
@@ -1236,7 +1262,15 @@ export function fmtTicketLink(t: JiraItem, completed: boolean = true): string {
     t.priority === "Blocker" || t.priority === "Critical"
       ? `, ${t.priority} priority`
       : "";
-  return `- [${t.key} - ${t.summary}](${t.url}) (${statusStr}${prioritySuffix})${qaTag}${ccStr}${bpStr}`;
+  let waiting = "";
+  if (WAITING_STATUSES[t.status] && now) {
+    const source = t.status_entered_date || t.statuscategorychangedate;
+    const age = daysInStatus(source, now);
+    if (age !== null) {
+      waiting = `, waiting ${age}d`;
+    }
+  }
+  return `- [${t.key} - ${t.summary}](${t.url}) (${statusStr}${prioritySuffix}${waiting})${qaTag}${ccStr}${bpStr}`;
 }
 
 export function fmtTestTaskSummary(testTickets: JiraItem[]): string {
@@ -1379,6 +1413,7 @@ export function formatCompletedSection(
 export function formatInProgressSection(
   sections: Map<string, Map<string, EngineerBlock>>,
   config: TeamConfig,
+  now?: Date,
 ): string {
   const lines: string[] = [];
   const productNames = new Map(config.products.map((p) => [p.key, p.name]));
@@ -1409,7 +1444,7 @@ export function formatInProgressSection(
       lines.push(`**${engName}:**`);
 
       for (const t of block.in_progress_tickets) {
-        lines.push(fmtTicketLink(t, false));
+        lines.push(fmtTicketLink(t, false, now));
         for (const pr of t.nested_prs) {
           lines.push(fmtPrLink(pr, 1));
         }
@@ -1717,28 +1752,21 @@ export function formatHighlightContext(
     }
   }
 
-  lines.push("");
-  lines.push("--- Highlights Context ---");
-  lines.push(
-    "Write 2-4 bullets (150-200 words max) for ## Summary > ### Highlights.",
-  );
-  lines.push(
-    "Only completed milestones. Peer-VP test: would a peer VP mention this?",
-  );
+  const highlightBullets: string[] = [];
   if (data.cve) {
-    lines.push(
+    highlightBullets.push(
       `  CVE batch: ${data.cve.count} fixes across ${data.cve.products.join(", ")}`,
     );
   }
   for (const [pk, items] of data.features) {
     if (items.length > 0)
-      lines.push(
+      highlightBullets.push(
         `  ${pk} features (${items.length}): ${items.slice(0, 3).join("; ")}`,
       );
   }
   for (const [, entries] of data.resolvedCustomerTickets) {
     for (const e of entries) {
-      lines.push(
+      highlightBullets.push(
         `  Resolved customer issue: [${e.key}](${e.url}) ${e.summary} (${e.customers.join(", ")})`,
       );
     }
@@ -1746,11 +1774,23 @@ export function formatHighlightContext(
   for (const [, entries] of data.backports) {
     for (const e of entries) {
       if (e.needed.length >= 3) {
-        lines.push(
+        highlightBullets.push(
           `  Backport risk: [${e.key}](${e.url}) ${e.summary} (needs: ${e.needed.join(", ")})`,
         );
       }
     }
+  }
+
+  if (highlightBullets.length > 0) {
+    lines.push("");
+    lines.push("--- Highlights Context ---");
+    lines.push(
+      "Write 2-4 bullets (150-200 words max) for ## Summary > ### Highlights.",
+    );
+    lines.push(
+      "Only completed milestones. Peer-VP test: would a peer VP mention this?",
+    );
+    lines.push(...highlightBullets);
   }
 
   return lines.join("\n");
@@ -1788,7 +1828,33 @@ export function generateHighlights(
   for (const [pk, items] of data.bugs) {
     if (items.length > 0) {
       const detail = items.slice(0, 3).join("; ");
-      highlights.push(`- ${pk} quality: ${detail}`);
+      highlights.push(`- ${pk} bug fixes: ${detail}`);
+    }
+  }
+
+  for (const [, entries] of data.customerTickets) {
+    for (const e of entries) {
+      highlights.push(
+        `- Customer-impacting issue in progress: [${e.key}](${e.url}) ${e.summary} (${e.customers.join(", ")})`,
+      );
+    }
+  }
+
+  for (const [, entries] of data.resolvedCustomerTickets) {
+    for (const e of entries) {
+      highlights.push(
+        `- Resolved customer issue: [${e.key}](${e.url}) ${e.summary} (${e.customers.join(", ")})`,
+      );
+    }
+  }
+
+  for (const [, entries] of data.backports) {
+    for (const e of entries) {
+      if (e.needed.length >= 3) {
+        highlights.push(
+          `- Backport risk: [${e.key}](${e.url}) ${e.summary} (needs: ${e.needed.join(", ")})`,
+        );
+      }
     }
   }
 
@@ -2069,10 +2135,6 @@ export function main(argv: string[] = process.argv): void {
     "",
     "## Summary",
     "",
-    "### Highlights",
-    "<!-- HIGHLIGHTS_PLACEHOLDER -->",
-    "- (highlights pending)",
-    "",
     "<!-- SUMMARY_PLACEHOLDER -->",
     "- (summary pending)",
   ];
@@ -2092,7 +2154,7 @@ export function main(argv: string[] = process.argv): void {
   );
 
   reportLines.push("## In Progress");
-  reportLines.push(formatInProgressSection(sections, config));
+  reportLines.push(formatInProgressSection(sections, config, windowEnd));
 
   const reportText = reportLines.join("\n") + "\n";
 

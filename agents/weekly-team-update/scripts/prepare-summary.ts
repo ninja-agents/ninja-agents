@@ -27,19 +27,12 @@ export function extractSummary(report: string): string {
     )
     .trimEnd();
 
-  if (
-    !/^### Highlights[ \t]*\r?$/m.test(summary) ||
-    !/^### (?!Highlights[ \t]*\r?$)[^\r\n]+/m.test(summary)
-  ) {
+  if (!/^### (?!#)[^\r\n]+/m.test(summary)) {
     throw new SummaryPreparationError(
-      "Summary needs Highlights and at least one product subsection",
+      "Summary needs at least one product subsection",
     );
   }
-  if (
-    /<!--\s*[A-Z_]*PLACEHOLDER\s*-->|- \((?:highlights|summary) pending\)/i.test(
-      summary,
-    )
-  ) {
+  if (/<!--\s*[A-Z_]*PLACEHOLDER\s*-->|- \(summary pending\)/i.test(summary)) {
     throw new SummaryPreparationError(
       "Summary still contains a placeholder or pending text",
     );

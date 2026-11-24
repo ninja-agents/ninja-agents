@@ -19,21 +19,6 @@ const OUTPUT_PATH = resolve(
 const LLM_BASE_URL = process.env.LLM_BASE_URL ?? "http://localhost:1234/v1";
 const LLM_MODEL = process.env.LLM_MODEL ?? "qwen2.5-coder-7b-instruct";
 
-const HIGHLIGHTS_SYSTEM_PROMPT = `You are a senior engineering leader writing Highlights for a weekly status report.
-Write 2-4 bullets (150-200 words max) covering only the most impactful completed milestones.
-
-Rules:
-- Each bullet: "- **Bold lead-in:** description ([KEY](url))"
-- Only completed milestones; no in-progress items or future plans
-- Frame by business impact: who benefits, what risk is reduced, what customer pain is resolved
-- Order: customer-visible milestones first, then quality, then strategic decisions, then releases
-- No promotional adjectives ("critical", "major", "significant")
-- No em dashes; use colons, semicolons, or parentheses
-- Peer-VP test: would a peer VP mention this? If no, cut it.
-- Cut: routine z-stream releases, internal tooling, CI fixes, routine bug fixes, meetings
-
-Output ONLY the 2-4 bullets, nothing else.`;
-
 const SUMMARY_SYSTEM_PROMPT = `You are a technical writer for a software engineering team's weekly status report.
 Write one "### ProductName" sub-heading per product with compact bullets covering relevant work.
 Use the Jira Hierarchy Context to group work bottom-up under linked Features and Epics. Show Feature > Epic > relevant Story or work links when available. If no Feature exists, start at the Epic. If no parent exists, summarize the product work in prose.
@@ -42,10 +27,10 @@ Cover completed and in-progress work, customer-impacting bugs, backport needs, a
 Rules:
 - Every product gets a paragraph, even if quiet
 - Use descriptive inline Jira links for hierarchy nodes and relevant work
-- Do not repeat any outcome, Jira key, or CVE already covered in Highlights; omit that work from the product summary
 - Group routine items concisely rather than listing each one
 - Every claim must trace to an item in the provided data — never invent work
 - Customer-impacting bugs must name the customers
+- Write the product sub-headings in the order the product blocks appear in the context
 
 Output ONLY the summary sub-headings and paragraphs, nothing else.`;
 
@@ -69,22 +54,14 @@ function run(cmd: string, label: string): string {
   }
 }
 
-async function callLlm(
-  highlightContext: string,
-  reportBody: string,
-  systemPrompt: string = SUMMARY_SYSTEM_PROMPT,
-  highlights = "",
-): Promise<string> {
+async function callLlm(context: string, reportBody: string): Promise<string> {
   const completedMatch = reportBody.match(
     /## Completed This Week[\s\S]*?(?=## In Progress)/,
   );
   const inProgressMatch = reportBody.match(/## In Progress[\s\S]*?(?=## |$)/);
 
   const userContent = [
-    highlightContext,
-    highlights
-      ? "\n--- Already written Highlights (do not repeat) ---\n" + highlights
-      : "",
+    context,
     "",
     "--- Report Sections (for reference) ---",
     completedMatch?.[0]?.slice(0, 2000) ?? "(no completed section found)",
@@ -101,7 +78,7 @@ async function callLlm(
     body: JSON.stringify({
       model: LLM_MODEL,
       messages: [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: SUMMARY_SYSTEM_PROMPT },
         { role: "user", content: userContent },
       ],
       max_tokens: 3072,
@@ -127,17 +104,6 @@ async function callLlm(
 
   // Strip <think>...</think> blocks (Qwen reasoning traces)
   return content.replace(/<think>[\s\S]*?<\/think>\s*/g, "").trim();
-}
-
-function repeatedSummaryReferences(
-  highlights: string,
-  summary: string,
-): string[] {
-  const referencePattern = /\b(?:CVE-\d{4}-\d+|[A-Z][A-Z0-9]+-\d+)\b/g;
-  const highlightReferences = new Set(highlights.match(referencePattern) ?? []);
-  return [...new Set(summary.match(referencePattern) ?? [])].filter(
-    (reference) => highlightReferences.has(reference),
-  );
 }
 
 async function main(): Promise<void> {
@@ -169,50 +135,8 @@ async function main(): Promise<void> {
   // report no longer makes before the model can echo them.
   const verifiedContext = reconcileBackportClaims(highlightContext, report);
 
-  if (report.includes("<!-- HIGHLIGHTS_PLACEHOLDER -->")) {
-    const execSummary = await callLlm(
-      verifiedContext,
-      report,
-      HIGHLIGHTS_SYSTEM_PROMPT,
-    );
-    report = report.replace(
-      /<!-- HIGHLIGHTS_PLACEHOLDER -->\n- \(highlights pending\)/,
-      execSummary,
-    );
-    writeFileSync(OUTPUT_PATH, report);
-    console.log("\n=> Highlights written");
-  }
-
   if (report.includes("<!-- SUMMARY_PLACEHOLDER -->")) {
-    const highlights =
-      report
-        .match(
-          /### Highlights\n([\s\S]*?)(?=\n### |\n<!-- SUMMARY_PLACEHOLDER -->)/,
-        )?.[1]
-        ?.trim() ?? "";
-    let summary = await callLlm(
-      verifiedContext,
-      report,
-      SUMMARY_SYSTEM_PROMPT,
-      highlights,
-    );
-    let repeated = repeatedSummaryReferences(highlights, summary);
-    if (repeated.length > 0) {
-      summary = await callLlm(
-        verifiedContext,
-        report,
-        SUMMARY_SYSTEM_PROMPT +
-          "\nRemove every mention of these references already in Highlights: " +
-          repeated.join(", "),
-        highlights,
-      );
-      repeated = repeatedSummaryReferences(highlights, summary);
-    }
-    if (repeated.length > 0) {
-      throw new Error(
-        "Summary repeats Highlights references: " + repeated.join(", "),
-      );
-    }
+    const summary = await callLlm(verifiedContext, report);
     report = report.replace(
       /<!-- SUMMARY_PLACEHOLDER -->\n- \(summary pending\)/,
       summary,

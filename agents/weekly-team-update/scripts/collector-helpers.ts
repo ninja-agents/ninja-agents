@@ -1,5 +1,11 @@
 import { setTimeout as delay } from "node:timers/promises";
 
+export const WAITING_STATUSES: Record<string, true> = {
+  Testing: true,
+  ON_QA: true,
+  MODIFIED: true,
+};
+
 export function matchingActiveSprintName(
   sprintField: unknown,
   sprintPattern: RegExp,

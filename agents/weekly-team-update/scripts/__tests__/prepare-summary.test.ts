@@ -21,11 +21,11 @@ const report = [
   "",
   "## Summary",
   "",
-  "### Highlights",
-  "- Shipped [work](https://example.com/work)",
-  "",
   "### MTV",
   "- In progress: migration work",
+  "",
+  "### CNV (OpenShift Virtualization)",
+  "- Shipped: live migration fix",
   "",
   "## Data Quality Notes",
   "- Source warning",
@@ -42,9 +42,9 @@ afterEach(() => {
 });
 
 describe("extractSummary", () => {
-  it("copies Highlights and product summaries without later report sections", () => {
+  it("copies product summaries without later report sections", () => {
     expect(extractSummary(report)).toBe(
-      "## Summary\n\n### Highlights\n- Shipped [work](https://example.com/work)\n\n### MTV\n- In progress: migration work\n",
+      "## Summary\n\n### MTV\n- In progress: migration work\n\n### CNV (OpenShift Virtualization)\n- Shipped: live migration fix\n",
     );
   });
 
@@ -63,9 +63,9 @@ describe("extractSummary", () => {
         ),
       ),
     ).toThrow("placeholder");
-    expect(() =>
-      extractSummary(report.replace("### Highlights", "### Other")),
-    ).toThrow("Highlights");
+    expect(() => extractSummary("## Summary\n\n- only a bullet\n")).toThrow(
+      "product subsection",
+    );
   });
 });
 

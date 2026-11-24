@@ -94,7 +94,7 @@ Scripts that add comments MUST check for existing comments with a matching prefi
 When reviewing changes to this repo, check for:
 
 - **Agent isolation** -- each agent is self-contained; no cross-agent imports (shared team config is the exception, accessed via a config path)
-- **Deterministic output** -- scripts produce the same output for the same input; non-deterministic prose is clearly separated (Key Highlights, Key Takeaways)
+- **Deterministic output** -- scripts produce the same output for the same input; non-deterministic prose is clearly separated (Key Takeaways, product summaries)
 - **No hardcoded data** -- team members, project keys, and board IDs come from config files, not source code
 - **No committed secrets** -- tokens resolve from environment variables via `${VAR_NAME}` in `.mcp.json`
 - **CSV quoting** -- fields with commas are double-quoted; internal quotes are escaped by doubling

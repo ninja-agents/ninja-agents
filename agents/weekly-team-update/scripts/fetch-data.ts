@@ -10,6 +10,7 @@ import { parseHierarchyIssue, type HierarchyNode } from "./jira-hierarchy.js";
 import {
   createGithubRequest,
   isExternalContributor,
+  WAITING_STATUSES,
 } from "./collector-helpers.js";
 
 const SCRIPT_DIR = import.meta.dirname;
@@ -67,6 +68,7 @@ interface JiraTicket {
   resolution: string;
   resolutiondate: string;
   statuscategorychangedate: string;
+  status_entered_date: string;
   issuetype: string;
   priority: string;
   assignee_id: string;
@@ -79,6 +81,9 @@ interface JiraTicket {
   fix_versions: string;
   components: string;
   issuelinks: JiraIssueLink[];
+  // Dual-tracking: SFDC cases via issue entity properties (+ legacy customfield_11283 helper)
+  sfdcCases: string[];
+  customerField11283: string[];
 }
 
 interface JiraIssueLink {
@@ -187,6 +192,7 @@ async function jiraRequest(
       headers: {
         Authorization: `Basic ${auth}`,
         Accept: "application/json",
+        "Accept-Language": "en-US",
       },
     });
     if (!res.ok) {
@@ -220,6 +226,7 @@ async function jiraGetIssue(
       headers: {
         Authorization: `Basic ${auth}`,
         Accept: "application/json",
+        "Accept-Language": "en-US",
       },
     });
     if (!res.ok) {
@@ -239,8 +246,75 @@ interface ChangelogHistory {
   author?: { displayName?: string; accountId?: string };
   items?: Array<{
     field?: string;
+    fromString?: string;
     toString?: string;
   }>;
+}
+
+export async function fetchChangelog(
+  key: string,
+  auth: string,
+): Promise<ChangelogHistory[]> {
+  const base = `https://${jiraConfig.cloud_id}/rest/api/3/issue/${key}/changelog`;
+  const histories: ChangelogHistory[] = [];
+  let startAt = 0;
+  let sawError = false;
+  while (true) {
+    const url = `${base}?startAt=${startAt}&maxResults=100`;
+    try {
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Basic ${auth}`,
+          Accept: "application/json",
+          "Accept-Language": "en-US",
+        },
+      });
+      if (!res.ok) {
+        const body = (await res.text()).slice(0, 200);
+        console.error(`  Changelog error ${res.status} for ${key}: ${body}`);
+        sawError = true;
+        break;
+      }
+      const data = (await res.json()) as {
+        values?: ChangelogHistory[];
+        isLast?: boolean;
+        total?: number;
+        startAt?: number;
+        maxResults?: number;
+      };
+      const values = data.values ?? [];
+      histories.push(...values);
+      const total = data.total ?? 0;
+      if (
+        data.isLast === true ||
+        startAt + values.length >= total ||
+        values.length === 0
+      )
+        break;
+      startAt += values.length;
+    } catch (e) {
+      console.error(`  Changelog fetch error for ${key}: ${String(e)}`);
+      sawError = true;
+      break;
+    }
+  }
+  if (sawError) return [];
+  return histories;
+}
+
+export function statusEnteredDate(
+  histories: ChangelogHistory[],
+  currentStatus: string,
+): string {
+  let lastMatch: string | undefined;
+  for (const h of histories) {
+    for (const item of h.items ?? []) {
+      if (item.field === "status" && item.toString === currentStatus) {
+        lastMatch = h.created;
+      }
+    }
+  }
+  return lastMatch ?? "";
 }
 
 function extractResolvedBy(
@@ -315,6 +389,148 @@ function extractSprintName(sprintField: unknown): string {
   return "";
 }
 
+export function isCipoeKey(s: string): boolean {
+  return s.startsWith("CIPOE-") || /^CIPOE-\d+$/.test(s);
+}
+
+export function extractSfdcCases(raw: unknown): string[] {
+  if (raw == null) return [];
+  if (typeof raw === "string") {
+    return raw
+      .split(/[,\s;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  if (Array.isArray(raw)) {
+    const out: string[] = [];
+    for (const e of raw as unknown[]) {
+      if (typeof e === "string") {
+        const t = e.trim();
+        if (t) out.push(t);
+      } else if (e && typeof e === "object") {
+        const o = e as Record<string, unknown>;
+        const v = (o.caseId ??
+          o.case_id ??
+          o.value ??
+          o.displayName ??
+          o.name ??
+          o.key ??
+          "") as unknown;
+        if (typeof v === "string" && v.trim()) out.push(v.trim());
+      }
+    }
+    return out;
+  }
+  if (typeof raw === "object") {
+    const o = raw as Record<string, unknown>;
+    if ("value" in o) return extractSfdcCases(o.value);
+  }
+  return [];
+}
+
+export function extractCustomerNamesFromField11283(raw: unknown): string[] {
+  if (raw == null) return [];
+  if (typeof raw === "string") {
+    return raw
+      .split(/[,;]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  if (Array.isArray(raw)) {
+    const out: string[] = [];
+    for (const e of raw as unknown[]) {
+      if (typeof e === "string") {
+        const t = e.trim();
+        if (t) out.push(t);
+      } else if (e && typeof e === "object") {
+        const o = e as Record<string, unknown>;
+        const v = (o.displayName ??
+          o.name ??
+          o.value ??
+          o.summary ??
+          o.key ??
+          "") as unknown;
+        if (typeof v === "string" && v.trim()) out.push(v.trim());
+      }
+    }
+    return out;
+  }
+  if (typeof raw === "object") {
+    const o = raw as Record<string, unknown>;
+    if ("value" in o) {
+      const v = o.value;
+      if (typeof v === "string" && v.trim()) return [v.trim()];
+      if (Array.isArray(v)) return extractCustomerNamesFromField11283(v);
+    }
+    const maybeNames: string[] = [];
+    for (const k of [
+      "affectedAccounts",
+      "interestedAccounts",
+      "accounts",
+      "customers",
+      "names",
+    ]) {
+      if (k in o) maybeNames.push(...extractCustomerNamesFromField11283(o[k]));
+    }
+    if (maybeNames.length) return maybeNames;
+  }
+  return [];
+}
+
+export function buildCustomerCases(
+  jiraTickets: Map<string, JiraTicket>,
+  jiraBase: string,
+): CustomerCase[] {
+  const customerCases: CustomerCase[] = [];
+  for (const [key, ticket] of jiraTickets) {
+    const seen = new Set<string>();
+    const pushUnique = (entry: CustomerCase): void => {
+      const dedupKey = (entry.case_id || entry.customer_name)
+        .toLowerCase()
+        .trim();
+      if (!dedupKey || seen.has(dedupKey)) return;
+      seen.add(dedupKey);
+      customerCases.push(entry);
+    };
+    for (const link of ticket.issuelinks) {
+      if (link.type?.name !== "Account") continue;
+      const outward = link.outwardIssue;
+      if (!outward) continue;
+      const accountKey = outward.key ?? "";
+      if (!accountKey.startsWith("CIPOE-")) continue;
+      const customerName = outward.fields?.summary ?? "";
+      pushUnique({
+        ticket_key: key,
+        case_id: accountKey,
+        case_url: `https://${jiraBase}/browse/${accountKey}`,
+        customer_name: customerName,
+      });
+    }
+    for (const name of ticket.customerField11283 ?? []) {
+      const n = name.trim();
+      if (!n) continue;
+      const isKey = isCipoeKey(n);
+      pushUnique({
+        ticket_key: key,
+        case_id: n,
+        case_url: isKey ? `https://${jiraBase}/browse/${n}` : "",
+        customer_name: isKey ? "" : n,
+      });
+    }
+    for (const sfdcId of ticket.sfdcCases ?? []) {
+      const sid = sfdcId.trim();
+      if (!sid) continue;
+      pushUnique({
+        ticket_key: key,
+        case_id: sid,
+        case_url: "",
+        customer_name: "",
+      });
+    }
+  }
+  return customerCases;
+}
+
 function parseJiraIssue(
   issue: { key: string; fields?: Record<string, unknown> },
   fallbackSprint?: string,
@@ -339,7 +555,6 @@ function parseJiraIssue(
         .map((c) => str(c.name))
         .filter(Boolean)
     : [];
-
   return {
     key: issue.key,
     summary: str(f.summary),
@@ -347,6 +562,7 @@ function parseJiraIssue(
     resolution: str((f.resolution as Record<string, unknown> | null)?.name),
     resolutiondate: str(f.resolutiondate),
     statuscategorychangedate: str(f.statuscategorychangedate),
+    status_entered_date: "",
     issuetype: str((f.issuetype as Record<string, unknown> | null)?.name),
     priority: str((f.priority as Record<string, unknown> | null)?.name),
     assignee_id: str(assignee?.accountId),
@@ -359,6 +575,8 @@ function parseJiraIssue(
     fix_versions: fixVersionsArr.join("|"),
     components: componentsArr.join("|"),
     issuelinks: (f.issuelinks ?? []) as JiraIssueLink[],
+    sfdcCases: [],
+    customerField11283: extractCustomerNamesFromField11283(f.customfield_11283),
   };
 }
 
@@ -563,6 +781,8 @@ async function main(): Promise<void> {
     "created",
     "customfield_10470",
     "customfield_10020",
+    // Plan: customfield_11283 (Interested_Parties counts today; harvest names if shape changes) — SFDC cases come from entity properties
+    "customfield_11283",
     "issuelinks",
     "versions",
     "fixVersions",
@@ -615,8 +835,30 @@ async function main(): Promise<void> {
     }
     console.log(`  Added ${added} new tickets from sprint backlog`);
   }
-
   console.log(`  Final Jira ticket count: ${jiraTickets.size}`);
+
+  const waitingKeys = [...jiraTickets.entries()]
+    .filter(([, t]) => WAITING_STATUSES[t.status])
+    .map(([k]) => k);
+
+  if (waitingKeys.length > 0) {
+    const auth = Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString(
+      "base64",
+    );
+    console.log(
+      `\n=== Fetching Changelogs for ${waitingKeys.length} Waiting-Status Tickets ===`,
+    );
+    for (const key of waitingKeys) {
+      const ticket = jiraTickets.get(key);
+      if (!ticket) continue;
+      const histories = await fetchChangelog(key, auth);
+      const entered = statusEnteredDate(histories, ticket.status);
+      if (entered) {
+        ticket.status_entered_date = entered;
+        console.log(`  ${key} (${ticket.status}): entered ${entered}`);
+      }
+    }
+  }
 
   // Fetch changelog for resolved tickets to determine who resolved them
   const resolvedKeys = [...jiraTickets.entries()]
@@ -641,13 +883,13 @@ async function main(): Promise<void> {
   }
 
   const jiraCsvLines = [
-    "key,summary,status,resolution,resolutiondate,statuscategorychangedate,issuetype,priority,assignee_id,assignee_name,qa_contact_id,qa_contact_name,sprint_name,resolved_by,affected_versions,fix_versions,components",
+    "key,summary,status,resolution,resolutiondate,statuscategorychangedate,status_entered_date,issuetype,priority,assignee_id,assignee_name,qa_contact_id,qa_contact_name,sprint_name,resolved_by,affected_versions,fix_versions,components",
   ];
   for (const ticket of jiraTickets.values()) {
     jiraCsvLines.push(
       `${ticket.key},${csvEscape(ticket.summary)},${ticket.status},` +
         `${ticket.resolution},${ticket.resolutiondate},` +
-        `${ticket.statuscategorychangedate},${ticket.issuetype},` +
+        `${ticket.statuscategorychangedate},${ticket.status_entered_date},${ticket.issuetype},` +
         `${ticket.priority},${ticket.assignee_id},` +
         `${csvEscape(ticket.assignee_name)},${ticket.qa_contact_id},` +
         `${csvEscape(ticket.qa_contact_name)},${ticket.sprint_name},` +
@@ -660,28 +902,59 @@ async function main(): Promise<void> {
     jiraCsvLines.join("\n") + "\n",
   );
 
-  // --- CUSTOMER ACCOUNTS ---
+  // --- SFDC CASES (new tracking system) — hydrate from entity properties ---
+  // Field customfield_11283 (Interested_Parties) holds only counts today; live customer cases live in
+  // issue properties `sfdc-cases-links` (space-separated case IDs). Fetch those here so customer-cases.csv
+  // can union both systems. Failures are non-fatal and leave legacy CIPOE path intact.
+  {
+    const auth = Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString(
+      "base64",
+    );
+    console.log("\n=== Fetching SFDC Case Links (entity properties) ===");
+    const entries = [...jiraTickets.entries()];
+    const CONCURRENCY = 8;
+    let withCases = 0;
+    for (let i = 0; i < entries.length; i += CONCURRENCY) {
+      const batch = entries.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(
+        batch.map(async ([key]) => {
+          try {
+            const res = await fetch(
+              `https://${jiraConfig.cloud_id}/rest/api/3/issue/${key}/properties/sfdc-cases-links`,
+              {
+                headers: {
+                  Authorization: `Basic ${auth}`,
+                  Accept: "application/json",
+                },
+                signal: AbortSignal.timeout(10_000),
+              },
+            );
+            if (!res.ok) return 0;
+            const data = (await res.json()) as { value?: { value?: unknown } };
+            const ids = extractSfdcCases(data?.value?.value);
+            if (ids.length) {
+              const ticket = jiraTickets.get(key);
+              if (ticket) ticket.sfdcCases = ids;
+              return 1;
+            }
+            return 0;
+          } catch {
+            return 0;
+          }
+        }),
+      );
+      withCases += (results as number[]).reduce((a, b) => a + b, 0);
+    }
+    console.log(
+      `  Checked ${entries.length} tickets via properties, ${withCases} with SFDC cases`,
+    );
+  }
+
+  // --- CUSTOMER ACCOUNTS (union: legacy Account links + SFDC cases property + helper field) ---
 
   console.log("\n=== Extracting Customer Accounts from Issue Links ===");
-  const customerCases: CustomerCase[] = [];
   const jiraBase = jiraConfig.cloud_id;
-
-  for (const [key, ticket] of jiraTickets) {
-    for (const link of ticket.issuelinks) {
-      if (link.type?.name !== "Account") continue;
-      const outward = link.outwardIssue;
-      if (!outward) continue;
-      const accountKey = outward.key ?? "";
-      if (!accountKey.startsWith("CIPOE-")) continue;
-      const customerName = outward.fields?.summary ?? "";
-      customerCases.push({
-        ticket_key: key,
-        case_id: accountKey,
-        case_url: `https://${jiraBase}/browse/${accountKey}`,
-        customer_name: customerName,
-      });
-    }
-  }
+  const customerCases = buildCustomerCases(jiraTickets, jiraBase);
 
   const ticketsWithCases = new Set(customerCases.map((c) => c.ticket_key)).size;
   console.log(

@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
+import {
+  fetchChangelog,
+  statusEnteredDate,
+  extractCustomerNamesFromField11283,
+  extractSfdcCases,
+  buildCustomerCases,
+} from "../fetch-data.js";
 
 // --- Test Utilities ---
 
@@ -648,6 +655,90 @@ describe("fetch-data integration", () => {
 
       expect(customerCases).toHaveLength(0);
     });
+
+    it("should extract customer names from customfield_11283 string array", () => {
+      expect(
+        extractCustomerNamesFromField11283(["Acme Corp", "Widget Inc"]),
+      ).toEqual(["Acme Corp", "Widget Inc"]);
+      expect(extractCustomerNamesFromField11283("Acme, Widget; Foo")).toEqual([
+        "Acme",
+        "Widget",
+        "Foo",
+      ]);
+    });
+
+    it("should extract customer names from customfield_11283 object array with displayName/value", () => {
+      expect(
+        extractCustomerNamesFromField11283([
+          { displayName: "Acme Corp" },
+          { value: "Widget Inc" },
+          { summary: "Foo Bar" },
+          { key: "CIPOE-123" },
+        ]),
+      ).toEqual(["Acme Corp", "Widget Inc", "Foo Bar", "CIPOE-123"]);
+    });
+
+    it("should union and dedup Account links + customfield_11283 + sfdcCases via buildCustomerCases", () => {
+      const tickets = new Map([
+        [
+          "OCPBUGS-999",
+          {
+            issuelinks: [
+              {
+                type: { name: "Account" },
+                outwardIssue: { key: "CIPOE-1", fields: { summary: "Acme" } },
+              },
+            ],
+            customerField11283: extractCustomerNamesFromField11283([
+              "Widget Inc",
+              "CIPOE-1",
+            ]),
+            sfdcCases: extractSfdcCases("00000001 00000002"),
+          },
+        ],
+      ]);
+      const cases = buildCustomerCases(
+        tickets as unknown as Map<string, never>,
+        "redhat.atlassian.net",
+      );
+      expect(cases.map((c) => c.case_id)).toEqual([
+        "CIPOE-1",
+        "Widget Inc",
+        "00000001",
+        "00000002",
+      ]);
+      expect(cases).toHaveLength(4);
+    });
+
+    it("should handle customfield_11283 null/undefined/empty and sfdc empty", () => {
+      // Counts-only object should yield no names
+      expect(
+        extractCustomerNamesFromField11283({
+          total: 5,
+          affected: 5,
+          hasAffected: true,
+        }),
+      ).toEqual([]);
+      expect(extractCustomerNamesFromField11283(null)).toEqual([]);
+      expect(extractCustomerNamesFromField11283(undefined)).toEqual([]);
+      expect(extractCustomerNamesFromField11283("")).toEqual([]);
+      expect(extractSfdcCases(null)).toEqual([]);
+      expect(extractSfdcCases("")).toEqual([]);
+      expect(extractSfdcCases({ value: "" })).toEqual([]);
+    });
+
+    it("should extract SFDC cases from space-separated string and property wrapper", () => {
+      expect(extractSfdcCases("00000001 00000002")).toEqual([
+        "00000001",
+        "00000002",
+      ]);
+      expect(
+        extractSfdcCases({ value: "00000001, 00000002;00000003" }),
+      ).toEqual(["00000001", "00000002", "00000003"]);
+      expect(
+        extractSfdcCases({ value: { value: "00000001 00000002" } }),
+      ).toEqual(["00000001", "00000002"]);
+    });
   });
 
   describe("GitLab API Handling", () => {
@@ -927,6 +1018,124 @@ describe("fetch-data integration", () => {
       const jql = `sprint = "${sprintName}"`;
 
       expect(jql).toContain('"Sprint with "quotes""');
+    });
+  });
+
+  describe("Changelog helpers", () => {
+    it("statusEnteredDate returns last transition into current status", () => {
+      const histories = [
+        {
+          created: "2026-10-20T19:04:31.077+0000",
+          items: [
+            { field: "status", fromString: "New", toString: "In Progress" },
+          ],
+        },
+        {
+          created: "2026-10-28T12:05:07.473+0000",
+          items: [
+            {
+              field: "status",
+              fromString: "Dev Complete",
+              toString: "Testing",
+            },
+          ],
+        },
+      ];
+      expect(statusEnteredDate(histories, "Testing")).toBe(
+        "2026-10-28T12:05:07.473+0000",
+      );
+      expect(statusEnteredDate(histories, "ON_QA")).toBe("");
+      expect(statusEnteredDate(histories, "In Progress")).toBe(
+        "2026-10-20T19:04:31.077+0000",
+      );
+    });
+
+    it("statusEnteredDate returns last occurrence on re-entry", () => {
+      const histories = [
+        {
+          created: "2026-11-01T00:00:00.000+0000",
+          items: [{ field: "status", toString: "Testing" }],
+        },
+        {
+          created: "2026-11-05T00:00:00.000+0000",
+          items: [{ field: "status", toString: "ON_QA" }],
+        },
+        {
+          created: "2026-11-07T00:00:00.000+0000",
+          items: [{ field: "status", toString: "Testing" }],
+        },
+      ];
+      expect(statusEnteredDate(histories, "Testing")).toBe(
+        "2026-11-07T00:00:00.000+0000",
+      );
+    });
+
+    it("fetchChangelog paginates past first page", async () => {
+      const first = {
+        values: Array.from({ length: 100 }, (_, i) => ({
+          created: `2026-10-01T00:00:00.000+0000`,
+          items: [{ field: "status", toString: `X${String(i)}` }],
+        })),
+        isLast: false,
+        total: 150,
+        startAt: 0,
+        maxResults: 100,
+      };
+      const second = {
+        values: [
+          {
+            created: "2026-10-28T12:05:07.473+0000",
+            items: [{ field: "status", toString: "Testing" }],
+          },
+        ],
+        isLast: true,
+        total: 101,
+        startAt: 100,
+        maxResults: 100,
+      };
+      fetchMock
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(first),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(second),
+        });
+      const histories = await fetchChangelog("CNV-99668", "fake-auth");
+      expect(histories).toHaveLength(101);
+      expect(statusEnteredDate(histories, "Testing")).toBe(
+        "2026-10-28T12:05:07.473+0000",
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(String(fetchMock.mock.calls[1][0])).toContain("startAt=100");
+    });
+
+    it("fetchChangelog returns empty on mid-pagination error (no partial)", async () => {
+      const first = {
+        values: [
+          {
+            created: "2026-11-01T00:00:00.000+0000",
+            items: [{ field: "status", toString: "Testing" }],
+          },
+        ],
+        isLast: false,
+        total: 150,
+        startAt: 0,
+        maxResults: 100,
+      };
+      fetchMock
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(first),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: () => Promise.resolve("err"),
+        });
+      const histories = await fetchChangelog("CNV-99668", "fake-auth");
+      expect(histories).toEqual([]);
     });
   });
 });

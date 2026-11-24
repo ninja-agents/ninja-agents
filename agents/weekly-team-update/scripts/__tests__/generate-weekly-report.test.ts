@@ -44,7 +44,6 @@ import {
   formatAdditionalContributions,
   formatCompletedSection,
   formatInProgressSection,
-  generateHighlights,
   computeHighlightData,
   formatHighlightContext,
   validateData,
@@ -57,6 +56,8 @@ import {
   computeBackportNeeds,
   applyBackportDetection,
   propagateToOrphanPrs,
+  daysInStatus,
+  WAITING_STATUSES,
   type PRItem,
   type JiraItem,
   type EngineerBlock,
@@ -95,6 +96,7 @@ function makeJira(overrides: Partial<JiraItem> = {}): JiraItem {
     resolution: "",
     resolutiondate: "2026-05-05T10:00:00Z",
     statuscategorychangedate: "2026-05-05T10:00:00Z",
+    status_entered_date: "",
     issuetype: "Story",
     priority: "Major",
     url: "https://test.atlassian.net/browse/TEST-123",
@@ -340,6 +342,162 @@ describe("fmtTicketLink", () => {
     const result = fmtTicketLink(t, true);
     expect(result).not.toContain("Customer");
     expect(result).not.toContain("—");
+  });
+
+  it("renders mix of legacy (with URL) and new-system (empty URL) customers", () => {
+    const t = makeJira({
+      key: "OCPBUGS-77435",
+      summary: "Dual-system ticket",
+      resolutiondate: "2026-09-17T00:00:00Z",
+      customer_cases: [
+        {
+          case_id: "CIPOE-100",
+          url: "https://redhat.atlassian.net/browse/CIPOE-100",
+          customer_name: "Acme Corp",
+        },
+        { case_id: "00000001", url: "", customer_name: "" },
+      ],
+    });
+    const result = fmtTicketLink(t, true);
+    expect(result).toContain("— Customers: Acme Corp, 00000001");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// daysInStatus
+// ---------------------------------------------------------------------------
+
+describe("daysInStatus", () => {
+  const anchor = new Date("2026-11-18T00:00:00Z");
+
+  it("computes whole-day delta", () => {
+    expect(daysInStatus("2026-11-06T00:00:00Z", anchor)).toBe(12);
+  });
+
+  it("returns 0 for future date", () => {
+    expect(daysInStatus("2026-11-20T00:00:00Z", anchor)).toBe(0);
+  });
+
+  it("returns null for empty or invalid input", () => {
+    expect(daysInStatus("", anchor)).toBeNull();
+    expect(daysInStatus("not-a-date", anchor)).toBeNull();
+  });
+
+  it("floors partial days", () => {
+    // 1.5 days ago should be 1
+    expect(daysInStatus("2026-11-16T12:00:00Z", anchor)).toBe(1);
+  });
+
+  it("returns 0 for same-day", () => {
+    expect(daysInStatus("2026-11-18T00:00:00Z", anchor)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fmtTicketLink waiting duration
+// ---------------------------------------------------------------------------
+
+describe("fmtTicketLink waiting duration", () => {
+  const anchor = new Date("2026-11-18T00:00:00Z");
+
+  it("appends waiting duration for Testing status", () => {
+    const t = makeJira({
+      status: "Testing",
+      statuscategorychangedate: "2026-11-06T00:00:00Z",
+    });
+    const result = fmtTicketLink(t, false, anchor);
+    expect(result).toContain("(Testing, waiting 12d)");
+  });
+
+  it("appends waiting duration for ON_QA status", () => {
+    const t = makeJira({
+      status: "ON_QA",
+      statuscategorychangedate: "2026-11-15T00:00:00Z",
+    });
+    const result = fmtTicketLink(t, false, anchor);
+    expect(result).toContain("(ON_QA, waiting 3d)");
+  });
+
+  it("appends waiting duration for MODIFIED status", () => {
+    const t = makeJira({
+      status: "MODIFIED",
+      statuscategorychangedate: "2026-11-10T00:00:00Z",
+    });
+    const result = fmtTicketLink(t, false, anchor);
+    expect(result).toContain("(MODIFIED, waiting 8d)");
+  });
+
+  it("combines priority and waiting suffix", () => {
+    const t = makeJira({
+      status: "Testing",
+      priority: "Critical",
+      statuscategorychangedate: "2026-11-08T00:00:00Z",
+    });
+    const result = fmtTicketLink(t, false, anchor);
+    expect(result).toContain("(Testing, Critical priority, waiting 10d)");
+  });
+
+  it("omits waiting suffix when anchor not provided", () => {
+    const t = makeJira({
+      status: "Testing",
+      statuscategorychangedate: "2026-11-06T00:00:00Z",
+    });
+    expect(fmtTicketLink(t, false)).toBe(
+      "- [TEST-123 - Test ticket](https://test.atlassian.net/browse/TEST-123) (Testing)",
+    );
+    expect(fmtTicketLink(t, false)).not.toContain("waiting");
+  });
+
+  it("omits waiting suffix when date is empty", () => {
+    const t = makeJira({ status: "Testing", statuscategorychangedate: "" });
+    expect(fmtTicketLink(t, false, anchor)).not.toContain("waiting");
+    expect(fmtTicketLink(t, false, anchor)).toContain("(Testing)");
+  });
+
+  it("never adds waiting for non-waiting status even with anchor", () => {
+    const t = makeJira({
+      status: "In Progress",
+      statuscategorychangedate: "2026-11-06T00:00:00Z",
+    });
+    expect(fmtTicketLink(t, false, anchor)).not.toContain("waiting");
+    expect(fmtTicketLink(t, false, anchor)).toContain("(In Progress)");
+  });
+
+  it("never adds waiting for completed tickets", () => {
+    const t = makeJira({
+      status: "Testing",
+      statuscategorychangedate: "2026-11-06T00:00:00Z",
+    });
+    expect(fmtTicketLink(t, true, anchor)).not.toContain("waiting");
+    expect(fmtTicketLink(t, true, anchor)).toContain("resolved");
+  });
+
+  it("prefers status_entered_date over statuscategorychangedate", () => {
+    const t = makeJira({
+      status: "Testing",
+      statuscategorychangedate: "2026-10-20T00:00:00Z",
+      status_entered_date: "2026-10-28T12:05:07.473+0000",
+    });
+    const result = fmtTicketLink(t, false, anchor);
+    // Oct 28 -> Nov 18 = ~20d, Oct 20 -> Nov 18 = 29d — must use 20d
+    expect(result).toContain("waiting 20d");
+    expect(result).not.toContain("waiting 29d");
+  });
+
+  it("falls back to statuscategorychangedate when status_entered_date is empty", () => {
+    const t = makeJira({
+      status: "Testing",
+      statuscategorychangedate: "2026-11-06T00:00:00Z",
+      status_entered_date: "",
+    });
+    expect(fmtTicketLink(t, false, anchor)).toContain("(Testing, waiting 12d)");
+  });
+
+  it("exposes WAITING_STATUSES for expected keys", () => {
+    expect(WAITING_STATUSES["Testing"]).toBe(true);
+    expect(WAITING_STATUSES["ON_QA"]).toBe(true);
+    expect(WAITING_STATUSES["MODIFIED"]).toBe(true);
+    expect(WAITING_STATUSES["In Progress"]).toBeUndefined();
   });
 });
 
@@ -619,6 +777,14 @@ describe("filterCompletedJira", () => {
     ];
     expect(filterCompletedJira(tickets, ws, we)).toHaveLength(1);
   });
+
+  it("accepts localized Done alias (完成) as completed", () => {
+    const tickets = [
+      makeJira({ resolution: "完成", resolutiondate: "2026-05-05T10:00:00Z" }),
+    ];
+    expect(filterCompletedJira(tickets, ws, we)).toHaveLength(1);
+    expect(filterInProgressJira(tickets)).toHaveLength(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -642,7 +808,7 @@ describe("filterInProgressJira", () => {
     expect(filterInProgressJira(tickets)).toHaveLength(1);
   });
 
-  it("filters Bug/qa_contact to only ON_QA status", () => {
+  it("filters Bug/qa_contact to only ON_QA and Testing statuses", () => {
     const bugQa = makeJira({
       issuetype: "Bug",
       role: "qa_contact",
@@ -656,9 +822,16 @@ describe("filterInProgressJira", () => {
       status: "ON_QA",
     });
     expect(filterInProgressJira([bugQaOnQa])).toHaveLength(1);
+
+    const bugQaTesting = makeJira({
+      issuetype: "Bug",
+      role: "qa_contact",
+      status: "Testing",
+    });
+    expect(filterInProgressJira([bugQaTesting])).toHaveLength(1);
   });
 
-  it("filters Bug/assignee to dev statuses", () => {
+  it("filters Bug/assignee to dev statuses including Testing and ON_QA", () => {
     const bugDev = makeJira({
       issuetype: "Bug",
       role: "assignee",
@@ -666,12 +839,26 @@ describe("filterInProgressJira", () => {
     });
     expect(filterInProgressJira([bugDev])).toHaveLength(1);
 
-    const bugDevOther = makeJira({
+    const bugTesting = makeJira({
+      issuetype: "Bug",
+      role: "assignee",
+      status: "Testing",
+    });
+    expect(filterInProgressJira([bugTesting])).toHaveLength(1);
+
+    const bugOnQa = makeJira({
       issuetype: "Bug",
       role: "assignee",
       status: "ON_QA",
     });
-    expect(filterInProgressJira([bugDevOther])).toHaveLength(0);
+    expect(filterInProgressJira([bugOnQa])).toHaveLength(1);
+
+    const bugOther = makeJira({
+      issuetype: "Bug",
+      role: "assignee",
+      status: "New",
+    });
+    expect(filterInProgressJira([bugOther])).toHaveLength(0);
   });
 
   it("keeps dev-role Bugs parked in MODIFIED, including sprintless products", () => {
@@ -1402,109 +1589,6 @@ describe("formatCompletedSection additional contributions", () => {
 });
 
 // ---------------------------------------------------------------------------
-// generateHighlights
-// ---------------------------------------------------------------------------
-
-describe("generateHighlights", () => {
-  it("generates CVE highlight", () => {
-    const sections = new Map<
-      string,
-      Map<
-        string,
-        {
-          name: string;
-          completed_tickets: JiraItem[];
-          completed_prs: PRItem[];
-          in_progress_tickets: JiraItem[];
-          in_progress_prs: PRItem[];
-        }
-      >
-    >();
-    const engineers = new Map<string, EngineerBlock>();
-    engineers.set("User", {
-      name: "User",
-      completed_tickets: [
-        makeJira({
-          summary: "CVE-2026-1234 lodash vulnerability",
-          issuetype: "Bug",
-        }),
-      ],
-      completed_prs: [],
-      in_progress_tickets: [],
-      in_progress_prs: [],
-    });
-    sections.set("TEAM", engineers);
-
-    const highlights = generateHighlights(sections);
-    expect(highlights.length).toBeGreaterThan(0);
-    expect(highlights[0]).toContain("CVE");
-    expect(highlights[0]).toContain("lodash");
-  });
-
-  it("generates test version highlight", () => {
-    const sections = new Map<
-      string,
-      Map<
-        string,
-        {
-          name: string;
-          completed_tickets: JiraItem[];
-          completed_prs: PRItem[];
-          in_progress_tickets: JiraItem[];
-          in_progress_prs: PRItem[];
-        }
-      >
-    >();
-    const engineers = new Map<string, EngineerBlock>();
-    engineers.set("User", {
-      name: "User",
-      completed_tickets: [
-        makeJira({ summary: "[TIER-1][test-kubevirt] cnv-4.18.35" }),
-      ],
-      completed_prs: [],
-      in_progress_tickets: [],
-      in_progress_prs: [],
-    });
-    sections.set("PROJ", engineers);
-
-    const highlights = generateHighlights(sections);
-    expect(highlights).toContainEqual(expect.stringContaining("4.18.35"));
-  });
-
-  it("returns max 4 highlights", () => {
-    const sections = new Map<
-      string,
-      Map<
-        string,
-        {
-          name: string;
-          completed_tickets: JiraItem[];
-          completed_prs: PRItem[];
-          in_progress_tickets: JiraItem[];
-          in_progress_prs: PRItem[];
-        }
-      >
-    >();
-    for (const pk of ["A", "B", "C", "D", "E"]) {
-      const engineers = new Map<string, EngineerBlock>();
-      engineers.set("User", {
-        name: "User",
-        completed_tickets: [
-          makeJira({ summary: `Feature for ${pk}`, issuetype: "Story" }),
-        ],
-        completed_prs: [],
-        in_progress_tickets: [],
-        in_progress_prs: [],
-      });
-      sections.set(pk, engineers);
-    }
-
-    const highlights = generateHighlights(sections);
-    expect(highlights.length).toBeLessThanOrEqual(4);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // computeHighlightData
 // ---------------------------------------------------------------------------
 
@@ -1752,6 +1836,7 @@ describe("formatHighlightContext", () => {
                   resolution: "Done",
                   resolutiondate: "2026-07-01",
                   statuscategorychangedate: "2026-07-01",
+                  status_entered_date: "",
                   issuetype: "Story",
                   priority: "Major",
                   url: "https://example.com/TEAM-100",
@@ -1775,6 +1860,7 @@ describe("formatHighlightContext", () => {
                   resolution: "",
                   resolutiondate: "",
                   statuscategorychangedate: "",
+                  status_entered_date: "",
                   issuetype: "Story",
                   priority: "Major",
                   url: "https://example.com/TEAM-101",
@@ -1832,7 +1918,7 @@ describe("formatHighlightContext", () => {
     const output = formatHighlightContext(data, sections);
     expect(output).toContain("--- Highlight Context ---");
     expect(output).not.toContain("### PROJ");
-    expect(output).toContain("--- Highlights Context ---");
+    expect(output).not.toContain("--- Highlights Context ---");
   });
 });
 
@@ -2013,10 +2099,6 @@ describe("end-to-end", () => {
         "",
         "## Summary",
         "",
-        "### Highlights",
-        "<!-- HIGHLIGHTS_PLACEHOLDER -->",
-        "- (highlights pending)",
-        "",
         "<!-- SUMMARY_PLACEHOLDER -->",
         "- (summary pending)",
       ];
@@ -2038,11 +2120,15 @@ describe("end-to-end", () => {
 
       const reportText = reportLines.join("\n") + "\n";
 
-      expect(reportText).toContain("### Highlights");
+      expect(reportText).not.toContain("### Highlights");
+      expect(reportText).not.toContain("HIGHLIGHTS_PLACEHOLDER");
       expect(reportText).toContain("## Summary");
-      expect(reportText).toContain("## Completed This Week");
-      expect(reportText.indexOf("## Summary\n")).toBeLessThan(
-        reportText.indexOf("### Highlights"),
+      expect(reportText).toContain("<!-- SUMMARY_PLACEHOLDER -->");
+      expect(reportText.indexOf("## Summary")).toBeLessThan(
+        reportText.indexOf("<!-- SUMMARY_PLACEHOLDER -->"),
+      );
+      expect(reportText.indexOf("<!-- SUMMARY_PLACEHOLDER -->")).toBeLessThan(
+        reportText.indexOf("## Completed This Week"),
       );
 
       const additionalCount = [...additionalByProduct.values()].reduce(
@@ -2473,5 +2559,55 @@ describe("fmtTicketLink with backport", () => {
     const t = makeJira({ backport_needed: [] });
     const result = fmtTicketLink(t, true);
     expect(result).not.toContain("Backport");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatInProgressSection with waiting duration
+// ---------------------------------------------------------------------------
+
+describe("formatInProgressSection with waiting duration", () => {
+  it("renders waiting suffix for Testing tickets when anchor is provided", () => {
+    const anchor = new Date("2026-11-18T00:00:00Z");
+    const ticket = makeJira({
+      key: "CNV-99999",
+      summary: "Needs QA",
+      status: "Testing",
+      statuscategorychangedate: "2026-11-08T00:00:00Z",
+    });
+    const config = makeConfig();
+    const sections = new Map<string, Map<string, EngineerBlock>>();
+    const block: EngineerBlock = {
+      name: "Test User",
+      completed_tickets: [],
+      completed_prs: [],
+      in_progress_tickets: [ticket],
+      in_progress_prs: [],
+    };
+    sections.set("CNV", new Map([["Test User", block]]));
+    const output = formatInProgressSection(sections, config, anchor);
+    expect(output).toContain("(Testing, waiting 10d)");
+  });
+
+  it("omits waiting suffix when anchor is not provided", () => {
+    const ticket = makeJira({
+      key: "CNV-99999",
+      summary: "Needs QA",
+      status: "Testing",
+      statuscategorychangedate: "2026-11-08T00:00:00Z",
+    });
+    const config = makeConfig();
+    const sections = new Map<string, Map<string, EngineerBlock>>();
+    const block: EngineerBlock = {
+      name: "Test User",
+      completed_tickets: [],
+      completed_prs: [],
+      in_progress_tickets: [ticket],
+      in_progress_prs: [],
+    };
+    sections.set("CNV", new Map([["Test User", block]]));
+    const output = formatInProgressSection(sections, config);
+    expect(output).toContain("(Testing)");
+    expect(output).not.toContain("waiting");
   });
 });

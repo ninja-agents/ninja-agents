@@ -76,6 +76,19 @@ describe("parseLinks", () => {
     expect(links[1].engineer).toBeNull();
   });
 
+  it("does not attribute indented nested PR to the ticket owner", () => {
+    const content = [
+      "**Bruno Maio:**",
+      "- [CNV-97327 - kubevirt api proxy - add namespace list check permission](https://redhat.atlassian.net/browse/CNV-97327)",
+      "  - [PR #53 - CNV-97327: Multicluster routing via ACM cluster-proxy](https://github.com/kubevirt-ui/kubevirt-apiserver-proxy/pull/53)",
+    ].join("\n");
+    const links = parseLinks(content);
+    expect(links).toHaveLength(2);
+    expect(links[0].engineer).toBe("Bruno Maio");
+    // Indented PR is rendered under the ticket, not owned by ticket owner
+    expect(links[1].engineer).toBeNull();
+  });
+
   it("returns empty for content with no links", () => {
     expect(parseLinks("Just plain text")).toHaveLength(0);
   });

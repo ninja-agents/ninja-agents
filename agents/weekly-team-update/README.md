@@ -50,11 +50,11 @@ npx tsx agents/weekly-team-update/scripts/validate-report-links.ts
 3. Merges per-engineer and sprint-based Jira results (dedup by key), follows Jira parent links for weekly work and PR references, and saves normalized CSVs in `data/cache/`
 4. Runs `scripts/generate-weekly-report.ts` for deterministic formatting (body sections)
 5. Runs `scripts/finalize-report.ts` to verify backport claims and append the Recommendations section
-6. Agent writes Highlights and product summaries using the generated context; product summaries group relevant work under linked Features and Epics
+6. Agent writes the product Summary using the generated context; product summaries group relevant work under linked Features and Epics
 7. Validates all links with `scripts/validate-report-links.ts`
 8. Saves report to `data/output/weekly-update-{date}.md`
 
-The agent writes Highlights and the product Summary. All other sections are generated deterministically by the TypeScript script.
+The agent writes the product Summary. All other sections are generated deterministically by the TypeScript script.
 
 The local-LLM variant (`scripts/run-local.ts`) runs the same stages, including backport verification and the Recommendations section, and filters its prompt context so the model never sees a version the verified report dropped.
 
@@ -64,8 +64,7 @@ The collector spaces sequential GitHub requests at least 2.1 seconds apart acros
 
 ## Output Format
 
-- **Summary > Highlights** — agent-written completed business outcomes
-- **Summary > Products** — compact activity grouped under linked Jira Features and Epics, without repeating Highlights
+- **Summary > Products** — one subsection per configured product, in configured product order, with compact activity grouped under linked Jira Features and Epics
 - **Completed This Week** — by product, then engineer, PRs nested under Jira tickets
 - **Completed This Week > Additional Contributions** — merged PRs from outside contributors in tracked repos, labeled by GitHub login
 - **In Progress** — same structure

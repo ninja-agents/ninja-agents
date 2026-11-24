@@ -57,7 +57,6 @@ export function loadEngineerMaps(configPath: string): EngineerMaps {
 // ---------------------------------------------------------------------------
 // Link parsing
 // ---------------------------------------------------------------------------
-
 export function parseLinks(content: string): LinkInfo[] {
   const lines = content.split("\n");
   const links: LinkInfo[] = [];
@@ -67,9 +66,6 @@ export function parseLinks(content: string): LinkInfo[] {
     const line = lines[i];
     const lineNum = i + 1;
 
-    // Engineer headings only scope the bullets under them; a new section (for
-    // example the appended `## Recommendations` table) must not inherit the
-    // last engineer, or PR author checks fail for other people's PRs.
     if (line.startsWith("## ")) {
       currentEngineer = null;
     }
@@ -79,6 +75,7 @@ export function parseLinks(content: string): LinkInfo[] {
       currentEngineer = engMatch[1];
     }
 
+    const isNestedPr = /^\s{2,}- \[/.test(line);
     const linkRe = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
     let m: RegExpExecArray | null;
     while ((m = linkRe.exec(line)) !== null) {
@@ -86,7 +83,7 @@ export function parseLinks(content: string): LinkInfo[] {
         line_num: lineNum,
         link_text: m[1],
         url: m[2],
-        engineer: currentEngineer,
+        engineer: isNestedPr ? null : currentEngineer,
       });
     }
   }

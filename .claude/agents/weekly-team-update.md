@@ -82,70 +82,23 @@ npx tsx agents/weekly-team-update/scripts/finalize-report.ts --date {today}
 Rules:
 
 - The script removes backport claims already covered by a Jira fix version, a done clone, or a merged release-branch PR.
-- Never mention a dropped backport version anywhere in the report, including Highlights and product summaries.
+- Never mention a dropped backport version anywhere in the report, including the product summaries.
 - Only versions still present in the report after this step may be described as needing a backport. Take them from the `--- Verified Backport Claims ---` block this step prints, and ignore the `Backport needed` and `Backport risk` lines in the generator context, which predate verification.
 - Never edit the `## Recommendations` section. Re-run the script to regenerate it.
 
-## Step 4: Write Highlights and Summary
+## Step 4: Write Summary
 
-The script outputs placeholders for two LLM-written sections. Fill both using the structured context printed to stdout.
+The script outputs one placeholder for the LLM-written Summary section.
 
 1. Read the report at `agents/weekly-team-update/data/output/weekly-update-{today}.md`
 2. Study the **Completed This Week** and **In Progress** sections
-3. Use the **Highlights Context**, **Highlight Context**, and **Jira Hierarchy Context** blocks printed by the script
-4. Write Highlights first, then a per-product Summary that does not repeat those outcomes
-5. Replace both placeholder markers
-
-### Highlights Format
-
-Write 2-4 bullets, 150-200 words max. This is an executive briefing, not a technical changelog.
-
-**Rules:**
-
-- Each bullet: `- **Bold lead-in:** description ([KEY](url))`
-- Inline Jira links (not reference-style)
-- Link a PR as `[PR #N - title](url)`, matching the label the generator emits. The validator compares link text to the live PR title, so `[PR #561](url)` reports title drift.
-- Single-line bullets (no wrapping)
-- No em dashes; use colons, semicolons, or parentheses
-- Only completed milestones and realized outcomes; no in-progress items or future plans
-- **The peer-VP test:** "Would a peer VP mention this in their own status report?" If no, cut it.
-- Must articulate a business consequence: who benefits, what risk is reduced, what customer pain is resolved
-
-**Impact framing sequence** (ask in order until one produces a concrete answer):
-
-1. What can a customer now do that they couldn't before?
-2. What risk does this eliminate (security, data loss, compliance)?
-3. What was previously blocked or slower that is now unblocked or faster?
-
-**Bullet ordering by priority:**
-
-1. Customer-visible operational milestones and deployment unblocks
-2. Quality improvements and metrics
-3. Strategic decisions with broad organizational impact
-4. New releases and capabilities
-
-**NOT exec-worthy (cut these):**
-
-- Routine z-stream/patch releases (unless new customer capabilities or resolves a strategic risk)
-- Routine bug fixes without customer escalation
-- Internal tooling, CI/test infrastructure fixes
-- Meetings, syncs, presentations
-- Incremental progress ("work continued", "investigation ongoing")
-- Items that summarize as "activity without a decision, deliverable, or measurable outcome"
-- No promotional adjectives ("critical", "major", "significant"); no flourish verbs ("spearheaded", "championed")
-
-**Good example:**
-
-```
-- **Customer migration unblocked for PAYCHEX:** Fixed provider VM pagination and Hyper-V inventory counts, restoring migration plan workflows ([MTV-6556](https://redhat.atlassian.net/browse/MTV-6556))
-- **Security posture hardened across 4.20-5.1:** Resolved 10 CVEs including baseline-browser-mapping DoS and fast-uri SSRF vulnerabilities ([OCPBUGS-122214](https://redhat.atlassian.net/browse/OCPBUGS-122214))
-```
-
-Replace `<!-- HIGHLIGHTS_PLACEHOLDER -->` and the pending line with your bullets under `## Summary` > `### Highlights`.
+3. Use the **Highlight Context** and **Jira Hierarchy Context** blocks printed by the script
+4. Write one `### ProductName` sub-heading per configured product, in the order the product blocks appear in the Highlight Context
+5. Replace the `<!-- SUMMARY_PLACEHOLDER -->` marker and its pending line
 
 ### Summary Format
 
-Replace `<!-- SUMMARY_PLACEHOLDER -->` and the pending line. Write one `### ProductName` sub-heading per configured product. Use compact bullets that group related work under linked Features and Epics.
+Replace `<!-- SUMMARY_PLACEHOLDER -->` and the pending line. Write one `### ProductName` sub-heading per configured product, in the configured product order. Use compact bullets that group related work under linked Features and Epics.
 
 **Rules:**
 
@@ -155,12 +108,11 @@ Replace `<!-- SUMMARY_PLACEHOLDER -->` and the pending line. Write one `### Prod
 - Quantify when possible ("8 bug fixes", "two features")
 - Work bottom-up from relevant completed and in-progress Stories, Tasks, Bugs, or PRs. Trace their Jira parents using the Jira Hierarchy Context. Present `Feature: Epic` with descriptive links to both when both exist, then link the relevant work beneath. If only an Epic exists, use it as the group heading. If no parent exists, summarize the product activity in concise prose.
 - Link only parent nodes and weekly work that appears in the context. A parent link supplies context; it does not mean the parent itself was completed this week.
-- Do not repeat outcomes, Jira keys, or CVEs already covered by Highlights. Omit that work from the product summary, including resolved customer bugs when Highlights already names them.
 - Keep routine work compact. Do not expand all tickets into a second copy of the detailed sections.
 - Every claim must trace to an item in the report — never invent work
 - Group related items into a single bullet when natural (e.g. multiple CVEs in one bullet, multiple related bug fixes in one bullet)
-- **CVE IDs must always be included** when mentioning CVE remediations — extract them from the "Notable" lines in the Highlight Context, unless already covered in Highlights.
-- **Customer-impacting bugs must be called out** with customer names unless Highlights already covers them.
+- **CVE IDs must always be included** when mentioning CVE remediations — extract them from the "Notable" lines in the Highlight Context.
+- **Customer-impacting bugs must be called out** with customer names.
 - **Backport needs must be mentioned only for versions still present in the report after Step 3.** Include the Jira key, a brief description, and the remaining list of versions needing backport: "Backport needed: [OCPBUGS-105358](https://issues.redhat.com/browse/OCPBUGS-105358) — NAD form config fix needs backport to 4.20.z, 4.21.z, 4.22.z, 4.23.z, 5.0.z"
 - `**Additional Contributions:**` blocks are outside work: cite the contributor's GitHub login, never attribute those PRs to a team member.
 
@@ -173,10 +125,9 @@ Replace `<!-- SUMMARY_PLACEHOLDER -->` and the pending line. Write one `### Prod
 
 ### Self-check before proceeding:
 
-- Every configured product has a `### ProductName` sub-heading with a bullet list
+- Every configured product has a `### ProductName` sub-heading with a bullet list, in the configured product order
 - All sentences use active voice
 - Every in-progress bullet names its `Feature > Epic` pair when the Jira Hierarchy Context supplies one; only work with no parent stays as prose
-- No outcome, Jira key, or CVE from Highlights is repeated in a product summary
 - Every fact matches an item in the report
 - No dropped backport version appears anywhere in the prose
 - Every `**Additional Contributions:**` block is left exactly as generated
@@ -198,7 +149,7 @@ Read and display `agents/weekly-team-update/data/output/weekly-update-{today}.md
 
 ## Rules
 
-1. Never write report sections yourself EXCEPT Highlights and the product Summary — the TypeScript script generates all other sections.
+1. Never write report sections yourself EXCEPT the product Summary — the TypeScript script generates all other sections.
 2. If the fetch script fails (exit 1), display the error and STOP. Do not proceed with empty data.
 3. Every claim must trace to an item in the generated report — never invent work.
 4. Backport verification and the Recommendations section are deterministic: never hand-edit either.

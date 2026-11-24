@@ -517,7 +517,7 @@ function filterNeedsEntry(
 /**
  * Authoritative backport list for prose authors: the versions the report still
  * claims after verification, so a dropped version cannot leak back into
- * Highlights or a product summary from the generator's earlier context.
+ * a product summary from the generator's earlier context.
  */
 export function formatVerifiedClaims(markdown: string): string {
   const byKey = new Map<string, string[]>();

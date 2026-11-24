@@ -24,9 +24,9 @@ Launches the `weekly-team-update` agent which:
    - Filters by date window and resolution
    - Nests PRs under their parent Jira tickets
    - Organizes by product and engineer
-   - Generates formatted markdown with placeholders for Highlights and product summaries
+   - Generates formatted markdown with a placeholder for the product summary
 4. **Runs `agents/weekly-team-update/scripts/finalize-report.ts`** which verifies every backport claim against Jira fix versions, done clones, and merged release-branch PRs, then appends the deterministic `## Recommendations` section.
-5. **Writes Summary** — the agent writes 2–4 completed business Highlights, then compact product bullets with linked Feature and Epic groups for relevant work. Product bullets omit outcomes already in Highlights.
+5. **Writes Summary** — one subsection per configured product in configured order, with compact product bullets and linked Feature and Epic groups.
 6. **Validates all links** via `agents/weekly-team-update/scripts/validate-report-links.ts`
 7. **Saves to file**: `agents/weekly-team-update/data/output/weekly-update-{YYYY-MM-DD}.md`
 8. **Displays** the report
@@ -39,8 +39,8 @@ A weekly report with:
 
 ### Summary
 
-- Highlights plus one subsection per configured product
-- Linked Feature and Epic groups for interesting weekly work, with no repeated Highlights
+- One subsection per configured product
+- Linked Feature and Epic groups for interesting weekly work
 
 ### Completed This Week
 
